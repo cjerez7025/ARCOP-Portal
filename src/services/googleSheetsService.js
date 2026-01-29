@@ -1,8 +1,10 @@
 // ==================================================
-// PORTAL ARCOP - SERVICIO GOOGLE APPS SCRIPT
+// PORTAL ARCOP - SERVICIO GOOGLE SHEETS API
 // ==================================================
 
-const APPS_SCRIPT_URL = process.env.REACT_APP_APPS_SCRIPT_URL;
+const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY;
+const SPREADSHEET_ID = process.env.REACT_APP_SPREADSHEET_ID;
+const SHEET_NAME = process.env.REACT_APP_SHEET_NAME || 'SOLICITUDES';
 
 // ==================================================
 // FUNCIONES AUXILIARES - GENERACIÓN DE DATOS
@@ -20,7 +22,7 @@ const generarId = () => {
 
 /**
  * Genera número de solicitud legible
- * Formato: SOL-2026-12345
+ * Formato: SOL-2025-12345
  */
 const generarNumeroSolicitud = () => {
   const fecha = new Date();
@@ -73,7 +75,7 @@ const calcularExpiracionToken = () => {
 // ==================================================
 
 /**
- * Crea una nueva solicitud enviando a Google Apps Script
+ * Crea una nueva solicitud en Google Sheets
  * @param {Object} datos - Datos del formulario
  * @returns {Promise<Object>} - Resultado de la operación
  */
@@ -81,13 +83,13 @@ export const crearSolicitud = async (datos) => {
   try {
     console.log('📝 Creando solicitud...', datos);
     
-    // Validar configuración
-    if (!APPS_SCRIPT_URL) {
-      throw new Error('APPS_SCRIPT_URL no configurada. Verifica tu archivo .env');
+    // Validar variables de entorno
+    if (!API_KEY) {
+      throw new Error('API_KEY no configurada. Verifica tu archivo .env');
     }
     
-    if (APPS_SCRIPT_URL.includes('TU-URL')) {
-      throw new Error('Debes actualizar la URL de Apps Script en tu archivo .env');
+    if (!SPREADSHEET_ID) {
+      throw new Error('SPREADSHEET_ID no configurado. Verifica tu archivo .env');
     }
     
     // Generar datos automáticos
@@ -101,50 +103,78 @@ export const crearSolicitud = async (datos) => {
     console.log('🔑 ID generado:', id);
     console.log('📋 Número:', numero);
     console.log('🎫 Token:', token.substr(0, 10) + '...');
-    console.log('📅 Fecha límite:', fechaLimite);
     
-    // Preparar solicitud completa
-    const solicitudCompleta = {
-      id,
-      numero_solicitud: numero,
-      fecha_solicitud: fechaSolicitud,
-      tipo: 'ACCESO',
-      estado: 'PENDIENTE',
-      nombre_completo: datos.nombre_completo,
-      rut: datos.rut,
-      email: datos.email.toLowerCase(),
-      telefono: datos.telefono || '',
-      alcance_acceso: datos.alcance_acceso,
-      categorias: JSON.stringify(datos.categorias || []),
-      formato_preferido: datos.formato_preferido,
-      token_validacion: token,
-      token_expiracion: tokenExpiracion,
-      fecha_limite: fechaLimite,
-      dias_restantes: 15,
-      ip_origen: datos.metadata?.ip_origen || window.location.hostname,
-      user_agent: datos.metadata?.user_agent || navigator.userAgent,
-      creado_en: fechaSolicitud
-    };
+    // Preparar fila para Google Sheets (25 columnas)
+    // Orden debe coincidir EXACTAMENTE con los headers de la hoja
+    const row = [
+      id,                                       // A: ID_SOLICITUD
+      numero,                                   // B: NUMERO_SOLICITUD
+      fechaSolicitud,                           // C: FECHA_SOLICITUD
+      'ACCESO',                                 // D: TIPO
+      'PENDIENTE',                              // E: ESTADO
+      datos.nombre_completo,                    // F: NOMBRE_COMPLETO
+      datos.rut,                                // G: RUT
+      datos.email.toLowerCase(),                // H: EMAIL
+      datos.telefono || '',                     // I: TELEFONO
+      datos.alcance_acceso,                     // J: ALCANCE_ACCESO
+      JSON.stringify(datos.categorias || []),   // K: CATEGORIAS
+      datos.formato_preferido,                  // L: FORMATO_PREFERIDO
+      'FALSE',                                  // M: IDENTIDAD_VALIDADA
+      token,                                    // N: TOKEN_VALIDACION
+      tokenExpiracion,                          // O: TOKEN_EXPIRACION
+      fechaLimite,                              // P: FECHA_LIMITE
+      '15',                                     // Q: DIAS_RESTANTES
+      '',                                       // R: ASIGNADO_A
+      '',                                       // S: FECHA_RESOLUCION
+      '',                                       // T: URL_DESCARGA
+      '',                                       // U: URL_EXPIRACION
+      datos.metadata?.ip_origen || '',          // V: IP_ORIGEN
+      datos.metadata?.user_agent || '',         // W: USER_AGENT
+      fechaSolicitud,                           // X: CREADO_EN
+      fechaSolicitud                            // Y: ACTUALIZADO_EN
+    ];
     
-    console.log('📤 Enviando a Google Apps Script...');
-    console.log('🌐 URL:', APPS_SCRIPT_URL);
+    // Construir URL de la API de Google Sheets
+    const baseUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
+    const endpoint = `${baseUrl}/${SPREADSHEET_ID}/values/${SHEET_NAME}:append`;
+    const url = `${endpoint}?valueInputOption=RAW&key=${API_KEY}`;
     
-    // Enviar a Google Apps Script
-    // IMPORTANTE: usar mode: 'no-cors' porque Apps Script no permite CORS
-    await fetch(APPS_SCRIPT_URL, {
+    console.log('🌐 Enviando a Google Sheets...');
+    
+    // Realizar request
+    const response = await fetch(url, {
       method: 'POST',
-      mode: 'no-cors', // ⚠️ CRÍTICO: Apps Script requiere no-cors
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        action: 'createSolicitud',
-        solicitud: solicitudCompleta
+        values: [row]
       })
     });
     
-    // Con no-cors no podemos leer la respuesta, pero si llegó aquí es porque se envió
-    console.log('✅ Solicitud enviada exitosamente');
+    // Manejar respuesta
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('❌ Error de Google Sheets:', error);
+      
+      // Mensajes de error más amigables
+      if (error.error?.status === 'PERMISSION_DENIED') {
+        throw new Error('Permisos insuficientes. Verifica que el Sheet sea público para lectura.');
+      }
+      
+      if (error.error?.status === 'NOT_FOUND') {
+        throw new Error('Sheet no encontrado. Verifica el SPREADSHEET_ID en .env');
+      }
+      
+      if (error.error?.status === 'INVALID_ARGUMENT') {
+        throw new Error('Error en los datos. Verifica que el nombre de la hoja sea correcto.');
+      }
+      
+      throw new Error(error.error?.message || 'Error al crear solicitud en Google Sheets');
+    }
+    
+    const result = await response.json();
+    console.log('✅ Solicitud creada exitosamente:', result);
     
     // Retornar datos de la solicitud creada
     return {
@@ -155,16 +185,17 @@ export const crearSolicitud = async (datos) => {
         fecha_solicitud: fechaSolicitud,
         fecha_limite: fechaLimite,
         email: datos.email,
-        estado: 'PENDIENTE'
+        estado: 'PENDIENTE',
+        // No incluir token en la respuesta por seguridad
       }
     };
     
   } catch (error) {
     console.error('❌ Error en crearSolicitud:', error);
     
-    // Mensajes de error más amigables
+    // Re-lanzar el error con mensaje más claro
     if (error.message.includes('Failed to fetch')) {
-      throw new Error('Error de conexión. Verifica tu internet y que la URL de Apps Script sea correcta.');
+      throw new Error('Error de conexión. Verifica tu internet y que la API Key sea válida.');
     }
     
     throw error;
@@ -185,29 +216,57 @@ export const obtenerSolicitudPorToken = async (token) => {
   try {
     console.log('🔍 Buscando solicitud por token...');
     
-    if (!APPS_SCRIPT_URL) {
-      throw new Error('APPS_SCRIPT_URL no configurada');
-    }
+    const baseUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
+    const endpoint = `${baseUrl}/${SPREADSHEET_ID}/values/${SHEET_NAME}`;
+    const url = `${endpoint}?key=${API_KEY}`;
     
-    const url = `${APPS_SCRIPT_URL}?action=getSolicitud&token=${encodeURIComponent(token)}`;
-    
-    const response = await fetch(url, {
-      method: 'GET'
-    });
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error('Error al buscar solicitud');
     }
     
     const result = await response.json();
+    const rows = result.values;
     
-    if (result.status === 'success') {
-      console.log('✅ Solicitud encontrada');
-      return result.solicitud;
-    } else {
+    if (!rows || rows.length <= 1) {
+      return null; // No hay datos (solo headers)
+    }
+    
+    // Buscar por token (columna N, índice 13)
+    const solicitudRow = rows.find((row, index) => {
+      // Saltar header
+      if (index === 0) return false;
+      return row[13] === token;
+    });
+    
+    if (!solicitudRow) {
       console.log('❌ Solicitud no encontrada');
       return null;
     }
+    
+    console.log('✅ Solicitud encontrada');
+    
+    // Mapear datos
+    return {
+      id: solicitudRow[0],
+      numero_solicitud: solicitudRow[1],
+      fecha_solicitud: solicitudRow[2],
+      tipo: solicitudRow[3],
+      estado: solicitudRow[4],
+      nombre_completo: solicitudRow[5],
+      rut: solicitudRow[6],
+      email: solicitudRow[7],
+      telefono: solicitudRow[8],
+      alcance_acceso: solicitudRow[9],
+      categorias: JSON.parse(solicitudRow[10] || '[]'),
+      formato_preferido: solicitudRow[11],
+      identidad_validada: solicitudRow[12] === 'TRUE',
+      token_validacion: solicitudRow[13],
+      token_expiracion: solicitudRow[14],
+      fecha_limite: solicitudRow[15],
+      dias_restantes: solicitudRow[16]
+    };
     
   } catch (error) {
     console.error('❌ Error en obtenerSolicitudPorToken:', error);
@@ -229,74 +288,47 @@ export const obtenerSolicitudesPorEmail = async (email) => {
   try {
     console.log('🔍 Buscando solicitudes de:', email);
     
-    if (!APPS_SCRIPT_URL) {
-      throw new Error('APPS_SCRIPT_URL no configurada');
-    }
+    const baseUrl = 'https://sheets.googleapis.com/v4/spreadsheets';
+    const endpoint = `${baseUrl}/${SPREADSHEET_ID}/values/${SHEET_NAME}`;
+    const url = `${endpoint}?key=${API_KEY}`;
     
-    const url = `${APPS_SCRIPT_URL}?action=getSolicitudesPorEmail&email=${encodeURIComponent(email)}`;
-    
-    const response = await fetch(url, {
-      method: 'GET'
-    });
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error('Error al obtener solicitudes');
     }
     
     const result = await response.json();
+    const rows = result.values;
     
-    if (result.status === 'success') {
-      console.log(`✅ Encontradas ${result.solicitudes.length} solicitudes`);
-      return result.solicitudes;
-    } else {
-      return [];
+    if (!rows || rows.length <= 1) {
+      return []; // No hay datos
     }
+    
+    // Filtrar por email (columna H, índice 7)
+    const solicitudes = rows
+      .filter((row, index) => {
+        // Saltar header
+        if (index === 0) return false;
+        return row[7]?.toLowerCase() === email.toLowerCase();
+      })
+      .map(row => ({
+        id: row[0],
+        numero_solicitud: row[1],
+        fecha_solicitud: row[2],
+        tipo: row[3],
+        estado: row[4],
+        nombre_completo: row[5],
+        fecha_limite: row[15],
+        dias_restantes: row[16]
+      }));
+    
+    console.log(`✅ Encontradas ${solicitudes.length} solicitudes`);
+    
+    return solicitudes;
     
   } catch (error) {
     console.error('❌ Error en obtenerSolicitudesPorEmail:', error);
-    throw error;
-  }
-};
-
-// ==================================================
-// FUNCIÓN: VALIDAR IDENTIDAD (Email confirmado)
-// (Para validación de email - próxima fase)
-// ==================================================
-
-/**
- * Valida la identidad del usuario confirmando el email
- * @param {string} token - Token de validación
- * @returns {Promise<Object>} - Resultado de la validación
- */
-export const validarIdentidad = async (token) => {
-  try {
-    console.log('✅ Validando identidad...');
-    
-    if (!APPS_SCRIPT_URL) {
-      throw new Error('APPS_SCRIPT_URL no configurada');
-    }
-    
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        action: 'validarIdentidad',
-        token: token
-      })
-    });
-    
-    console.log('✅ Identidad validada');
-    
-    return {
-      success: true,
-      message: 'Identidad validada correctamente'
-    };
-    
-  } catch (error) {
-    console.error('❌ Error en validarIdentidad:', error);
     throw error;
   }
 };
@@ -308,60 +340,5 @@ export const validarIdentidad = async (token) => {
 export default {
   crearSolicitud,
   obtenerSolicitudPorToken,
-  obtenerSolicitudesPorEmail,
-  validarIdentidad
-};
-/**
- * Valida la identidad del usuario confirmando el email
- */
-export const validarIdentidad = async (token) => {
-  try {
-    console.log('✅ Validando identidad con token:', token.substr(0, 10) + '...');
-    
-    if (!APPS_SCRIPT_URL) {
-      throw new Error('APPS_SCRIPT_URL no configurada');
-    }
-    
-    // Llamar a Apps Script para validar
-    await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        action: 'validarIdentidad',
-        token: token
-      })
-    });
-    
-    // Como es no-cors, asumimos éxito si no hay error
-    console.log('✅ Identidad validada');
-    
-    // Obtener datos de la solicitud
-    const solicitudResponse = await fetch(
-      `${APPS_SCRIPT_URL}?action=getSolicitud&token=${encodeURIComponent(token)}`
-    );
-    
-    if (solicitudResponse.ok) {
-      const result = await solicitudResponse.json();
-      
-      return {
-        success: true,
-        solicitud: result.data
-      };
-    }
-    
-    return {
-      success: true,
-      message: 'Identidad validada correctamente'
-    };
-    
-  } catch (error) {
-    console.error('❌ Error al validar identidad:', error);
-    return {
-      success: false,
-      message: error.message || 'Error al validar identidad'
-    };
-  }
+  obtenerSolicitudesPorEmail
 };
