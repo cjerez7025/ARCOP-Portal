@@ -61,7 +61,6 @@ export const crearSolicitud = async (datos) => {
       throw new Error('APPS_SCRIPT_URL no configurada en .env');
     }
     
-    // Generar datos automáticos
     const id = generarId();
     const numero = generarNumeroSolicitud();
     const token = generarToken();
@@ -69,12 +68,8 @@ export const crearSolicitud = async (datos) => {
     const fechaLimite = calcularFechaLimite();
     const tokenExpiracion = calcularExpiracionToken();
     
-    console.log('🔑 Datos generados:');
-    console.log('  ID:', id);
-    console.log('  Número:', numero);
-    console.log('  Token:', token.substr(0, 10) + '...');
+    console.log('🔑 Datos generados:', { id, numero, token: token.substr(0, 10) + '...' });
     
-    // Preparar solicitud completa
     const solicitudCompleta = {
       id,
       numero_solicitud: numero,
@@ -98,9 +93,7 @@ export const crearSolicitud = async (datos) => {
     };
     
     console.log('📤 Enviando a Apps Script...');
-    console.log('🌐 URL:', APPS_SCRIPT_URL);
     
-    // Enviar a Google Apps Script
     await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -139,13 +132,12 @@ export const crearSolicitud = async (datos) => {
 
 export const validarIdentidad = async (token) => {
   try {
-    console.log('✅ Validando identidad...');
+    console.log('✅ Validando identidad con token:', token.substr(0, 10) + '...');
     
     if (!APPS_SCRIPT_URL) {
       throw new Error('APPS_SCRIPT_URL no configurada');
     }
     
-    // Llamar a Apps Script para validar
     await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -160,7 +152,6 @@ export const validarIdentidad = async (token) => {
     
     console.log('✅ Identidad validada');
     
-    // Obtener datos de la solicitud
     const solicitudResponse = await fetch(
       `${APPS_SCRIPT_URL}?action=getSolicitud&token=${encodeURIComponent(token)}`
     );
@@ -186,13 +177,4 @@ export const validarIdentidad = async (token) => {
       message: error.message || 'Error al validar identidad'
     };
   }
-};
-
-// ==================================================
-// EXPORTAR FUNCIONES
-// ==================================================
-
-export default {
-  crearSolicitud,
-  validarIdentidad
 };
