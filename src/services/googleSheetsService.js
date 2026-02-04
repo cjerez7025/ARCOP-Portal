@@ -68,6 +68,10 @@ export const crearSolicitud = async (datos) => {
     const fechaLimite = calcularFechaLimite();
     const tokenExpiracion = calcularExpiracionToken();
     
+    // Obtener URL del frontend desde .env o del navegador
+    const frontendUrl = process.env.REACT_APP_FRONTEND_URL || window.location.origin;
+    
+    console.log('🌐 Frontend URL:', frontendUrl);
     console.log('🔑 Datos generados:', { id, numero, token: token.substr(0, 10) + '...' });
     
     const solicitudCompleta = {
@@ -89,7 +93,8 @@ export const crearSolicitud = async (datos) => {
       dias_restantes: 15,
       ip_origen: datos.metadata?.ip_origen || window.location.hostname,
       user_agent: datos.metadata?.user_agent || navigator.userAgent,
-      creado_en: fechaSolicitud
+      creado_en: fechaSolicitud,
+      frontend_url: frontendUrl  // ← ESTA LÍNEA ES LA NUEVA
     };
     
     console.log('📤 Enviando a Apps Script...');
