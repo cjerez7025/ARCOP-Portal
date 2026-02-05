@@ -32,7 +32,6 @@ export const obtenerTodasSolicitudes = async (filtros = {}) => {
 
 /**
  * Actualiza una solicitud (estado, asignación, etc.)
- * NOTA: Actualizar sigue usando POST con no-cors
  */
 export const actualizarSolicitud = async (id, cambios) => {
   try {
@@ -64,6 +63,39 @@ export const actualizarSolicitud = async (id, cambios) => {
 };
 
 /**
+ * Marca solicitud como resuelta y guarda link de descarga
+ */
+export const marcarComoResuelta = async (id, urlDescarga, formatoEntregado) => {
+  try {
+    console.log('✅ Marcando como resuelta:', id, urlDescarga);
+    
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'marcarResuelta',
+        id,
+        url_descarga: urlDescarga,
+        formato_entregado: formatoEntregado
+      })
+    });
+    
+    console.log('✅ Marcada como resuelta');
+    return {
+      status: 'success',
+      message: 'Solicitud marcada como resuelta y email enviado'
+    };
+    
+  } catch (error) {
+    console.error('❌ Error al marcar como resuelta:', error);
+    throw error;
+  }
+};
+
+/**
  * Obtiene estadísticas del dashboard
  */
 export const obtenerEstadisticas = async () => {
@@ -84,6 +116,37 @@ export const obtenerEstadisticas = async () => {
     
   } catch (error) {
     console.error('❌ Error al obtener estadísticas:', error);
+    throw error;
+  }
+};
+
+/**
+ * Registra que el usuario descargó sus datos
+ */
+export const registrarDescarga = async (numeroSolicitud) => {
+  try {
+    console.log('📥 Registrando descarga:', numeroSolicitud);
+    
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: 'registrarDescarga',
+        numero_solicitud: numeroSolicitud
+      })
+    });
+    
+    console.log('✅ Descarga registrada');
+    return {
+      status: 'success',
+      message: 'Descarga registrada'
+    };
+    
+  } catch (error) {
+    console.error('❌ Error al registrar descarga:', error);
     throw error;
   }
 };
