@@ -4,6 +4,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import FormularioSolicitud from './components/FormularioSolicitud';
 import ValidarIdentidad from './pages/ValidarIdentidad';
+import PanelDPO from './pages/PanelDPO';
 import { FileText, Shield, Phone, Mail } from 'lucide-react';
 import { EMPRESA } from './utils/constants';
 
@@ -44,6 +45,7 @@ function App() {
           <Routes>
             <Route path="/" element={<FormularioSolicitud />} />
             <Route path="/validar/:token" element={<ValidarIdentidad />} />
+            <Route path="/dpo" element={<PanelDPO />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
@@ -76,9 +78,9 @@ function App() {
                   Información Legal
                 </h3>
                 <ul className="space-y-2 text-sm text-gray-600">
-                  <li><a href="#" className="hover:text-blue-600">Política de Privacidad</a></li>
-                  <li><a href="#" className="hover:text-blue-600">Términos y Condiciones</a></li>
-                  <li><a href="#" className="hover:text-blue-600">Ley 21.719 ↗</a></li>
+                  <li><button className="hover:text-blue-600">Política de Privacidad</button></li>
+                  <li><button className="hover:text-blue-600">Términos y Condiciones</button></li>
+                  <li><a href="https://www.bcn.cl/leychile/navegar?idNorma=1198130" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">Ley 21.719 ↗</a></li>
                 </ul>
               </div>
             </div>
