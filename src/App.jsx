@@ -2,111 +2,58 @@ import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+
+// Layout Components
+import Layout from './components/layout/Layout';
+
+// Páginas existentes (NO SE TOCAN)
 import FormularioSolicitud from './components/FormularioSolicitud';
 import ValidarIdentidad from './pages/ValidarIdentidad';
 import Seguimiento from './pages/Seguimiento';
 import PanelDPO from './pages/PanelDPO';
-import { FileText, Shield, Phone, Mail } from 'lucide-react';
-import { EMPRESA } from './utils/constants';
+
+// Páginas nuevas (se agregarán después)
+import Dashboard from './pages/Dashboard';
+// import Reportes from './pages/Reportes';
+// import Configuracion from './pages/Configuracion';
+// import BuscarSolicitud from './pages/BuscarSolicitud';
 
 function App() {
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Layout envuelve todo: Navbar + Content + Footer */}
+      <Layout>
+        <Routes>
+          {/* Rutas públicas existentes - NO SE TOCAN */}
+          <Route path="/" element={<FormularioSolicitud />} />
+          <Route path="/validar/:token" element={<ValidarIdentidad />} />
+          <Route path="/seguimiento/:numero" element={<Seguimiento />} />
+          
+          {/* Rutas DPO existentes - NO SE TOCAN */}
+          <Route path="/dpo" element={<PanelDPO />} />
+          
+          {/* Rutas nuevas (descomentar cuando estén listas) */}
+          { <Route path="/dpo/dashboard" element={<Dashboard />} /> }
+          {/* <Route path="/dpo/reportes" element={<Reportes />} /> */}
+          {/* <Route path="/dpo/configuracion" element={<Configuracion />} /> */}
+          {/* <Route path="/buscar" element={<BuscarSolicitud />} /> */}
+          
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
 
-        {/* Header */}
-        <header className="bg-white shadow-sm sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="bg-blue-600 p-2 rounded-lg">
-                  <FileText className="w-7 h-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-900">
-                    Portal ARCOP
-                  </h1>
-                  <p className="text-xs text-gray-500">
-                    Protección de Datos Personales
-                  </p>
-                </div>
-              </div>
-              <div className="hidden sm:flex items-center space-x-2 bg-blue-50 px-4 py-2 rounded-lg">
-                <Shield className="w-5 h-5 text-blue-600" />
-                <span className="text-sm font-medium text-blue-900">
-                  Ley 21.719
-                </span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Main con Rutas */}
-        <main className="flex-grow">
-          <Routes>
-            <Route path="/" element={<FormularioSolicitud />} />
-            <Route path="/validar/:token" element={<ValidarIdentidad />} />
-            <Route path="/seguimiento/:numero" element={<Seguimiento />} />
-            <Route path="/dpo" element={<PanelDPO />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-
-        {/* Footer */}
-        <footer className="bg-white border-t border-gray-200 mt-auto">
-          <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                  Delegado de Protección de Datos (DPO)
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Mail className="w-4 h-4 mr-2 text-blue-600" />
-                    <a href={`mailto:${EMPRESA.DPO_EMAIL}`} className="hover:text-blue-600">
-                      {EMPRESA.DPO_EMAIL}
-                    </a>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Phone className="w-4 h-4 mr-2 text-blue-600" />
-                    <a href={`tel:${EMPRESA.DPO_TELEFONO}`} className="hover:text-blue-600">
-                      {EMPRESA.DPO_TELEFONO}
-                    </a>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                  Información Legal
-                </h3>
-                <ul className="space-y-2 text-sm text-gray-600">
-                  <li><button className="hover:text-blue-600">Política de Privacidad</button></li>
-                  <li><button className="hover:text-blue-600">Términos y Condiciones</button></li>
-                  <li>
-                    <a href="https://www.bcn.cl/leychile/navegar?idNorma=1198130" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600">
-                      Ley 21.719 ↗
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div className="pt-6 border-t text-center text-sm text-gray-500">
-              © 2026 {EMPRESA.NOMBRE} | RUT: {EMPRESA.RUT}
-            </div>
-          </div>
-        </footer>
-
-        <ToastContainer
-          position="top-right"
-          autoClose={5000}
-          hideProgressBar={false}
-          newestOnTop
-          closeOnClick
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-        />
-      </div>
+      {/* Toast notifications */}
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </Router>
   );
 }

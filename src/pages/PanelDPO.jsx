@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle, Clock, Loader, AlertTriangle, 
-  Search, Filter, Download, Upload, X, Link as LinkIcon 
+  Search, Filter, Download, Upload, X, Link as LinkIcon,
+  FolderOpen, AlertCircle, FileCheck, Repeat, CheckCheck, Bell
 } from 'lucide-react';
 import { obtenerTodasSolicitudes, obtenerEstadisticas, actualizarSolicitud, marcarComoResuelta } from '../services/dpoService';
 
@@ -131,28 +132,57 @@ const PanelDPO = () => {
         {/* Estadísticas */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            {/* Total */}
             <div className="bg-white rounded-lg shadow p-6">
-              <div className="text-sm text-gray-600 mb-1">Total</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-gray-600">Total</div>
+                <FolderOpen className="w-8 h-8 text-gray-400" />
+              </div>
               <div className="text-3xl font-bold text-gray-900">{stats.total}</div>
             </div>
+            
+            {/* Pendientes */}
             <div className="bg-yellow-50 rounded-lg shadow p-6">
-              <div className="text-sm text-yellow-700 mb-1">Pendientes</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-yellow-700">Pendientes</div>
+                <Clock className="w-8 h-8 text-yellow-500" />
+              </div>
               <div className="text-3xl font-bold text-yellow-800">{stats.pendientes}</div>
             </div>
+            
+            {/* Validadas */}
             <div className="bg-blue-50 rounded-lg shadow p-6">
-              <div className="text-sm text-blue-700 mb-1">Validadas</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-blue-700">Validadas</div>
+                <FileCheck className="w-8 h-8 text-blue-500" />
+              </div>
               <div className="text-3xl font-bold text-blue-800">{stats.validadas}</div>
             </div>
+            
+            {/* En Proceso */}
             <div className="bg-purple-50 rounded-lg shadow p-6">
-              <div className="text-sm text-purple-700 mb-1">En Proceso</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-purple-700">En Proceso</div>
+                <Repeat className="w-8 h-8 text-purple-500" />
+              </div>
               <div className="text-3xl font-bold text-purple-800">{stats.en_proceso}</div>
             </div>
+            
+            {/* Resueltas */}
             <div className="bg-green-50 rounded-lg shadow p-6">
-              <div className="text-sm text-green-700 mb-1">Resueltas</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-green-700">Resueltas</div>
+                <CheckCheck className="w-8 h-8 text-green-500" />
+              </div>
               <div className="text-3xl font-bold text-green-800">{stats.resueltas}</div>
             </div>
+            
+            {/* Por Vencer */}
             <div className="bg-red-50 rounded-lg shadow p-6">
-              <div className="text-sm text-red-700 mb-1">Por Vencer</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm text-red-700">Por Vencer</div>
+                <Bell className="w-8 h-8 text-red-500" />
+              </div>
               <div className="text-3xl font-bold text-red-800">{stats.por_vencer}</div>
             </div>
           </div>
@@ -336,28 +366,28 @@ const PanelDPO = () => {
 
       {/* Modal para marcar como RESUELTA */}
       {modalResuelta && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
-            <div className="flex justify-between items-start mb-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-4">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">Entregar datos al usuario</h2>
-                <p className="text-gray-600 mt-1">Solicitud #{modalResuelta.numero_solicitud}</p>
+                <h2 className="text-xl font-bold text-gray-900">Entregar datos al usuario</h2>
+                <p className="text-gray-600 mt-0.5 text-sm">Solicitud #{modalResuelta.numero_solicitud}</p>
               </div>
               <button
                 onClick={cerrarModal}
                 className="text-gray-400 hover:text-gray-600"
                 disabled={enviando}
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               
               {/* Información del usuario */}
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">Usuario</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="bg-blue-50 rounded-lg p-3">
+                <h3 className="font-semibold text-blue-900 mb-2 text-sm">Usuario</h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <span className="text-blue-700">Nombre:</span>
                     <span className="ml-2 text-blue-900 font-medium">{modalResuelta.nombre_completo}</span>
@@ -374,14 +404,14 @@ const PanelDPO = () => {
               </div>
 
               {/* Instrucciones */}
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
                 <div className="flex">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-semibold text-yellow-800 mb-2">Instrucciones:</p>
-                    <ol className="list-decimal list-inside space-y-1 text-yellow-700">
-                      <li>Sube el archivo con los datos a <strong>Google Drive</strong></li>
-                      <li>Haz clic derecho → <strong>"Obtener enlace"</strong></li>
+                  <AlertTriangle className="w-4 h-4 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <p className="font-semibold text-yellow-800 mb-1">Instrucciones:</p>
+                    <ol className="list-decimal list-inside space-y-0.5 text-yellow-700">
+                      <li>Sube el archivo a <strong>Google Drive</strong></li>
+                      <li>Clic derecho → <strong>"Obtener enlace"</strong></li>
                       <li>Configura: <strong>"Cualquiera con el enlace"</strong></li>
                       <li>Configura expiración: <strong>48 horas</strong></li>
                       <li>Copia el link y pégalo abajo</li>
@@ -392,8 +422,8 @@ const PanelDPO = () => {
 
               {/* Input URL */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <LinkIcon className="w-4 h-4 inline mr-2" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <LinkIcon className="w-4 h-4 inline mr-1" />
                   Link de descarga de Google Drive
                 </label>
                 <input
@@ -401,7 +431,7 @@ const PanelDPO = () => {
                   value={urlDescarga}
                   onChange={(e) => setUrlDescarga(e.target.value)}
                   placeholder="https://drive.google.com/file/d/..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={enviando}
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -411,17 +441,17 @@ const PanelDPO = () => {
 
               {/* Formato entregado */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Formato del archivo entregado
                 </label>
-                <div className="flex gap-4">
+                <div className="flex gap-3 text-sm">
                   <label className="flex items-center">
                     <input
                       type="radio"
                       value="PDF"
                       checked={formatoEntregado === 'PDF'}
                       onChange={(e) => setFormatoEntregado(e.target.value)}
-                      className="mr-2"
+                      className="mr-1"
                       disabled={enviando}
                     />
                     <span>PDF</span>
@@ -432,7 +462,7 @@ const PanelDPO = () => {
                       value="Excel"
                       checked={formatoEntregado === 'Excel'}
                       onChange={(e) => setFormatoEntregado(e.target.value)}
-                      className="mr-2"
+                      className="mr-1"
                       disabled={enviando}
                     />
                     <span>Excel</span>
@@ -443,7 +473,7 @@ const PanelDPO = () => {
                       value="Ambos"
                       checked={formatoEntregado === 'Ambos'}
                       onChange={(e) => setFormatoEntregado(e.target.value)}
-                      className="mr-2"
+                      className="mr-1"
                       disabled={enviando}
                     />
                     <span>Ambos (PDF + Excel)</span>
@@ -452,9 +482,9 @@ const PanelDPO = () => {
               </div>
 
               {/* ¿Qué pasará? */}
-              <div className="bg-green-50 rounded-lg p-4">
-                <h3 className="font-semibold text-green-900 mb-2">✅ Al confirmar:</h3>
-                <ul className="text-sm text-green-700 space-y-1">
+              <div className="bg-green-50 rounded-lg p-3">
+                <h3 className="font-semibold text-green-900 mb-1 text-sm">✅ Al confirmar:</h3>
+                <ul className="text-xs text-green-700 space-y-0.5">
                   <li>• La solicitud cambiará a estado <strong>RESUELTA</strong></li>
                   <li>• Se enviará un email automático al usuario con el link</li>
                   <li>• El usuario podrá descargar sus datos desde el seguimiento</li>
@@ -465,27 +495,27 @@ const PanelDPO = () => {
             </div>
 
             {/* Botones */}
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-3 mt-4 pt-4 border-t">
               <button
                 onClick={cerrarModal}
-                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm"
                 disabled={enviando}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleMarcarResuelta}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={enviando || !urlDescarga.trim()}
               >
                 {enviando ? (
                   <>
-                    <Loader className="w-5 h-5 inline animate-spin mr-2" />
+                    <Loader className="w-4 h-4 inline animate-spin mr-1" />
                     Enviando...
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="w-5 h-5 inline mr-2" />
+                    <CheckCircle className="w-4 h-4 inline mr-1" />
                     Marcar como Resuelta y Enviar
                   </>
                 )}

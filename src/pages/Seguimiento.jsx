@@ -39,6 +39,40 @@ const Seguimiento = () => {
     }
   };
 
+  const handleDescargar = async () => {
+    try {
+      console.log('📥 Registrando descarga...');
+      
+      // Registrar descarga en backend
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'registrarDescarga',
+          numero_solicitud: numero
+        })
+      });
+      
+      console.log('✅ Descarga registrada');
+      
+      // Abrir link en nueva pestaña
+      window.open(solicitud.url_descarga, '_blank');
+      
+      // Recargar datos para mostrar que se descargó
+      setTimeout(() => {
+        cargarSeguimiento();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ Error al registrar descarga:', error);
+      // Igual abrir el link aunque falle el registro
+      window.open(solicitud.url_descarga, '_blank');
+    }
+  };
+
   const getEstadoInfo = (estado) => {
     const estados = {
       'PENDIENTE': { 
@@ -208,13 +242,13 @@ const Seguimiento = () => {
           {/* Botón de descarga si está resuelta */}
           {solicitud.estado === 'RESUELTA' && solicitud.url_descarga && (
             <div className="mt-4">
-              <a
-                href={solicitud.url_descarga}
+              <button
+                onClick={handleDescargar}
                 className="flex items-center justify-center gap-2 w-full px-6 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold text-lg"
               >
                 <Download className="w-6 h-6" />
-                Descargar mis datos ({solicitud.formato_preferido})
-              </a>
+                Descargar mis datos ({solicitud.formato_entregado || solicitud.formato_preferido})
+              </button>
               <p className="text-sm text-gray-600 text-center mt-2">
                 ⚠️ Este link expira en 48 horas por seguridad
               </p>
