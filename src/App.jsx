@@ -6,36 +6,35 @@ import 'react-toastify/dist/ReactToastify.css';
 // Layout Components
 import Layout from './components/layout/Layout';
 
-// Páginas existentes (NO SE TOCAN)
+// Páginas existentes
 import FormularioSolicitud from './components/FormularioSolicitud';
 import ValidarIdentidad from './pages/ValidarIdentidad';
 import Seguimiento from './pages/Seguimiento';
 import PanelDPO from './pages/PanelDPO';
 
-// Páginas nuevas (se agregarán después)
+// Páginas nuevas
 import Dashboard from './pages/Dashboard';
+import Configuracion from './pages/Configuracion';
 // import Reportes from './pages/Reportes';
-// import Configuracion from './pages/Configuracion';
 // import BuscarSolicitud from './pages/BuscarSolicitud';
 
 function App() {
   return (
     <Router>
-      {/* Layout envuelve todo: Navbar + Content + Footer */}
       <Layout>
         <Routes>
-          {/* Rutas públicas existentes - NO SE TOCAN */}
+          {/* Rutas públicas */}
           <Route path="/" element={<FormularioSolicitud />} />
           <Route path="/validar/:token" element={<ValidarIdentidad />} />
           <Route path="/seguimiento/:numero" element={<Seguimiento />} />
           
-          {/* Rutas DPO existentes - NO SE TOCAN */}
+          {/* Rutas DPO */}
           <Route path="/dpo" element={<PanelDPO />} />
-          
-          {/* Rutas nuevas (descomentar cuando estén listas) */}
-          { <Route path="/dpo/dashboard" element={<Dashboard />} /> }
+          <Route path="/dpo/dashboard" element={<Dashboard />} />
+          <Route path="/dpo/configuracion" element={<Configuracion />} />
           {/* <Route path="/dpo/reportes" element={<Reportes />} /> */}
-          {/* <Route path="/dpo/configuracion" element={<Configuracion />} /> */}
+          
+          {/* Rutas públicas adicionales */}
           {/* <Route path="/buscar" element={<BuscarSolicitud />} /> */}
           
           {/* Fallback */}
@@ -43,7 +42,6 @@ function App() {
         </Routes>
       </Layout>
 
-      {/* Toast notifications */}
       <ToastContainer
         position="top-right"
         autoClose={5000}
