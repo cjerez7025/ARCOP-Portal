@@ -1,13 +1,13 @@
 /**
  * SolicitudesTable.jsx
- * Tabla mejorada con mapeo automático de columnas
+ * Tabla de solicitudes con todas las acciones DPO
  */
 
 import React from 'react';
-import { Eye } from 'lucide-react';
+import { Eye, Edit, CheckCircle } from 'lucide-react';
 import { ESTADO_COLORS, ESTADO_LABELS } from '../utils/constants';
 
-const SolicitudesTable = ({ solicitudes, onVerDetalle }) => {
+const SolicitudesTable = ({ solicitudes, onVerDetalle, onCambiarEstado, onMarcarResuelta }) => {
   
   /**
    * Obtiene valor de campo con fallback a mayúsculas/minúsculas
@@ -166,13 +166,38 @@ const SolicitudesTable = ({ solicitudes, onVerDetalle }) => {
                   {fecha}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <button
-                    onClick={() => onVerDetalle(solicitud)}
-                    className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1"
-                  >
-                    <Eye className="w-4 h-4" />
-                    Ver
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {/* Ver Detalle */}
+                    <button
+                      onClick={() => onVerDetalle(solicitud)}
+                      className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1"
+                      title="Ver detalle"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Cambiar Estado (si las funciones están disponibles) */}
+                    {onCambiarEstado && (
+                      <button
+                        onClick={() => onCambiarEstado(solicitud)}
+                        className="text-yellow-600 hover:text-yellow-900 inline-flex items-center gap-1"
+                        title="Cambiar estado"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    )}
+                    
+                    {/* Marcar Resuelta (solo si no está resuelta) */}
+                    {onMarcarResuelta && estado !== 'RESUELTA' && estado !== 'CERRADA' && (
+                      <button
+                        onClick={() => onMarcarResuelta(solicitud)}
+                        className="text-green-600 hover:text-green-900 inline-flex items-center gap-1"
+                        title="Marcar resuelta"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
