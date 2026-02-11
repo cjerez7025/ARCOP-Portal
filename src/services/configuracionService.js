@@ -1,7 +1,7 @@
 /**
  * configuracionService.js
  * Servicio para gestionar la configuración del sistema
- * VERSIÓN CON FALLBACK - No bloquea si falla
+ * VERSIÓN CORREGIDA - Con manejo correcto de respuestas
  */
 
 import { API_URL } from '../utils/constants';
@@ -91,6 +91,7 @@ export const obtenerConfiguracion = async () => {
 
 /**
  * Guarda la configuración del sistema
+ * CORRECCIÓN: Removido mode: 'no-cors' para poder recibir respuesta
  */
 export const guardarConfiguracion = async (configuracion) => {
   try {
@@ -101,25 +102,26 @@ export const guardarConfiguracion = async (configuracion) => {
       console.warn('⚠️ API_URL no configurada, no se puede guardar en servidor');
       return {
         status: 'warning',
-        message: 'Configuración guardada localmente. Configure API_URL para guardar en servidor.'
+        message: 'API_URL no configurada. Configure la URL del backend en el archivo .env'
       };
     }
     
-    const response = await fetch(`${API_URL}?action=guardarConfiguracion`, {
+    // CAMBIO CRÍTICO: Hacer POST sin mode: 'no-cors'
+    const response = await fetch(API_URL, {
       method: 'POST',
-      mode: 'no-cors',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(configuracion)
+      body: JSON.stringify({
+        action: 'guardarConfiguracion',
+        ...configuracion
+      })
     });
 
-    console.log('✅ Configuración guardada');
+    const data = await response.json();
+    console.log('✅ Respuesta del servidor:', data);
     
-    return {
-      status: 'success',
-      message: 'Configuración guardada correctamente'
-    };
+    return data;
     
   } catch (error) {
     console.error('❌ Error en guardarConfiguracion:', error);
@@ -145,20 +147,20 @@ export const restaurarConfiguracion = async () => {
       };
     }
     
-    const response = await fetch(`${API_URL}?action=restaurarConfiguracion`, {
+    const response = await fetch(API_URL, {
       method: 'POST',
-      mode: 'no-cors',
       headers: {
         'Content-Type': 'application/json',
-      }
+      },
+      body: JSON.stringify({
+        action: 'restaurarConfiguracion'
+      })
     });
 
-    console.log('✅ Configuración restaurada');
+    const data = await response.json();
+    console.log('✅ Configuración restaurada:', data);
     
-    return {
-      status: 'success',
-      message: 'Configuración restaurada correctamente'
-    };
+    return data;
     
   } catch (error) {
     console.error('❌ Error en restaurarConfiguracion:', error);
@@ -204,7 +206,7 @@ export const exportarConfiguracion = async () => {
     const data = await response.json();
     
     if (data.status === 'success') {
-      const blob = new Blob([data.data], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
