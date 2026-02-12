@@ -75,7 +75,7 @@ const PanelDPO = () => {
     setNuevoEstado(getFieldValue(solicitud, 'estado') || 'PENDIENTE');
   };
 
-  const handleCambiarEstado = async () => {
+ const handleCambiarEstado = async () => {
     if (!modalCambiarEstado || !nuevoEstado) {
       toast.error('Selecciona un estado válido');
       return;
@@ -83,28 +83,36 @@ const PanelDPO = () => {
 
     try {
       setProcesando(true);
-      
-      const id = getFieldValue(modalCambiarEstado, 'id') || 
-                 getFieldValue(modalCambiarEstado, 'ID');
-      
-      const result = await actualizarSolicitud(id, {
-        estado: nuevoEstado
-      });
+
+      const id = getSolicitudId(modalCambiarEstado);
+
+      if (!id) {
+        toast.error('No se pudo obtener el ID de la solicitud');
+        console.error('❌ Solicitud sin ID:', modalCambiarEstado);
+        return;
+      }
+
+      console.log('🔄 Cambiando estado - ID:', id, '→', nuevoEstado);
+
+      const result = await actualizarSolicitud(id, { estado: nuevoEstado });
 
       if (result.status === 'success') {
         toast.success('✅ Estado actualizado correctamente');
         setModalCambiarEstado(null);
         await cargarSolicitudes();
       } else {
-        toast.error('Error al actualizar estado');
+        toast.error('Error al actualizar estado: ' + (result.message || ''));
+        console.error('❌ Error del backend:', result);
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('❌ Error en handleCambiarEstado:', error);
       toast.error('Error al actualizar estado');
     } finally {
       setProcesando(false);
     }
   };
+
+
 
   const handleAbrirMarcarResuelta = (solicitud) => {
     setModalResuelta(solicitud);
@@ -112,7 +120,7 @@ const PanelDPO = () => {
     setFormatoEntregado('PDF');
   };
 
-  const handleMarcarResuelta = async () => {
+const handleMarcarResuelta = async () => {
     if (!modalResuelta || !urlDescarga.trim()) {
       toast.error('Ingresa la URL de descarga');
       return;
@@ -120,36 +128,88 @@ const PanelDPO = () => {
 
     try {
       setProcesando(true);
-      
-      const id = getFieldValue(modalResuelta, 'id') || 
-                 getFieldValue(modalResuelta, 'ID');
-      
+
+      const id = getSolicitudId(modalResuelta);
+
+      if (!id) {
+        toast.error('No se pudo obtener el ID de la solicitud');
+        console.error('❌ Solicitud sin ID:', modalResuelta);
+        return;
+      }
+
+      console.log('✅ Marcando resuelta - ID:', id);
+
       const result = await marcarComoResuelta(id, urlDescarga, formatoEntregado);
 
       if (result.status === 'success') {
-        toast.success('✅ Solicitud marcada como resuelta. Email enviado al usuario.');
+        toast.success('✅ Solicitud resuelta. Email enviado al usuario.');
         setModalResuelta(null);
         await cargarSolicitudes();
       } else {
-        toast.error('Error al marcar como resuelta');
+        toast.error('Error: ' + (result.message || ''));
+        console.error('❌ Error del backend:', result);
       }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('❌ Error en handleMarcarResuelta:', error);
       toast.error('Error al marcar como resuelta');
     } finally {
       setProcesando(false);
     }
   };
 
+
+
+
+
+
   /**
    * Helper para obtener valor de campo con mayúsculas/minúsculas
    */
-  const getFieldValue = (obj, fieldName) => {
+   const getFieldValue = (obj, fieldName) => {
     if (!obj) return '';
-    if (obj[fieldName] !== undefined) return obj[fieldName];
-    if (obj[fieldName.toUpperCase()] !== undefined) return obj[fieldName.toUpperCase()];
-    if (obj[fieldName.toLowerCase()] !== undefined) return obj[fieldName.toLowerCase()];
+    // Intentar el nombre exacto
+    if (obj[fieldName] !== undefined && obj[fieldName] !== null && obj[fieldName] !== '')
+      return obj[fieldName];
+    // Intentar mayúsculas
+    const upper = fieldName.toUpperCase();
+    if (obj[upper] !== undefined && obj[upper] !== null && obj[upper] !== '')
+      return obj[upper];
+    // Intentar minúsculas
+    const lower = fieldName.toLowerCase();
+    if (obj[lower] !== undefined && obj[lower] !== null && obj[lower] !== '')
+      return obj[lower];
     return '';
+  };
+ // Obtiene el identificador único de una solicitud
+  // Intenta 'id', 'ID', luego 'numero_solicitud' como fallback
+  const getSolicitudId = (solicitud) => {
+    if (!solicitud) return null;
+
+    // Log para debugging
+    console.log('🔍 getSolicitudId - objeto completo:', solicitud);
+
+    // Intentar todas las variantes del campo id
+    const posiblesId = ['id', 'ID', 'Id'];
+    for (const campo of posiblesId) {
+      const valor = solicitud[campo];
+      if (valor && valor.toString().trim() !== '') {
+        console.log(`✅ ID encontrado en campo "${campo}":`, valor);
+        return valor.toString().trim();
+      }
+    }
+
+    // Fallback: usar numero_solicitud (también sirve para buscar en el backend)
+    const posiblesNumero = ['numero_solicitud', 'NUMERO_SOLICITUD', 'Numero_Solicitud'];
+    for (const campo of posiblesNumero) {
+      const valor = solicitud[campo];
+      if (valor && valor.toString().trim() !== '') {
+        console.warn(`⚠️ ID vacío, usando numero_solicitud como fallback: "${valor}"`);
+        return valor.toString().trim();
+      }
+    }
+
+    console.error('❌ No se encontró ID ni numero_solicitud en:', Object.keys(solicitud));
+    return null;
   };
 
   /**
