@@ -1,93 +1,55 @@
 // ============================================
-// UTILIDADES GENERALES
+// UTILS.GS - UTILIDADES GENERALES
 // ============================================
 
 const Utils = {
   
   /**
-   * Crea respuesta HTTP JSON
-   */
-  crearRespuesta: function(exito, mensaje, datos) {
-    const respuesta = {
-      status: exito ? 'success' : 'error',
-      message: mensaje
-    };
-    
-    if (datos) {
-      respuesta.data = datos;
-    }
-    
-    return ContentService
-      .createTextOutput(JSON.stringify(respuesta))
-      .setMimeType(ContentService.MimeType.JSON);
-  },
-  
-  /**
-   * Registra evento en logs
-   */
-  registrarLog: function(accion, referencia, detalles) {
-    try {
-      const sheet = ConfiguracionService.getOrCreateSheet(ConfiguracionService.LOGS_SHEET_NAME);
-      
-      // Crear headers si es nueva hoja
-      if (sheet.getLastRow() === 0) {
-        sheet.appendRow(['TIMESTAMP', 'ACCION', 'REFERENCIA', 'DETALLES', 'USUARIO']);
-        sheet.getRange('A1:E1')
-          .setFontWeight('bold')
-          .setBackground('#34A853')
-          .setFontColor('#ffffff');
-      }
-      
-      const timestamp = new Date();
-      const usuario = Session.getEffectiveUser().getEmail();
-      
-      sheet.appendRow([timestamp, accion, referencia, detalles, usuario]);
-      
-    } catch (error) {
-      Logger.log('Error al registrar log: ' + error);
-    }
-  },
-  
-  /**
-   * Genera ID único
+   * Genera un ID único para solicitud
    */
   generarId: function() {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substr(2, 9);
-    return `${timestamp}-${random}`;
+    return 'SOL_' + new Date().getTime() + '_' + Math.random().toString(36).substr(2, 9);
   },
   
   /**
-   * Genera número de solicitud
+   * Genera número de solicitud con formato SOL-YYYYMM-XXXX
    */
   generarNumeroSolicitud: function() {
     const fecha = new Date();
     const año = fecha.getFullYear();
-    const numero = String(Date.now()).slice(-5);
-    return `SOL-${año}-${numero}`;
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `SOL-${año}${mes}-${random}`;
   },
   
   /**
-   * Genera token aleatorio
+   * Genera token de validación aleatorio
    */
   generarToken: function() {
-    const part1 = Math.random().toString(36).substr(2);
-    const part2 = Math.random().toString(36).substr(2);
-    return part1 + part2;
+    return Math.random().toString(36).substr(2, 9) + Math.random().toString(36).substr(2, 9);
   },
   
   /**
-   * Calcula fecha límite (15 días hábiles)
+   * Calcula fecha de expiración del token (5 días)
+   */
+  calcularExpiracionToken: function() {
+    const fecha = new Date();
+    fecha.setDate(fecha.getDate() + Config.PLAZOS.DIAS_VALIDACION);
+    return fecha.toISOString();
+  },
+  
+  /**
+   * Calcula fecha límite de respuesta (15 días hábiles)
    */
   calcularFechaLimite: function() {
     const fecha = new Date();
     let diasAgregados = 0;
     
-    while (diasAgregados < ConfiguracionService.PLAZOS.DIAS_HABILES_RESPUESTA) {
+    while (diasAgregados < Config.PLAZOS.DIAS_RESPUESTA) {
       fecha.setDate(fecha.getDate() + 1);
       const diaSemana = fecha.getDay();
       
-      // No contar sábados (6) ni domingos (0)
+      // Omitir sábados (6) y domingos (0)
       if (diaSemana !== 0 && diaSemana !== 6) {
         diasAgregados++;
       }
@@ -97,28 +59,28 @@ const Utils = {
   },
   
   /**
-   * Calcula expiración del token (30 minutos)
+   * Normaliza headers de columnas a minúsculas
    */
-  calcularExpiracionToken: function() {
-    const ahora = Date.now();
-    const minutos = ConfiguracionService.PLAZOS.MINUTOS_EXPIRACION_TOKEN;
-    const milisegundos = minutos * 60 * 1000;
-    return new Date(ahora + milisegundos).toISOString();
+  normalizarHeader: function(header) {
+    return header.toString().toLowerCase().trim();
   },
   
   /**
-   * Formatea fecha a string legible
+   * Busca índice de columna (case-insensitive)
    */
-  formatearFecha: function(fecha) {
-    if (!fecha) return '';
-    
-    const d = new Date(fecha);
-    return d.toLocaleDateString('es-CL', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+  buscarIndiceColumna: function(headers, nombreColumna) {
+    const nombreNormalizado = nombreColumna.toLowerCase();
+    return headers.findIndex(h => this.normalizarHeader(h) === nombreNormalizado);
+  },
+  
+  /**
+   * Convierte fila de Sheet a objeto
+   */
+  filaAObjeto: function(headers, fila) {
+    const objeto = {};
+    headers.forEach((header, index) => {
+      objeto[this.normalizarHeader(header)] = fila[index];
     });
+    return objeto;
   }
 };
