@@ -18,7 +18,7 @@ const Dashboard = () => {
     try {
       setLoading(true);
       console.log('📊 Cargando datos del dashboard...');
-      
+
       const [statsResult, solicitudesResult] = await Promise.all([
         obtenerEstadisticas(),
         obtenerTodasSolicitudes({})
@@ -28,7 +28,7 @@ const Dashboard = () => {
         setStats(statsResult.data);
         console.log('✅ Estadísticas cargadas:', statsResult.data);
       }
-      
+
       if (solicitudesResult.status === 'success') {
         setSolicitudes(solicitudesResult.data);
         console.log('✅ Solicitudes cargadas:', solicitudesResult.data.length);
@@ -51,14 +51,14 @@ const Dashboard = () => {
     );
   }
 
-  // Calcular solicitudes recientes (últimas 5)
+  // Solicitudes recientes (últimas 5)
   const solicitudesRecientes = [...solicitudes]
     .sort((a, b) => new Date(b.fecha_solicitud) - new Date(a.fecha_solicitud))
     .slice(0, 5);
 
-  // Calcular alertas
+  // ── Alertas con filtro ──────────────────────────────────────
   const alertas = [];
-  
+
   if (stats && stats.por_vencer > 0) {
     alertas.push({
       tipo: 'urgente',
@@ -66,11 +66,14 @@ const Dashboard = () => {
       mensaje: `${stats.por_vencer} solicitud${stats.por_vencer > 1 ? 'es' : ''} ${stats.por_vencer > 1 ? 'vencen' : 'vence'} en menos de 3 días`,
       color: 'text-red-600',
       bg: 'bg-red-50',
-      border: 'border-red-200'
+      border: 'border-red-200',
+      filtro: { por_vencer: true }      // ✅ filtro para PanelDPO
     });
   }
 
-  const sinAsignar = solicitudes.filter(s => !s.asignado_a && s.estado !== 'CERRADA' && s.estado !== 'RESUELTA').length;
+  const sinAsignar = solicitudes.filter(
+    s => !s.asignado_a && s.estado !== 'CERRADA' && s.estado !== 'RESUELTA'
+  ).length;
   if (sinAsignar > 0) {
     alertas.push({
       tipo: 'warning',
@@ -78,7 +81,8 @@ const Dashboard = () => {
       mensaje: `${sinAsignar} solicitud${sinAsignar > 1 ? 'es' : ''} sin asignar`,
       color: 'text-yellow-600',
       bg: 'bg-yellow-50',
-      border: 'border-yellow-200'
+      border: 'border-yellow-200',
+      filtro: { sin_asignar: true }     // ✅ filtro para PanelDPO
     });
   }
 
@@ -90,17 +94,18 @@ const Dashboard = () => {
       mensaje: `${pendientesValidacion} solicitudes pendientes de validación`,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
-      border: 'border-blue-200'
+      border: 'border-blue-200',
+      filtro: { estado: 'PENDIENTE' }   // ✅ filtro para PanelDPO
     });
   }
 
   const getEstadoBadge = (estado) => {
     const badges = {
-      'PENDIENTE': 'bg-yellow-100 text-yellow-800',
-      'VALIDADA': 'bg-blue-100 text-blue-800',
+      'PENDIENTE':  'bg-yellow-100 text-yellow-800',
+      'VALIDADA':   'bg-blue-100 text-blue-800',
       'EN_PROCESO': 'bg-purple-100 text-purple-800',
-      'RESUELTA': 'bg-green-100 text-green-800',
-      'CERRADA': 'bg-gray-100 text-gray-800'
+      'RESUELTA':   'bg-green-100 text-green-800',
+      'CERRADA':    'bg-gray-100 text-gray-800'
     };
     return badges[estado] || 'bg-gray-100 text-gray-800';
   };
@@ -108,7 +113,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto space-y-8">
-        
+
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
@@ -132,8 +137,11 @@ const Dashboard = () => {
                   >
                     <IconoAlerta className={`w-6 h-6 ${alerta.color} flex-shrink-0`} />
                     <p className={`font-medium ${alerta.color} flex-grow`}>{alerta.mensaje}</p>
+
+                    {/* ✅ Link con state que lleva el filtro al PanelDPO */}
                     <Link
                       to="/dpo"
+                      state={{ filtro: alerta.filtro }}
                       className={`text-sm ${alerta.color} hover:underline flex items-center gap-1 whitespace-nowrap`}
                     >
                       Ver solicitudes
@@ -256,6 +264,7 @@ const Dashboard = () => {
             <p className="text-sm text-gray-600">Ajustes del sistema</p>
           </Link>
         </div>
+
       </div>
     </div>
   );
