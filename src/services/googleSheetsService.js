@@ -1,31 +1,26 @@
 // ==================================================
 // PORTAL ARCOP - SERVICIO GOOGLE APPS SCRIPT
-// VERSION CORREGIDA - validarIdentidad sin no-cors
+// ✅ tipo: dinámico (ya no hardcodeado como ACCESO)
+// ✅ campos extra por tipo incluidos en solicitudCompleta
 // ==================================================
 
 const APPS_SCRIPT_URL = process.env.REACT_APP_APPS_SCRIPT_URL;
 
-// ==================================================
-// FUNCIONES AUXILIARES
-// ==================================================
-
+// ── Helpers ────────────────────────────────────────────────
 const generarId = () => {
   const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 9);
+  const random    = Math.random().toString(36).substr(2, 9);
   return `${timestamp}-${random}`;
 };
 
 const generarNumeroSolicitud = () => {
-  const fecha = new Date();
-  const anio = fecha.getFullYear();
+  const anio   = new Date().getFullYear();
   const numero = String(Date.now()).slice(-5);
   return `SOL-${anio}-${numero}`;
 };
 
 const generarToken = () => {
-  const part1 = Math.random().toString(36).substr(2);
-  const part2 = Math.random().toString(36).substr(2);
-  return part1 + part2;
+  return Math.random().toString(36).substr(2) + Math.random().toString(36).substr(2);
 };
 
 const calcularFechaLimite = () => {
@@ -33,76 +28,84 @@ const calcularFechaLimite = () => {
   let diasAgregados = 0;
   while (diasAgregados < 15) {
     fecha.setDate(fecha.getDate() + 1);
-    const diaSemana = fecha.getDay();
-    if (diaSemana !== 0 && diaSemana !== 6) {
-      diasAgregados++;
-    }
+    const dia = fecha.getDay();
+    if (dia !== 0 && dia !== 6) diasAgregados++;
   }
   return fecha.toISOString();
 };
 
 const calcularExpiracionToken = () => {
-  const ahora = Date.now();
-  const cincoDias = 5 * 24 * 60 * 60 * 1000;
-  return new Date(ahora + cincoDias).toISOString();
+  return new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
 };
 
 // ==================================================
-// FUNCION PRINCIPAL: CREAR SOLICITUD
+// CREAR SOLICITUD
 // ==================================================
-
 export const crearSolicitud = async (datos) => {
   try {
-    console.log('Creando solicitud...', datos);
+    console.log('Creando solicitud tipo:', datos.tipo, datos);
 
     if (!APPS_SCRIPT_URL) {
       throw new Error('APPS_SCRIPT_URL no configurada en .env');
     }
 
-    const id = generarId();
-    const numero = generarNumeroSolicitud();
-    const token = generarToken();
+    const id            = generarId();
+    const numero        = generarNumeroSolicitud();
+    const token         = generarToken();
     const fechaSolicitud = new Date().toISOString();
-    const fechaLimite = calcularFechaLimite();
+    const fechaLimite   = calcularFechaLimite();
     const tokenExpiracion = calcularExpiracionToken();
-    const frontendUrl = process.env.REACT_APP_FRONTEND_URL || window.location.origin;
+    const frontendUrl   = process.env.REACT_APP_FRONTEND_URL || window.location.origin;
 
-    console.log('Frontend URL:', frontendUrl);
-
+    // ✅ tipo viene del formulario, no hardcodeado
     const solicitudCompleta = {
       id,
-      numero_solicitud: numero,
-      fecha_solicitud: fechaSolicitud,
-      tipo: 'ACCESO',
-      estado: 'PENDIENTE',
-      nombre_completo: datos.nombre_completo,
-      rut: datos.rut,
-      email: datos.email.toLowerCase(),
-      telefono: datos.telefono || '',
-      alcance_acceso: datos.alcance_acceso,
-      categorias: JSON.stringify(datos.categorias || []),
-      formato_preferido: datos.formato_preferido,
-      token_validacion: token,
-      token_expiracion: tokenExpiracion,
-      fecha_limite: fechaLimite,
-      dias_restantes: 15,
-      ip_origen: datos.metadata?.ip_origen || window.location.hostname,
-      user_agent: datos.metadata?.user_agent || navigator.userAgent,
-      creado_en: fechaSolicitud,
-      frontend_url: frontendUrl
+      numero_solicitud:  numero,
+      fecha_solicitud:   fechaSolicitud,
+      tipo:              datos.tipo || 'ACCESO',           // ✅ dinámico
+      estado:            'PENDIENTE',
+      nombre_completo:   datos.nombre_completo,
+      rut:               datos.rut,
+      email:             datos.email.toLowerCase(),
+      telefono:          datos.telefono || '',
+      // Campos de acceso/portabilidad
+      alcance_acceso:    datos.alcance_acceso    || '',
+      categorias:        JSON.stringify(datos.categorias || []),
+      formato_preferido: datos.formato_preferido || 'PDF',
+      // Campos de rectificación
+      dato_incorrecto:   datos.dato_incorrecto   || '',
+      valor_correcto:    datos.valor_correcto     || '',
+      documentacion:     datos.documentacion      || '',
+      // Campos de cancelación
+      alcance_cancelacion: datos.alcance_cancelacion || '',
+      // Campos de oposición
+      tipo_oposicion:    datos.tipo_oposicion    || '',
+      // Campos de portabilidad
+      destino_portabilidad: datos.destino_portabilidad || '',
+      // Campo motivo (cancelación/oposición)
+      motivo:            datos.motivo            || '',
+      // Metadatos
+      token_validacion:  token,
+      token_expiracion:  tokenExpiracion,
+      fecha_limite:      fechaLimite,
+      dias_restantes:    15,
+      ip_origen:         datos.metadata?.ip_origen  || window.location.hostname,
+      user_agent:        datos.metadata?.user_agent || navigator.userAgent,
+      creado_en:         fechaSolicitud,
+      frontend_url:      frontendUrl,
     };
 
-    console.log('Enviando a Apps Script...');
+    console.log('Enviando a Apps Script...', solicitudCompleta);
 
     const response = await fetch(`${APPS_SCRIPT_URL}?action=createSolicitud`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ solicitud: solicitudCompleta }),
-      redirect: 'follow'
+      method:   'POST',
+      headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
+      body:     JSON.stringify({ solicitud: solicitudCompleta }),
+      redirect: 'follow',
     });
 
     const responseText = await response.text();
-    console.log('Respuesta:', responseText.substring(0, 200));
+    console.log('Respuesta raw:', responseText.substring(0, 300));
 
     let responseData;
     try {
@@ -117,19 +120,18 @@ export const crearSolicitud = async (datos) => {
       responseData = { status: 'success' };
     }
 
-    console.log('Solicitud creada exitosamente');
-
     return {
       success: true,
       data: {
         id,
         numero_solicitud: numero,
-        fecha_solicitud: fechaSolicitud,
-        fecha_limite: fechaLimite,
-        email: datos.email,
-        estado: 'PENDIENTE',
-        token_validacion: token
-      }
+        fecha_solicitud:  fechaSolicitud,
+        fecha_limite:     fechaLimite,
+        tipo:             datos.tipo,
+        email:            datos.email,
+        estado:           'PENDIENTE',
+        token_validacion: token,
+      },
     };
 
   } catch (error) {
@@ -142,145 +144,62 @@ export const crearSolicitud = async (datos) => {
 };
 
 // ==================================================
-// FUNCION: VALIDAR IDENTIDAD - CORREGIDA
-// ✅ Sin mode: no-cors para que el backend reciba correctamente
+// VALIDAR IDENTIDAD
 // ==================================================
-
 export const validarIdentidad = async (token) => {
   try {
-    console.log('=== VALIDANDO IDENTIDAD (FRONTEND) ===');
-    console.log('Token:', token ? token.substr(0, 15) + '...' : 'VACÍO');
+    console.log('=== VALIDANDO IDENTIDAD ===');
+    console.log('Token:', token ? token.substring(0, 20) + '...' : 'null');
 
     if (!APPS_SCRIPT_URL) {
       throw new Error('APPS_SCRIPT_URL no configurada');
     }
 
-    if (!token) {
-      return { success: false, message: 'Token no proporcionado' };
-    }
-
-    console.log('Enviando validacion al backend...');
-
-    // ✅ CORRECCION: Sin mode: no-cors
     const response = await fetch(`${APPS_SCRIPT_URL}?action=validarIdentidad`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ token: token }),
-      redirect: 'follow'
+      method:   'POST',
+      headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
+      body:     JSON.stringify({ token }),
+      redirect: 'follow',
     });
 
-    console.log('Response status:', response.status);
-
     const responseText = await response.text();
-    console.log('Response text:', responseText.substring(0, 300));
+    console.log('Respuesta validación:', responseText.substring(0, 200));
 
-    let responseData;
+    let data;
     try {
-      responseData = JSON.parse(responseText);
-      console.log('Response parseada:', responseData);
-    } catch (parseError) {
-      console.warn('No se pudo parsear respuesta, asumiendo exito');
-      responseData = { status: 'success' };
-    }
-
-    if (responseData.status === 'error') {
-      return {
-        success: false,
-        message: responseData.message || 'Error al validar identidad'
-      };
-    }
-
-    console.log('Identidad validada exitosamente en el backend');
-
-    // Obtener datos actualizados de la solicitud
-    try {
-      const solicitudResponse = await fetch(
-        `${APPS_SCRIPT_URL}?action=getSolicitud&token=${encodeURIComponent(token)}`,
-        { redirect: 'follow' }
-      );
-      const solicitudText = await solicitudResponse.text();
-      const solicitudData = JSON.parse(solicitudText);
-
-      if (solicitudData.status === 'success' && solicitudData.data) {
-        return {
-          success: true,
-          solicitud: solicitudData.data
-        };
+      data = JSON.parse(responseText);
+    } catch {
+      if (responseText.includes('Exception') || responseText.includes('Error')) {
+        return { status: 'error', message: 'Error al validar identidad' };
       }
-    } catch (fetchError) {
-      console.warn('No se pudo obtener datos actualizados:', fetchError.message);
+      return { status: 'success' };
     }
 
-    return {
-      success: true,
-      message: 'Identidad validada correctamente'
-    };
+    return data;
 
   } catch (error) {
-    console.error('Error al validar identidad:', error);
-    return {
-      success: false,
-      message: error.message || 'Error al validar identidad'
-    };
+    console.error('Error en validarIdentidad:', error);
+    return { status: 'error', message: error.message };
   }
 };
 
 // ==================================================
-// FUNCION: OBTENER SOLICITUD POR TOKEN
+// OBTENER SOLICITUD POR NÚMERO
 // ==================================================
-
-export const obtenerSolicitudPorToken = async (token) => {
-  try {
-    if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL no configurada');
-
-    const response = await fetch(
-      `${APPS_SCRIPT_URL}?action=getSolicitud&token=${encodeURIComponent(token)}`,
-      { redirect: 'follow' }
-    );
-    const text = await response.text();
-    return JSON.parse(text);
-  } catch (error) {
-    console.error('Error al obtener solicitud:', error);
-    throw error;
-  }
-};
-
-// ==================================================
-// FUNCION: OBTENER SOLICITUDES POR EMAIL
-// ==================================================
-
-export const obtenerSolicitudesPorEmail = async (email) => {
-  try {
-    if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL no configurada');
-
-    const response = await fetch(
-      `${APPS_SCRIPT_URL}?action=getSolicitudesPorEmail&email=${encodeURIComponent(email)}`,
-      { redirect: 'follow' }
-    );
-    const text = await response.text();
-    return JSON.parse(text);
-  } catch (error) {
-    console.error('Error al obtener solicitudes:', error);
-    throw error;
-  }
-};
-
-// ==================================================
-// FUNCION: OBTENER SOLICITUD POR NUMERO
-// ==================================================
-
 export const obtenerSolicitudPorNumero = async (numero) => {
   try {
     if (!APPS_SCRIPT_URL) throw new Error('APPS_SCRIPT_URL no configurada');
 
     const response = await fetch(
       `${APPS_SCRIPT_URL}?action=getSolicitudPorNumero&numero=${encodeURIComponent(numero)}`,
-      { redirect: 'follow' }
+      { method: 'GET', redirect: 'follow' }
     );
-    const text = await response.text();
-    return JSON.parse(text);
+
+    const data = await response.json();
+    return data;
+
   } catch (error) {
-    console.error('Error al obtener solicitud:', error);
-    throw error;
+    console.error('Error en obtenerSolicitudPorNumero:', error);
+    return { status: 'error', message: error.message };
   }
 };

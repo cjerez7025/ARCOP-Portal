@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Building2, User, Palette, Clock, Settings,
+  Building2, User, Palette, Clock, Settings, FileText,
   Save, RotateCcw, Loader, AlertCircle,
   Mail, Phone, Globe, MapPin, Link2
 } from 'lucide-react';
 import { obtenerConfiguracion, guardarConfiguracion, restaurarConfiguracion } from '../services/configuracionService';
 import { toast } from 'react-toastify';
+import TabFormularios from '../components/TabFormularios';
+import useFormularioConfig from '../hooks/useFormularioConfig';
 
 const Configuracion = () => {
   const [loading, setLoading]                   = useState(true);
@@ -13,6 +15,8 @@ const Configuracion = () => {
   const [tabActiva, setTabActiva]               = useState('empresa');
   const [config, setConfig]                     = useState({});
   const [cambiosPendientes, setCambiosPendientes] = useState(false);
+  // Hook del configurador de formularios dinámicos
+  const formularioHook = useFormularioConfig();
 
   useEffect(() => { cargarConfiguracion(); }, []);
 
@@ -94,7 +98,8 @@ const Configuracion = () => {
     { id: 'dpo',      nombre: 'DPO',      icono: User      },
     { id: 'branding', nombre: 'Branding', icono: Palette   },
     { id: 'plazos',   nombre: 'Plazos',   icono: Clock     },
-    { id: 'avanzado', nombre: 'Avanzado', icono: Settings  },
+    { id: 'avanzado',    nombre: 'Avanzado',    icono: Settings  },
+    { id: 'formularios', nombre: 'Formularios', icono: FileText  },
   ];
 
   return (
@@ -490,30 +495,60 @@ const Configuracion = () => {
               </div>
             )}
 
+
+            {/* TAB: FORMULARIOS */}
+            {tabActiva === 'formularios' && (
+              <TabFormularios hook={formularioHook} />
+            )}
+
           </div>{/* fin Tab Content */}
 
-          {/* Botones Acción */}
+          {/* Botones Acción — condicional según tab activa */}
           <div className="border-t border-gray-200 px-8 py-6 bg-gray-50 flex items-center justify-between">
-            <button
-              onClick={handleRestaurar}
-              disabled={guardando}
-              className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              <RotateCcw className="w-4 h-4" />
-              Restaurar Predeterminados
-            </button>
-
-            <button
-              onClick={handleGuardar}
-              disabled={guardando || !cambiosPendientes}
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {guardando ? (
-                <><Loader className="w-5 h-5 animate-spin" />Guardando...</>
-              ) : (
-                <><Save className="w-5 h-5" />Guardar Cambios</>
-              )}
-            </button>
+            {tabActiva !== 'formularios' ? (
+              <>
+                <button
+                  onClick={handleRestaurar}
+                  disabled={guardando}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Restaurar Predeterminados
+                </button>
+                <button
+                  onClick={handleGuardar}
+                  disabled={guardando || !cambiosPendientes}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {guardando ? (
+                    <><Loader className="w-5 h-5 animate-spin" />Guardando...</>
+                  ) : (
+                    <><Save className="w-5 h-5" />Guardar Cambios</>
+                  )}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="text-sm text-gray-500 flex items-center gap-2">
+                  {formularioHook.dirty && (
+                    <span className="flex items-center gap-1 text-yellow-600">
+                      <AlertCircle className="w-4 h-4" /> Cambios sin guardar
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={formularioHook.guardar}
+                  disabled={formularioHook.guardando || !formularioHook.dirty}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {formularioHook.guardando ? (
+                    <><Loader className="w-5 h-5 animate-spin" />Guardando...</>
+                  ) : (
+                    <><Save className="w-5 h-5" />Guardar Formularios</>
+                  )}
+                </button>
+              </>
+            )}
           </div>
 
         </div>
