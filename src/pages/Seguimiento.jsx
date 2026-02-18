@@ -1,29 +1,32 @@
+// ============================================================
+// SEGUIMIENTO.JSX — v3 (via Traductor)
+// Ya no llama directo a Apps Script.
+// Usa obtenerSolicitudPorNumero desde googleSheetsService
+// (que internamente usa el adapter)
+// ============================================================
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { CheckCircle, Clock, Loader, AlertCircle, Download } from 'lucide-react';
-
-const APPS_SCRIPT_URL = process.env.REACT_APP_APPS_SCRIPT_URL;
+import { obtenerSolicitudPorNumero } from '../services/googleSheetsService';
+import adapter from '../adapters';
 
 const Seguimiento = () => {
   const { numero } = useParams();
   const [solicitud, setSolicitud] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
 
-  useEffect(() => {
-    cargarSeguimiento();
-  }, [numero]);
+  useEffect(() => { cargarSeguimiento(); }, [numero]);
 
   const cargarSeguimiento = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({ action: 'obtenerSeguimiento', numero });
-      const response = await fetch(`${APPS_SCRIPT_URL}?${params}`);
-      const result = await response.json();
+      const result = await obtenerSolicitudPorNumero(numero);
       if (result.status === 'success') {
         setSolicitud(result.data);
       } else {
-        setError(result.message);
+        setError(result.message || 'Solicitud no encontrada');
       }
     } catch (err) {
       console.error('Error:', err);
@@ -35,28 +38,24 @@ const Seguimiento = () => {
 
   const handleDescargar = async () => {
     try {
-      await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'registrarDescarga', numero_solicitud: numero })
+      // Registrar descarga via adapter y abrir URL
+      await adapter.updateSolicitud(solicitud.id || solicitud.numero_solicitud, {
+        descarga_registrada: new Date().toISOString(),
       });
+    } catch {
+      // No bloquear la descarga si falla el registro
+    } finally {
       window.open(solicitud.url_descarga, '_blank');
       setTimeout(() => cargarSeguimiento(), 1000);
-    } catch (error) {
-      window.open(solicitud.url_descarga, '_blank');
     }
   };
 
-  /**
-   * Formatea fecha de forma segura — evita bug "31 dic 1969"
-   * cuando el valor es null, '', 0 o fecha inválida
-   */
+  // ── Helpers ─────────────────────────────────────────────
+
   const formatFecha = (valor) => {
     if (!valor || valor === '' || valor === 0 || valor === '0') return 'No disponible';
     try {
       const d = new Date(valor);
-      // getTime() === 0 significa epoch (1 ene 1970 o 31 dic 1969 UTC)
       if (isNaN(d.getTime()) || d.getTime() <= 0) return 'No disponible';
       return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
     } catch {
@@ -66,11 +65,11 @@ const Seguimiento = () => {
 
   const getEstadoInfo = (estado) => {
     const estados = {
-      'PENDIENTE':  { icon: Clock,        color: 'text-yellow-600', bg: 'bg-yellow-50', texto: 'Pendiente de validación', descripcion: 'Hemos recibido tu solicitud y está en proceso de validación.' },
-      'VALIDADA':   { icon: CheckCircle,  color: 'text-blue-600',   bg: 'bg-blue-50',   texto: 'Identidad validada',      descripcion: 'Tu identidad ha sido confirmada. Estamos procesando tu solicitud.' },
-      'EN_PROCESO': { icon: Loader,       color: 'text-purple-600', bg: 'bg-purple-50', texto: 'En proceso',              descripcion: 'Estamos recopilando tus datos personales activamente.' },
-      'RESUELTA':   { icon: CheckCircle,  color: 'text-green-600',  bg: 'bg-green-50',  texto: '¡Datos listos!',          descripcion: 'Tus datos personales están disponibles para descarga.' },
-      'CERRADA':    { icon: CheckCircle,  color: 'text-gray-600',   bg: 'bg-gray-50',   texto: 'Cerrada',                 descripcion: 'Solicitud completada exitosamente.' }
+      PENDIENTE:  { icon: Clock,       color: 'text-yellow-600', bg: 'bg-yellow-50', texto: 'Pendiente de validación', descripcion: 'Hemos recibido tu solicitud y está en proceso de validación.' },
+      VALIDADA:   { icon: CheckCircle, color: 'text-blue-600',   bg: 'bg-blue-50',   texto: 'Identidad validada',      descripcion: 'Tu identidad ha sido confirmada. Estamos procesando tu solicitud.' },
+      EN_PROCESO: { icon: Loader,      color: 'text-purple-600', bg: 'bg-purple-50', texto: 'En proceso',              descripcion: 'Estamos recopilando tus datos personales activamente.' },
+      RESUELTA:   { icon: CheckCircle, color: 'text-green-600',  bg: 'bg-green-50',  texto: '¡Datos listos!',          descripcion: 'Tus datos personales están disponibles para descarga.' },
+      CERRADA:    { icon: CheckCircle, color: 'text-gray-600',   bg: 'bg-gray-50',   texto: 'Cerrada',                 descripcion: 'Solicitud completada exitosamente.' },
     };
     return estados[estado] || estados['PENDIENTE'];
   };
@@ -80,7 +79,7 @@ const Seguimiento = () => {
     return orden.indexOf(estadoActual);
   };
 
-  // ── Pantallas de carga / error ──────────────────────────────
+  // ── Pantallas de carga / error ───────────────────────────
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -115,7 +114,7 @@ const Seguimiento = () => {
     { nombre: 'Recibida',   estado: 'PENDIENTE'  },
     { nombre: 'Validada',   estado: 'VALIDADA'   },
     { nombre: 'En Proceso', estado: 'EN_PROCESO' },
-    { nombre: 'Resuelta',   estado: 'RESUELTA'   }
+    { nombre: 'Resuelta',   estado: 'RESUELTA'   },
   ];
 
   return (
@@ -135,7 +134,6 @@ const Seguimiento = () => {
             </span>
           </div>
 
-          {/* Datos del solicitante */}
           <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
             <div>
               <p className="text-sm text-gray-600">Nombre completo</p>
@@ -155,12 +153,10 @@ const Seguimiento = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600">Fecha de solicitud</p>
-              {/* ✅ formatFecha seguro — evita bug "31 dic 1969" */}
               <p className="font-semibold text-gray-900">{formatFecha(solicitud.fecha_solicitud)}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600">Fecha límite</p>
-              {/* ✅ formatFecha seguro */}
               <p className="font-semibold text-gray-900">{formatFecha(solicitud.fecha_limite)}</p>
             </div>
           </div>
@@ -175,8 +171,7 @@ const Seguimiento = () => {
               <p className="text-gray-700 mt-1">{estadoInfo.descripcion}</p>
             </div>
           </div>
-
-          {solicitud.dias_restantes > 0 && solicitud.estado !== 'RESUELTA' && solicitud.estado !== 'CERRADA' && (
+          {solicitud.dias_restantes > 0 && !['RESUELTA', 'CERRADA'].includes(solicitud.estado) && (
             <div className="mt-4 p-4 bg-white rounded-lg">
               <p className="text-sm text-gray-600">
                 ⏰ Días restantes para resolver: <strong>{solicitud.dias_restantes}</strong>
@@ -206,13 +201,15 @@ const Seguimiento = () => {
           <div className="relative">
             {steps.map((step, index) => {
               const completado = index <= stepActual;
-              const actual = index === stepActual;
+              const actual     = index === stepActual;
               return (
                 <div key={step.estado} className="flex items-start gap-4 mb-4 relative">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 z-10 ${
                     completado ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
                   } ${actual ? 'ring-4 ring-blue-200' : ''}`}>
-                    {completado ? <CheckCircle className="w-5 h-5" /> : <span className="text-sm font-bold">{index + 1}</span>}
+                    {completado
+                      ? <CheckCircle className="w-5 h-5" />
+                      : <span className="text-sm font-bold">{index + 1}</span>}
                   </div>
                   <div className="pt-1">
                     <p className={`font-semibold ${completado ? 'text-gray-900' : 'text-gray-400'}`}>{step.nombre}</p>
