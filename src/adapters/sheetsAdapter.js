@@ -92,6 +92,36 @@ const sheetsAdapter = {
     return post('guardarConfiguracion', updated);
   },
 
+  // ── Configuración de flujos por derecho ───────────────
+
+  getFlujoConfig: async () => {
+    const result = await get('getConfiguracion');
+    if (result.status !== 'success') return { status: 'error', data: null };
+
+    const raw = result.data?.flujo_config;
+    if (!raw) return { status: 'success', data: null };
+
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return { status: 'success', data: parsed };
+    } catch {
+      console.warn('flujo_config inválido en Sheets, usando defaults');
+      return { status: 'success', data: null };
+    }
+  },
+
+  saveFlujoConfig: async (flujoConfig) => {
+    const current = await get('getConfiguracion');
+    const currentData = current.status === 'success' ? current.data : {};
+
+    const updated = {
+      ...currentData,
+      flujo_config: JSON.stringify(flujoConfig),
+    };
+
+    return post('guardarConfiguracion', updated);
+  },
+
   // ── Solicitudes ────────────────────────────────────────
 
   createSolicitud: async (solicitud) => {

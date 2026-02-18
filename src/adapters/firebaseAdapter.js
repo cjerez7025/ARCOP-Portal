@@ -22,6 +22,10 @@ const firebaseAdapter = {
   getFormularioConfig:   async ()           => NOT_IMPLEMENTED('getFormularioConfig'),
   saveFormularioConfig:  async (config)     => NOT_IMPLEMENTED('saveFormularioConfig'),
 
+  // ── Configuración de flujos por derecho ───────────────
+  getFlujoConfig:       async ()       => NOT_IMPLEMENTED('getFlujoConfig'),
+  saveFlujoConfig:      async (config) => NOT_IMPLEMENTED('saveFlujoConfig'),
+
   // ── Solicitudes ────────────────────────────────────────
   createSolicitud:       async (sol)        => NOT_IMPLEMENTED('createSolicitud'),
   getSolicitudes:        async (filtros)    => NOT_IMPLEMENTED('getSolicitudes'),
