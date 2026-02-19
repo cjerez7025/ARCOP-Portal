@@ -1,80 +1,63 @@
-/**
- * SolicitudesTable.jsx
- * Tabla de solicitudes con todas las acciones DPO
- */
+// ============================================================
+// SOLICITUDES TABLE — v2 (estados dinámicos)
+// Recibe estadosDef desde el flujoConfig para mostrar badges
+// con el nombre y color correcto, incluyendo estados custom.
+// ============================================================
 
 import React from 'react';
 import { Eye, Edit, CheckCircle } from 'lucide-react';
-import { ESTADO_COLORS, ESTADO_LABELS } from '../utils/constants';
 
-const SolicitudesTable = ({ solicitudes, onVerDetalle, onCambiarEstado, onMarcarResuelta }) => {
-  
-  /**
-   * Obtiene valor de campo con fallback a mayúsculas/minúsculas
-   */
-  const getFieldValue = (solicitud, fieldName) => {
-    // Intentar minúsculas
-    if (solicitud[fieldName] !== undefined) {
-      return solicitud[fieldName];
-    }
-    
-    // Intentar mayúsculas
-    const upperField = fieldName.toUpperCase();
-    if (solicitud[upperField] !== undefined) {
-      return solicitud[upperField];
-    }
-    
-    // Intentar con guiones bajos en mayúsculas
-    const snakeUpper = fieldName.replace(/([A-Z])/g, '_$1').toUpperCase();
-    if (solicitud[snakeUpper] !== undefined) {
-      return solicitud[snakeUpper];
-    }
-    
-    return '';
+const COLOR_CLASSES = {
+  yellow: 'bg-yellow-100 text-yellow-800',
+  blue:   'bg-blue-100   text-blue-800',
+  purple: 'bg-purple-100 text-purple-800',
+  green:  'bg-green-100  text-green-800',
+  gray:   'bg-gray-100   text-gray-700',
+  red:    'bg-red-100    text-red-800',
+  orange: 'bg-orange-100 text-orange-800',
+  teal:   'bg-teal-100   text-teal-800',
+  indigo: 'bg-indigo-100 text-indigo-800',
+  pink:   'bg-pink-100   text-pink-800',
+};
+
+// Fallback si no llega flujoConfig todavía
+const FALLBACK_COLORS = {
+  PENDIENTE:  'bg-yellow-100 text-yellow-800',
+  VALIDADA:   'bg-blue-100   text-blue-800',
+  EN_PROCESO: 'bg-purple-100 text-purple-800',
+  RESUELTA:   'bg-green-100  text-green-800',
+  CERRADA:    'bg-gray-100   text-gray-700',
+  BLOQUEADO:  'bg-orange-100 text-orange-800',
+};
+
+const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambiarEstado, onMarcarResuelta }) => {
+
+  const getField = (obj, field) => {
+    if (!obj) return '';
+    return obj[field] ?? obj[field.toUpperCase()] ?? obj[field.toLowerCase()] ?? '';
   };
 
-  /**
-   * Formatea fecha desde diferentes formatos posibles
-   */
-  const formatearFecha = (solicitud) => {
-    const fechaSolicitud = getFieldValue(solicitud, 'fecha_solicitud') || 
-                          getFieldValue(solicitud, 'FECHA_SOLICITUD');
-    
-    if (!fechaSolicitud) return 'Sin fecha';
-    
+  const formatFecha = (sol) => {
+    const val = getField(sol, 'fecha_solicitud');
+    if (!val) return 'Sin fecha';
     try {
-      // Si es objeto Date de Sheets
-      if (fechaSolicitud instanceof Date) {
-        return fechaSolicitud.toLocaleDateString('es-CL');
-      }
-      
-      // Si es string ISO
-      if (typeof fechaSolicitud === 'string') {
-        const date = new Date(fechaSolicitud);
-        if (!isNaN(date.getTime())) {
-          return date.toLocaleDateString('es-CL');
-        }
-      }
-      
-      return 'Fecha inválida';
-    } catch (error) {
-      return 'Fecha inválida';
-    }
+      const d = val instanceof Date ? val : new Date(val);
+      return isNaN(d.getTime()) ? 'Sin fecha' : d.toLocaleDateString('es-CL');
+    } catch { return 'Sin fecha'; }
   };
 
-  /**
-   * Obtiene color del badge según estado
-   */
-  const getEstadoColor = (estado) => {
-    const colores = {
-      'PENDIENTE': 'bg-yellow-100 text-yellow-800',
-      'VALIDADA': 'bg-blue-100 text-blue-800',
-      'EN_PROCESO': 'bg-purple-100 text-purple-800',
-      'RESUELTA': 'bg-green-100 text-green-800',
-      'CERRADA': 'bg-gray-100 text-gray-800'
+  // Resuelve el badge de un estado desde estadosDef o fallback
+  const getEstadoBadge = (estadoId) => {
+    const def = estadosDef.find(e => e.id === estadoId);
+    if (def) {
+      const cls = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
+      return { cls, label: def.nombre };
+    }
+    // Fallback para estados que aún no cargó la config
+    return {
+      cls:   FALLBACK_COLORS[estadoId] || COLOR_CLASSES.gray,
+      label: estadoId,
     };
-    
-    return colores[estado] || 'bg-gray-100 text-gray-800';
   };
 
   if (!solicitudes || solicitudes.length === 0) {
@@ -90,110 +73,55 @@ const SolicitudesTable = ({ solicitudes, onVerDetalle, onCambiarEstado, onMarcar
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              #
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Nombre
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              RUT
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Email
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Estado
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Formato
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Fecha
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Acciones
-            </th>
+            {['#', 'Nombre', 'RUT', 'Email', 'Estado', 'Tipo', 'Fecha', 'Acciones'].map(h => (
+              <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                {h}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {solicitudes.map((solicitud, index) => {
-            const nombre = getFieldValue(solicitud, 'nombre_completo') || 
-                          getFieldValue(solicitud, 'NOMBRE_COMPLETO') || 
-                          'Sin nombre';
-            
-            const rut = getFieldValue(solicitud, 'rut') || 
-                       getFieldValue(solicitud, 'RUT') || 
-                       'Sin RUT';
-            
-            const email = getFieldValue(solicitud, 'email') || 
-                         getFieldValue(solicitud, 'EMAIL') || 
-                         'Sin email';
-            
-            const estado = getFieldValue(solicitud, 'estado') || 
-                          getFieldValue(solicitud, 'ESTADO') || 
-                          'PENDIENTE';
-            
-            const formato = getFieldValue(solicitud, 'formato_preferido') || 
-                           getFieldValue(solicitud, 'FORMATO_PREFERIDO') || 
-                           'PDF';
-            
-            const fecha = formatearFecha(solicitud);
-            
+          {solicitudes.map((sol, idx) => {
+            const nombre  = getField(sol, 'nombre_completo') || 'Sin nombre';
+            const rut     = getField(sol, 'rut')             || 'Sin RUT';
+            const email   = getField(sol, 'email')           || 'Sin email';
+            const estadoId = getField(sol, 'estado')         || 'PENDIENTE';
+            const tipo    = getField(sol, 'tipo')            || '—';
+            const fecha   = formatFecha(sol);
+            const { cls, label } = getEstadoBadge(estadoId);
+
+            const esFinal = ['RESUELTA', 'CERRADA'].includes(estadoId);
+
             return (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {index + 1}
+              <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                <td className="px-5 py-4 text-sm text-gray-400">{idx + 1}</td>
+                <td className="px-5 py-4">
+                  <div className="text-sm font-semibold text-gray-900">{nombre}</div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm font-medium text-gray-900">{nombre}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{rut}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">{email}</div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getEstadoColor(estado)}`}>
-                    {ESTADO_LABELS[estado] || estado}
+                <td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">{rut}</td>
+                <td className="px-5 py-4 text-sm text-gray-500">{email}</td>
+                <td className="px-5 py-4 whitespace-nowrap">
+                  <span className={`px-2.5 py-1 inline-flex text-xs font-semibold rounded-full ${cls}`}>
+                    {label}
                   </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formato}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {fecha}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">{tipo}</td>
+                <td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">{fecha}</td>
+                <td className="px-5 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    {/* Ver Detalle */}
-                    <button
-                      onClick={() => onVerDetalle(solicitud)}
-                      className="text-blue-600 hover:text-blue-900 inline-flex items-center gap-1"
-                      title="Ver detalle"
-                    >
+                    <button onClick={() => onVerDetalle(sol)} title="Ver detalle"
+                      className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors">
                       <Eye className="w-4 h-4" />
                     </button>
-                    
-                    {/* Cambiar Estado (si las funciones están disponibles) */}
-                    {onCambiarEstado && (
-                      <button
-                        onClick={() => onCambiarEstado(solicitud)}
-                        className="text-yellow-600 hover:text-yellow-900 inline-flex items-center gap-1"
-                        title="Cambiar estado"
-                      >
+                    {onCambiarEstado && !esFinal && (
+                      <button onClick={() => onCambiarEstado(sol)} title="Cambiar estado"
+                        className="p-1.5 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50 rounded-lg transition-colors">
                         <Edit className="w-4 h-4" />
                       </button>
                     )}
-                    
-                    {/* Marcar Resuelta (solo si no está resuelta) */}
-                    {onMarcarResuelta && estado !== 'RESUELTA' && estado !== 'CERRADA' && (
-                      <button
-                        onClick={() => onMarcarResuelta(solicitud)}
-                        className="text-green-600 hover:text-green-900 inline-flex items-center gap-1"
-                        title="Marcar resuelta"
-                      >
+                    {onMarcarResuelta && !esFinal && (
+                      <button onClick={() => onMarcarResuelta(sol)} title="Marcar resuelta"
+                        className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors">
                         <CheckCircle className="w-4 h-4" />
                       </button>
                     )}
