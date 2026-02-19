@@ -6,7 +6,9 @@
   "author": "Tu Empresa",
   "license": "MIT",
   "dependencies": {
+    "@dagrejs/dagre": "^2.0.4",
     "@hookform/resolvers": "^3.3.2",
+    "@xyflow/react": "^12.10.0",
     "axios": "^1.6.2",
     "chart.js": "^4.5.1",
     "date-fns": "^3.0.0",
