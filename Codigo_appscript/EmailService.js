@@ -122,7 +122,7 @@ const EmailService = {
           rut:        config.data.empresa_rut     || '12.345.678-9',
           email:      config.data.dpo_email       || 'dpo@arcop.cl',
           telefono:   config.data.dpo_telefono    || '+56 2 2345 6789',
-          portal_url: config.data.portal_url      || 'http://localhost:3000'
+          portal_url: config.data.portal_url      || 'https://arcop-portal.vercel.app'
         };
       }
     } catch (error) {
@@ -133,7 +133,7 @@ const EmailService = {
       rut:        '12.345.678-9',
       email:      'dpo@arcop.cl',
       telefono:   '+56 2 2345 6789',
-      portal_url: 'http://localhost:3000'
+      portal_url: 'https://arcop-portal.vercel.app'
     };
   }
 };

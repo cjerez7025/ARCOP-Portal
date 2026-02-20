@@ -1,8 +1,7 @@
 // ============================================
-// DPOHANDLERS.GS - v2.6
-// Nombres de columnas ajustados a la hoja real:
-// ID_SOLICITUD, NUMERO_SOLICITUD, ESTADO,
-// EMAIL, NOMBRE_COMPLETO, URL_DESCARGA, etc.
+// DPOHANDLERS.GS - v2.7
+// Agrega confirmarDescarga() para registrar
+// el evento de descarga del titular
 // ============================================
 
 const DPOHandlers = {
@@ -86,56 +85,6 @@ const DPOHandlers = {
   },
 
   // ──────────────────────────────────────────
-  // HELPER: encontrar índice de columna
-  // Prueba múltiples variantes del nombre
-  // ──────────────────────────────────────────
-  _getIdx: function(headers, nombres) {
-    // nombres puede ser string o array de strings
-    var lista = Array.isArray(nombres) ? nombres : [nombres];
-    for (var n = 0; n < lista.length; n++) {
-      var idx = Utils.buscarIndiceColumna(headers, lista[n]);
-      if (idx !== -1) return idx;
-    }
-    return -1;
-  },
-
-  // ──────────────────────────────────────────
-  // HELPER: buscar número de fila
-  // Busca por ID_SOLICITUD, luego por NUMERO_SOLICITUD
-  // ──────────────────────────────────────────
-  _buscarFila: function(dataRange, headers, valorBuscado) {
-    var idIndex     = DPOHandlers._getIdx(headers, ['id_solicitud', 'id']);
-    var numeroIndex = DPOHandlers._getIdx(headers, ['numero_solicitud']);
-    var valor       = valorBuscado.toString().trim();
-
-    Logger.log('_buscarFila: "' + valor + '" | idIndex:' + idIndex + ' | numeroIndex:' + numeroIndex);
-
-    // 1) Por ID_SOLICITUD
-    if (idIndex !== -1) {
-      for (var i = 1; i < dataRange.length; i++) {
-        if ((dataRange[i][idIndex] || '').toString().trim() === valor) {
-          Logger.log('Encontrado por id_solicitud en fila: ' + (i + 1));
-          return i + 1;
-        }
-      }
-      Logger.log('No encontrado por id_solicitud, probando numero_solicitud...');
-    }
-
-    // 2) Por NUMERO_SOLICITUD
-    if (numeroIndex !== -1) {
-      for (var j = 1; j < dataRange.length; j++) {
-        if ((dataRange[j][numeroIndex] || '').toString().trim() === valor) {
-          Logger.log('Encontrado por numero_solicitud en fila: ' + (j + 1));
-          return j + 1;
-        }
-      }
-    }
-
-    Logger.log('Fila no encontrada para: "' + valor + '"');
-    return -1;
-  },
-
-  // ──────────────────────────────────────────
   // ACTUALIZAR SOLICITUD
   // ──────────────────────────────────────────
   actualizarSolicitud: function(data) {
@@ -162,11 +111,10 @@ const DPOHandlers = {
       var dataRange = sheet.getDataRange().getValues();
       var headers   = dataRange[0];
 
-      // Índices con nombres reales de la hoja
       var estadoIndex = DPOHandlers._getIdx(headers, ['estado']);
       var emailIndex  = DPOHandlers._getIdx(headers, ['email']);
       var numeroIndex = DPOHandlers._getIdx(headers, ['numero_solicitud']);
-      var notasIndex  = DPOHandlers._getIdx(headers, ['notas_dpo', 'notas']);  // puede no existir
+      var notasIndex  = DPOHandlers._getIdx(headers, ['notas_dpo', 'notas']);
 
       var fila = DPOHandlers._buscarFila(dataRange, headers, id);
       if (fila === -1) {
@@ -179,26 +127,21 @@ const DPOHandlers = {
 
       Logger.log('Email: ' + emailActual + ' | Estado anterior: "' + estadoAnterior + '"');
 
-      // Actualizar ESTADO
       if (estado && estadoIndex !== -1) {
         sheet.getRange(fila, estadoIndex + 1).setValue(estado);
         Logger.log('ESTADO -> ' + estado);
       }
 
-      // Actualizar NOTAS (solo si la columna existe)
       if (notas && notasIndex !== -1) {
         sheet.getRange(fila, notasIndex + 1).setValue(notas);
         Logger.log('NOTAS actualizadas');
       }
 
-      // Actualizar ACTUALIZADO_EN
       var actualizadoIndex = DPOHandlers._getIdx(headers, ['actualizado_en']);
       if (actualizadoIndex !== -1) {
         sheet.getRange(fila, actualizadoIndex + 1).setValue(new Date().toISOString());
       }
 
-      // Enviar email siempre que haya estado nuevo y email válido
-      // (sin comparar con anterior para evitar problemas de sincronía)
       var emailEnviado = false;
       if (estado && emailActual) {
         Logger.log('Enviando email - estado: ' + estado + ' | destinatario: ' + emailActual);
@@ -247,9 +190,8 @@ const DPOHandlers = {
       var dataRange = sheet.getDataRange().getValues();
       var headers   = dataRange[0];
 
-      // Nombres reales de columnas en la hoja
       var estadoIndex  = DPOHandlers._getIdx(headers, ['estado']);
-      var urlIndex     = DPOHandlers._getIdx(headers, ['url_descarga', 'url_datos']);  // nombre real: URL_DESCARGA
+      var urlIndex     = DPOHandlers._getIdx(headers, ['url_descarga', 'url_datos']);
       var formatoIndex = DPOHandlers._getIdx(headers, ['formato_entrega', 'formato_preferido']);
       var emailIndex   = DPOHandlers._getIdx(headers, ['email']);
       var nombreIndex  = DPOHandlers._getIdx(headers, ['nombre_completo']);
@@ -270,7 +212,6 @@ const DPOHandlers = {
       if (urlIndex     !== -1) sheet.getRange(fila, urlIndex     + 1).setValue(url_datos);
       if (formatoIndex !== -1) sheet.getRange(fila, formatoIndex + 1).setValue(formato_entrega);
 
-      // Actualizar ACTUALIZADO_EN
       var actualizadoIndex = DPOHandlers._getIdx(headers, ['actualizado_en']);
       if (actualizadoIndex !== -1) {
         sheet.getRange(fila, actualizadoIndex + 1).setValue(new Date().toISOString());
@@ -292,6 +233,165 @@ const DPOHandlers = {
       Logger.log('ERROR en marcarResuelta: ' + error);
       return { status: 'error', message: error.toString() };
     }
-  }
+  },
+
+  // ──────────────────────────────────────────
+  // CONFIRMAR DESCARGA DEL TITULAR
+  // Llamado automáticamente cuando el titular
+  // hace clic en "Descargar" en Seguimiento.jsx.
+  // El estado siguiente se determina leyendo el
+  // flujo configurado por el DPO — sin hardcodear.
+  // ──────────────────────────────────────────
+  confirmarDescarga: function(data) {
+    try {
+      Logger.log('');
+      Logger.log('=== CONFIRMANDO DESCARGA ===');
+      Logger.log('Data: ' + JSON.stringify(data));
+
+      var id                     = ((data.id || '') + '').trim();
+      var descarga_confirmada_en = data.descarga_confirmada_en || new Date().toISOString();
+
+      if (!id) {
+        return { status: 'error', message: 'ID requerido' };
+      }
+
+      var ss    = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName(Config.SHEETS.SOLICITUDES);
+      if (!sheet) return { status: 'error', message: 'Hoja SOLICITUDES no encontrada' };
+
+      var dataRange = sheet.getDataRange().getValues();
+      var headers   = dataRange[0];
+
+      var fila = DPOHandlers._buscarFila(dataRange, headers, id);
+      if (fila === -1) {
+        return { status: 'error', message: 'Solicitud no encontrada: ' + id };
+      }
+
+      var estadoIndex    = DPOHandlers._getIdx(headers, ['estado']);
+      var tipoIndex      = DPOHandlers._getIdx(headers, ['tipo']);
+      var actualizadoIdx = DPOHandlers._getIdx(headers, ['actualizado_en']);
+      var descargaIdx    = DPOHandlers._getIdx(headers, ['descarga_confirmada_en']);
+      var emailIndex     = DPOHandlers._getIdx(headers, ['email']);
+      var numeroIndex    = DPOHandlers._getIdx(headers, ['numero_solicitud']);
+
+      // Leer estado y tipo directamente desde la fila de la solicitud
+      var estadoActual = estadoIndex !== -1 ? (dataRange[fila - 1][estadoIndex] + '').trim() : '';
+      var tipoSolicitud = tipoIndex  !== -1 ? (dataRange[fila - 1][tipoIndex]   + '').trim() : '';
+
+      Logger.log('Estado actual: ' + estadoActual + ' | Tipo: ' + tipoSolicitud);
+
+      // ── Determinar el siguiente estado desde el flujo configurado ──
+      // Lee la configuración guardada en Sheets (no asume nada)
+      var siguienteEstado = null;
+      try {
+        var configResult = ConfiguracionService.obtener();
+        var flujoRaw     = configResult.data && configResult.data.flujo_config;
+        if (flujoRaw) {
+          var flujo      = JSON.parse(flujoRaw);
+          var estados    = flujo.derechos && flujo.derechos[tipoSolicitud] && flujo.derechos[tipoSolicitud].estados;
+          if (estados) {
+            var estadoConfig = null;
+            for (var i = 0; i < estados.length; i++) {
+              if (estados[i].id === estadoActual) { estadoConfig = estados[i]; break; }
+            }
+            if (estadoConfig && estadoConfig.transiciones_posibles && estadoConfig.transiciones_posibles.length > 0) {
+              siguienteEstado = estadoConfig.transiciones_posibles[0];
+              Logger.log('Siguiente estado desde flujo configurado: ' + siguienteEstado);
+            }
+          }
+        }
+      } catch (flujoErr) {
+        Logger.log('No se pudo leer flujo_config: ' + flujoErr);
+      }
+
+      if (!siguienteEstado) {
+        Logger.log('No se encontró siguiente estado en el flujo — se mantiene estado actual');
+        return { status: 'error', message: 'No hay transición definida desde el estado "' + estadoActual + '" en el flujo de ' + tipoSolicitud };
+      }
+
+      // ── Actualizar estado al siguiente según el flujo ──────────────
+      if (estadoIndex !== -1) {
+        sheet.getRange(fila, estadoIndex + 1).setValue(siguienteEstado);
+        Logger.log('ESTADO: ' + estadoActual + ' -> ' + siguienteEstado);
+      }
+
+      // Registrar timestamp de descarga
+      if (descargaIdx !== -1) {
+        sheet.getRange(fila, descargaIdx + 1).setValue(descarga_confirmada_en);
+        Logger.log('DESCARGA_CONFIRMADA_EN: ' + descarga_confirmada_en);
+      } else {
+        Logger.log('Columna DESCARGA_CONFIRMADA_EN no existe aún — ejecuta agregarColumnaDescarga()');
+      }
+
+      // Actualizar ACTUALIZADO_EN
+      if (actualizadoIdx !== -1) {
+        sheet.getRange(fila, actualizadoIdx + 1).setValue(new Date().toISOString());
+      }
+
+      var email  = emailIndex  !== -1 ? dataRange[fila - 1][emailIndex]  : '';
+      var numero = numeroIndex !== -1 ? dataRange[fila - 1][numeroIndex] : '';
+
+      Logger.log('Descarga confirmada: ' + numero + ' | ' + email);
+      Logger.log('=== DESCARGA CONFIRMADA OK ===');
+
+      return {
+        status:          'success',
+        message:         'Descarga registrada correctamente',
+        numero:          numero,
+        estado_anterior: estadoActual,
+        estado_nuevo:    siguienteEstado,
+        timestamp:       descarga_confirmada_en
+      };
+
+    } catch (error) {
+      Logger.log('ERROR en confirmarDescarga: ' + error);
+      return { status: 'error', message: error.toString() };
+    }
+  },
+
+  // ──────────────────────────────────────────
+  // HELPERS INTERNOS
+  // ──────────────────────────────────────────
+
+  _getIdx: function(headers, nombres) {
+    var lista = Array.isArray(nombres) ? nombres : [nombres];
+    for (var n = 0; n < lista.length; n++) {
+      var idx = Utils.buscarIndiceColumna(headers, lista[n]);
+      if (idx !== -1) return idx;
+    }
+    return -1;
+  },
+
+  _buscarFila: function(dataRange, headers, valorBuscado) {
+    var idIndex     = DPOHandlers._getIdx(headers, ['id_solicitud', 'id']);
+    var numeroIndex = DPOHandlers._getIdx(headers, ['numero_solicitud']);
+    var valor       = valorBuscado.toString().trim();
+
+    Logger.log('_buscarFila: "' + valor + '" | idIndex:' + idIndex + ' | numeroIndex:' + numeroIndex);
+
+    // 1) Por ID_SOLICITUD
+    if (idIndex !== -1) {
+      for (var i = 1; i < dataRange.length; i++) {
+        if ((dataRange[i][idIndex] || '').toString().trim() === valor) {
+          Logger.log('Encontrado por id_solicitud en fila: ' + (i + 1));
+          return i + 1;
+        }
+      }
+      Logger.log('No encontrado por id_solicitud, probando numero_solicitud...');
+    }
+
+    // 2) Por NUMERO_SOLICITUD
+    if (numeroIndex !== -1) {
+      for (var j = 1; j < dataRange.length; j++) {
+        if ((dataRange[j][numeroIndex] || '').toString().trim() === valor) {
+          Logger.log('Encontrado por numero_solicitud en fila: ' + (j + 1));
+          return j + 1;
+        }
+      }
+    }
+
+    Logger.log('Fila no encontrada para: "' + valor + '"');
+    return -1;
+  },
 
 };

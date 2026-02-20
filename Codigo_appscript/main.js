@@ -1,6 +1,7 @@
 // ============================================
 // MAIN.GS - PUNTO DE ENTRADA
-// Portal ARCOP v2.4
+// Portal ARCOP v2.5
+// Agrega: confirmarDescarga en doPost
 // ============================================
 
 function doPost(e) {
@@ -26,6 +27,12 @@ function doPost(e) {
       return jsonResponse(DPOHandlers.marcarResuelta(data));
     }
 
+    // ── NUEVO ─────────────────────────────────────────────
+    if (action === 'confirmarDescarga') {
+      return jsonResponse(DPOHandlers.confirmarDescarga(data));
+    }
+    // ──────────────────────────────────────────────────────
+
     if (action === 'guardarConfiguracion') {
       return jsonResponse(ConfiguracionService.guardar(data));
     }
@@ -48,7 +55,6 @@ function doGet(e) {
 
     Logger.log('GET recibido - Action: ' + action);
 
-    // ── Solicitudes públicas ──────────────────────────────
     if (action === 'getSolicitud') {
       return jsonResponse(SolicitudService.obtenerPorToken(e.parameter.token));
     }
@@ -57,17 +63,14 @@ function doGet(e) {
       return jsonResponse(SolicitudService.obtenerPorEmail(e.parameter.email));
     }
 
-    // ✅ Acción usada por Seguimiento.jsx
     if (action === 'obtenerSeguimiento') {
       return jsonResponse(SolicitudService.obtenerPorNumero(e.parameter.numero));
     }
 
-    // Alias alternativo (por compatibilidad)
     if (action === 'getSolicitudPorNumero') {
       return jsonResponse(SolicitudService.obtenerPorNumero(e.parameter.numero));
     }
 
-    // ── Panel DPO ─────────────────────────────────────────
     if (action === 'getTodasSolicitudes') {
       return jsonResponse(DPOHandlers.obtenerTodasSolicitudes(e));
     }
@@ -76,7 +79,6 @@ function doGet(e) {
       return jsonResponse(DPOHandlers.obtenerEstadisticas(e));
     }
 
-    // ── Configuración ─────────────────────────────────────
     if (action === 'getConfiguracion') {
       return jsonResponse(ConfiguracionService.obtener());
     }
@@ -85,7 +87,6 @@ function doGet(e) {
       return jsonResponse(ConfiguracionService.exportar());
     }
 
-    // Acción no encontrada
     return jsonResponse({ status: 'error', message: 'Acción GET no válida: ' + action });
 
   } catch (error) {

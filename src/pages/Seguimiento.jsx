@@ -1,21 +1,21 @@
 // ============================================================
-// SEGUIMIENTO.JSX — v3 (via Traductor)
-// Ya no llama directo a Apps Script.
-// Usa obtenerSolicitudPorNumero desde googleSheetsService
-// (que internamente usa el adapter)
+// src/pages/Seguimiento.jsx — v4
+// Registra evento de descarga → estado DESCARGA_CONFIRMADA
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, Clock, Loader, AlertCircle, Download } from 'lucide-react';
+import { CheckCircle, Clock, Loader, AlertCircle, Download, PackageCheck } from 'lucide-react';
 import { obtenerSolicitudPorNumero } from '../services/googleSheetsService';
 import adapter from '../adapters';
 
 const Seguimiento = () => {
   const { numero } = useParams();
-  const [solicitud, setSolicitud] = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState(null);
+  const [solicitud,   setSolicitud]   = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
+  const [descargando, setDescargando] = useState(false);
+  const [descargaOk,  setDescargaOk]  = useState(false);
 
   useEffect(() => { cargarSeguimiento(); }, [numero]);
 
@@ -25,212 +25,219 @@ const Seguimiento = () => {
       const result = await obtenerSolicitudPorNumero(numero);
       if (result.status === 'success') {
         setSolicitud(result.data);
+        if (result.data.descarga_confirmada_en || result.data.estado === 'DESCARGA_CONFIRMADA') {
+          setDescargaOk(true);
+        }
       } else {
         setError(result.message || 'Solicitud no encontrada');
       }
     } catch (err) {
-      console.error('Error:', err);
       setError('Error al cargar seguimiento');
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Evento de descarga ────────────────────────────────
   const handleDescargar = async () => {
+    if (descargando) return;
+    const url = solicitud.url_descarga || solicitud.url_datos;
+    if (!url) return;
+
+    setDescargando(true);
     try {
-      // Registrar descarga via adapter y abrir URL
-      await adapter.updateSolicitud(solicitud.id || solicitud.numero_solicitud, {
-        descarga_registrada: new Date().toISOString(),
-      });
-    } catch {
-      // No bloquear la descarga si falla el registro
-    } finally {
-      window.open(solicitud.url_descarga, '_blank');
-      setTimeout(() => cargarSeguimiento(), 1000);
+      // Registrar en Sheets — no bloquea la descarga si falla
+      await adapter.confirmarDescarga(solicitud.id || solicitud.numero_solicitud);
+      setDescargaOk(true);
+    } catch (err) {
+      console.warn('Registro de descarga falló, pero se abre el archivo igual:', err);
     }
+    // Abrir siempre, aunque el registro haya fallado
+    window.open(url, '_blank');
+    setTimeout(() => { cargarSeguimiento(); setDescargando(false); }, 1500);
   };
 
-  // ── Helpers ─────────────────────────────────────────────
-
+  // ── Helpers ──────────────────────────────────────────
   const formatFecha = (valor) => {
-    if (!valor || valor === '' || valor === 0 || valor === '0') return 'No disponible';
+    if (!valor || valor === '' || valor === 0) return 'No disponible';
     try {
       const d = new Date(valor);
-      if (isNaN(d.getTime()) || d.getTime() <= 0) return 'No disponible';
+      if (isNaN(d.getTime())) return 'No disponible';
       return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' });
-    } catch {
-      return 'No disponible';
-    }
+    } catch { return 'No disponible'; }
   };
 
-  const getEstadoInfo = (estado) => {
-    const estados = {
-      PENDIENTE:  { icon: Clock,       color: 'text-yellow-600', bg: 'bg-yellow-50', texto: 'Pendiente de validación', descripcion: 'Hemos recibido tu solicitud y está en proceso de validación.' },
-      VALIDADA:   { icon: CheckCircle, color: 'text-blue-600',   bg: 'bg-blue-50',   texto: 'Identidad validada',      descripcion: 'Tu identidad ha sido confirmada. Estamos procesando tu solicitud.' },
-      EN_PROCESO: { icon: Loader,      color: 'text-purple-600', bg: 'bg-purple-50', texto: 'En proceso',              descripcion: 'Estamos recopilando tus datos personales activamente.' },
-      RESUELTA:   { icon: CheckCircle, color: 'text-green-600',  bg: 'bg-green-50',  texto: '¡Datos listos!',          descripcion: 'Tus datos personales están disponibles para descarga.' },
-      CERRADA:    { icon: CheckCircle, color: 'text-gray-600',   bg: 'bg-gray-50',   texto: 'Cerrada',                 descripcion: 'Solicitud completada exitosamente.' },
-    };
-    return estados[estado] || estados['PENDIENTE'];
+  const ESTADOS_INFO = {
+    PENDIENTE:           { icon: Clock,        color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200', texto: 'Pendiente de validación',  desc: 'Hemos recibido tu solicitud. Valida tu identidad con el link enviado a tu email.' },
+    VALIDADA:            { icon: CheckCircle,  color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-200',   texto: 'Identidad validada',        desc: 'Tu identidad ha sido confirmada. Estamos procesando tu solicitud.' },
+    EN_PROCESO:          { icon: Loader,       color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200', texto: 'En proceso',                desc: 'Estamos recopilando tus datos personales activamente.' },
+    RESUELTA:            { icon: CheckCircle,  color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200',  texto: '¡Datos listos!',            desc: 'Tus datos personales están disponibles. Descárgalos a continuación.' },
+    DESCARGA_CONFIRMADA: { icon: PackageCheck, color: 'text-teal-600',   bg: 'bg-teal-50',   border: 'border-teal-200',   texto: 'Descarga confirmada',       desc: 'Has descargado tus datos correctamente. Solicitud completada.' },
+    CERRADA:             { icon: CheckCircle,  color: 'text-gray-600',   bg: 'bg-gray-50',   border: 'border-gray-200',   texto: 'Cerrada',                   desc: 'Solicitud completada y archivada exitosamente.' },
   };
 
-  const getEstadoStep = (estadoActual) => {
-    const orden = ['PENDIENTE', 'VALIDADA', 'EN_PROCESO', 'RESUELTA', 'CERRADA'];
-    return orden.indexOf(estadoActual);
-  };
-
-  // ── Pantallas de carga / error ───────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Cargando seguimiento...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-          <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Solicitud no encontrada</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <a href="/#/" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-            Volver al inicio
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  const estadoInfo = getEstadoInfo(solicitud.estado);
-  const EstadoIcon = estadoInfo.icon;
-  const stepActual = getEstadoStep(solicitud.estado);
-
-  const steps = [
-    { nombre: 'Recibida',   estado: 'PENDIENTE'  },
-    { nombre: 'Validada',   estado: 'VALIDADA'   },
-    { nombre: 'En Proceso', estado: 'EN_PROCESO' },
-    { nombre: 'Resuelta',   estado: 'RESUELTA'   },
+  const PASOS = [
+    { key: 'PENDIENTE',           label: 'Recibida'   },
+    { key: 'VALIDADA',            label: 'Validada'   },
+    { key: 'EN_PROCESO',          label: 'En proceso' },
+    { key: 'RESUELTA',            label: 'Lista'      },
+    { key: 'DESCARGA_CONFIRMADA', label: 'Descargada' },
+    { key: 'CERRADA',             label: 'Cerrada'    },
   ];
+
+  // ── Pantallas de carga / error ────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+        <p className="text-gray-600">Cargando seguimiento...</p>
+      </div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+        <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Solicitud no encontrada</h2>
+        <p className="text-gray-600 mb-6">{error}</p>
+        <a href="/#/" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          Volver al inicio
+        </a>
+      </div>
+    </div>
+  );
+
+  const info         = ESTADOS_INFO[solicitud.estado] || ESTADOS_INFO['PENDIENTE'];
+  const Icon         = info.icon;
+  const stepActual   = PASOS.findIndex(p => p.key === solicitud.estado);
+  const urlDescarga  = solicitud.url_descarga || solicitud.url_datos;
+  const puedeDescargar = ['RESUELTA', 'DESCARGA_CONFIRMADA'].includes(solicitud.estado) && urlDescarga;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-2xl mx-auto space-y-5">
 
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Seguimiento de Solicitud</h1>
-              <p className="text-gray-500 mt-1">#{solicitud.numero_solicitud}</p>
-            </div>
-            <span className={`px-4 py-2 rounded-full text-sm font-medium ${estadoInfo.bg} ${estadoInfo.color} border`}>
-              <EstadoIcon className="w-4 h-4 inline mr-1" />
-              {estadoInfo.texto}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-            <div>
-              <p className="text-sm text-gray-600">Nombre completo</p>
-              <p className="font-semibold text-gray-900">{solicitud.nombre_completo}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">RUT</p>
-              <p className="font-semibold text-gray-900">{solicitud.rut}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Email</p>
-              <p className="font-semibold text-gray-900">{solicitud.email}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Teléfono</p>
-              <p className="font-semibold text-gray-900">{solicitud.telefono || 'No proporcionado'}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Fecha de solicitud</p>
-              <p className="font-semibold text-gray-900">{formatFecha(solicitud.fecha_solicitud)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600">Fecha límite</p>
-              <p className="font-semibold text-gray-900">{formatFecha(solicitud.fecha_limite)}</p>
-            </div>
-          </div>
+        {/* Título */}
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Seguimiento de Solicitud</h1>
+          <p className="text-gray-500 mt-1">
+            Número: <span className="font-mono font-semibold text-blue-600">{numero}</span>
+          </p>
         </div>
 
         {/* Estado actual */}
-        <div className={`${estadoInfo.bg} rounded-lg shadow-lg p-6 mb-6`}>
-          <div className="flex items-center gap-4 mb-4">
-            <EstadoIcon className={`w-12 h-12 ${estadoInfo.color}`} />
+        <div className={`rounded-2xl border-2 p-5 ${info.bg} ${info.border}`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-white shadow-sm`}>
+              <Icon className={`w-6 h-6 ${info.color}`} />
+            </div>
             <div>
-              <h2 className={`text-2xl font-bold ${estadoInfo.color}`}>{estadoInfo.texto}</h2>
-              <p className="text-gray-700 mt-1">{estadoInfo.descripcion}</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Estado actual</p>
+              <h2 className={`text-lg font-bold ${info.color}`}>{info.texto}</h2>
+              <p className="text-sm text-gray-600">{info.desc}</p>
             </div>
           </div>
-          {solicitud.dias_restantes > 0 && !['RESUELTA', 'CERRADA'].includes(solicitud.estado) && (
-            <div className="mt-4 p-4 bg-white rounded-lg">
-              <p className="text-sm text-gray-600">
-                ⏰ Días restantes para resolver: <strong>{solicitud.dias_restantes}</strong>
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Botón descarga si está resuelta */}
-        {solicitud.estado === 'RESUELTA' && solicitud.url_descarga && (
-          <div className="bg-green-50 rounded-lg shadow-lg p-6 mb-6 text-center">
-            <Download className="w-12 h-12 text-green-600 mx-auto mb-3" />
-            <h3 className="text-xl font-bold text-green-800 mb-2">Sus datos están disponibles</h3>
-            <p className="text-green-700 mb-4">Formato: {solicitud.formato_preferido || 'PDF'}</p>
-            <button
-              onClick={handleDescargar}
-              className="px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors"
-            >
-              Descargar mis datos
-            </button>
-          </div>
-        )}
-
-        {/* Progreso de la solicitud */}
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h3 className="text-xl font-bold text-gray-900 mb-6">Progreso de la solicitud</h3>
-          <div className="relative">
-            {steps.map((step, index) => {
-              const completado = index <= stepActual;
-              const actual     = index === stepActual;
+        {/* Barra de progreso */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="flex items-start">
+            {PASOS.map((paso, i) => {
+              const completado = i <= stepActual;
+              const esActual   = i === stepActual;
               return (
-                <div key={step.estado} className="flex items-start gap-4 mb-4 relative">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 z-10 ${
-                    completado ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-400'
-                  } ${actual ? 'ring-4 ring-blue-200' : ''}`}>
-                    {completado
-                      ? <CheckCircle className="w-5 h-5" />
-                      : <span className="text-sm font-bold">{index + 1}</span>}
+                <React.Fragment key={paso.key}>
+                  <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: 0 }}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                      esActual   ? 'bg-blue-600 text-white ring-4 ring-blue-100' :
+                      completado ? 'bg-green-500 text-white' :
+                                   'bg-gray-200 text-gray-400'}`}>
+                      {completado && !esActual ? '✓' : i + 1}
+                    </div>
+                    <p className={`text-xs mt-1 text-center leading-tight px-0.5 ${completado ? 'text-gray-700 font-medium' : 'text-gray-400'}`}
+                       style={{ fontSize: '10px', maxWidth: '48px' }}>
+                      {paso.label}
+                    </p>
                   </div>
-                  <div className="pt-1">
-                    <p className={`font-semibold ${completado ? 'text-gray-900' : 'text-gray-400'}`}>{step.nombre}</p>
-                    {actual && <p className="text-sm text-blue-600 font-medium">En curso</p>}
-                  </div>
-                  {index < steps.length - 1 && (
-                    <div className={`absolute left-5 top-10 w-0.5 h-8 ${completado && index < stepActual ? 'bg-blue-600' : 'bg-gray-200'}`} />
+                  {i < PASOS.length - 1 && (
+                    <div className={`flex-1 h-1 mt-3.5 mx-1 rounded-full ${i < stepActual ? 'bg-green-400' : 'bg-gray-200'}`} />
                   )}
-                </div>
+                </React.Fragment>
               );
             })}
           </div>
         </div>
 
-        {/* Footer info */}
-        <div className="bg-blue-50 rounded-lg p-6 text-center">
-          <p className="text-gray-700">ℹ️ Recibirás un email cada vez que el estado de tu solicitud cambie.</p>
-          <p className="text-sm text-gray-600 mt-2">
-            ¿Tienes preguntas? Contáctanos en{' '}
-            <a href="mailto:dpo@empresa.cl" className="text-blue-600 hover:underline">dpo@empresa.cl</a>
-          </p>
+        {/* Sección de descarga */}
+        {puedeDescargar && (
+          <div className={`rounded-2xl border-2 p-5 ${descargaOk ? 'bg-teal-50 border-teal-200' : 'bg-green-50 border-green-200'}`}>
+            {descargaOk ? (
+              // ── Ya descargó ──────────────────────────────
+              <div className="text-center space-y-3">
+                <PackageCheck className="w-12 h-12 text-teal-600 mx-auto" />
+                <div>
+                  <h3 className="text-lg font-bold text-teal-800">Descarga registrada ✓</h3>
+                  <p className="text-sm text-teal-700 mt-1">
+                    Hemos confirmado que accediste a tus datos personales.
+                  </p>
+                  {solicitud.descarga_confirmada_en && (
+                    <p className="text-xs text-teal-600 mt-1">
+                      Registrado el {formatFecha(solicitud.descarga_confirmada_en)}
+                    </p>
+                  )}
+                </div>
+                <button onClick={handleDescargar} disabled={descargando}
+                  className="text-sm text-teal-700 underline hover:text-teal-900 inline-flex items-center gap-1">
+                  <Download className="w-3.5 h-3.5" />
+                  Descargar nuevamente
+                </button>
+              </div>
+            ) : (
+              // ── Primera descarga ─────────────────────────
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-bold text-green-800">📥 Tus datos están listos</h3>
+                  <p className="text-sm text-green-700 mt-1">
+                    Haz clic para descargar. Registraremos este acceso como evidencia de
+                    cumplimiento de la Ley 21.719.
+                  </p>
+                </div>
+                {solicitud.formato_entrega && (
+                  <p className="text-xs text-green-600">
+                    Formato: <span className="font-semibold">{solicitud.formato_entrega}</span>
+                  </p>
+                )}
+                <button onClick={handleDescargar} disabled={descargando}
+                  className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold text-base transition-all shadow-sm disabled:opacity-60">
+                  {descargando
+                    ? <><Loader className="w-5 h-5 animate-spin" /> Registrando...</>
+                    : <><Download className="w-5 h-5" /> Descargar mis datos personales</>}
+                </button>
+                <p className="text-xs text-green-600 text-center">
+                  Al descargar, confirmas que recibiste tus datos según lo solicitado.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Detalle */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Detalle</h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            {[
+              ['Tipo',             solicitud.tipo || 'ACCESO'],
+              ['Fecha ingreso',    formatFecha(solicitud.fecha_solicitud)],
+              ['Fecha límite',     formatFecha(solicitud.fecha_limite)],
+              ['Formato',          solicitud.formato_preferido || '—'],
+            ].map(([label, valor]) => (
+              <div key={label}>
+                <p className="text-gray-400 text-xs">{label}</p>
+                <p className="font-medium text-gray-800">{valor}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
       </div>
