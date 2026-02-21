@@ -1,385 +1,40 @@
 // ============================================================
-// PANEL DPO v5 — consume grafo de transiciones enriquecido
-//
-// El modal de cambio de estado:
-// 1. Lee el tipo de la solicitud → carga el flujo correcto
-// 2. Filtra las transiciones salientes del estado actual
-// 3. Separa automáticas (condicion='automatica') de las que
-//    el DPO elige (condicion='dpo_elige')
-// 4. Por cada transición muestra su etiqueta, color y
-//    recolecta los campos_requeridos propios de ESA flecha
+// PanelDPO.jsx — v3
+// Agrega selector de actor responsable al cambiar a un estado
+// que tenga actores configurados en el flujo
 // ============================================================
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation }     from 'react-router-dom';
-import { Search, Filter, Loader, X, AlertCircle, Zap, ChevronRight, Link2, CheckSquare } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Search, Filter, Loader, X, CheckCircle, Clock, User } from 'lucide-react';
 import { obtenerTodasSolicitudes, actualizarSolicitud, marcarComoResuelta } from '../services/dpoService';
-import { obtenerFlujoConfig, COLOR_CLASSES, getColor } from '../services/flujoService';
 import SolicitudesTable from '../components/SolicitudesTable';
+import { ESTADOS, ESTADO_LABELS } from '../utils/constants';
 import { toast } from 'react-toastify';
+import { obtenerFlujoConfig } from '../services/flujoService';
 
-// ── Helpers ───────────────────────────────────────────────
-const getField = (obj, field) => {
-  if (!obj) return '';
-  return obj[field] ?? obj[field.toUpperCase()] ?? obj[field.toLowerCase()] ?? '';
-};
-
-const getSolicitudId = (sol) => {
-  for (const k of ['id', 'ID'])
-    if (sol?.[k]?.toString().trim()) return sol[k].toString().trim();
-  for (const k of ['numero_solicitud', 'NUMERO_SOLICITUD'])
-    if (sol?.[k]?.toString().trim()) return sol[k].toString().trim();
-  return null;
-};
-
-const formatFecha = (val) => {
-  if (!val) return 'Sin fecha';
-  try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return 'Sin fecha';
-    return d.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  } catch { return 'Sin fecha'; }
-};
-
-// ── Render dinámico de un campo requerido ─────────────────
-const CampoInput = ({ campo, value, onChange }) => {
-  const base = "w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent";
-
-  if (campo.tipo === 'checkbox') return (
-    <label className="flex items-start gap-3 p-3 bg-gray-50 border rounded-xl cursor-pointer hover:bg-gray-100 select-none">
-      <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)}
-        className="w-4 h-4 text-blue-600 rounded mt-0.5 flex-shrink-0" />
-      <span className="text-sm text-gray-800">
-        {campo.label}{campo.obligatorio && <span className="text-red-500 ml-1">*</span>}
-      </span>
-    </label>
-  );
-
-  if (campo.tipo === 'textarea') return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {campo.label}{campo.obligatorio && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      <textarea value={value || ''} onChange={e => onChange(e.target.value)} rows={3}
-        className={base} placeholder={campo.placeholder || ''} />
-    </div>
-  );
-
-  if (campo.tipo === 'select') return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {campo.label}{campo.obligatorio && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      <select value={value || ''} onChange={e => onChange(e.target.value)} className={base}>
-        <option value="">Seleccionar...</option>
-        {(campo.opciones || []).map(op => <option key={op} value={op}>{op}</option>)}
-      </select>
-    </div>
-  );
-
-  if (campo.tipo === 'url') return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        <Link2 className="w-3.5 h-3.5 inline mr-1 text-gray-400" />
-        {campo.label}{campo.obligatorio && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      <input type="url" value={value || ''} onChange={e => onChange(e.target.value)}
-        className={base} placeholder="https://..." />
-    </div>
-  );
-
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {campo.label}{campo.obligatorio && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      <input type={campo.tipo === 'date' ? 'date' : 'text'} value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        className={base} placeholder={campo.placeholder || ''} />
-    </div>
-  );
-};
-
-// ── Badge de estado ───────────────────────────────────────
-const EstadoBadge = ({ estadoId, estadosDef }) => {
-  const def = estadosDef?.find(e => e.id === estadoId);
-  const c   = getColor(def?.color);
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${c.bg} ${c.text} ${c.border}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${c.dot}`} />
-      {def?.nombre || estadoId}
-    </span>
-  );
-};
-
-// ── MODAL CAMBIAR ESTADO — corazón de toda la lógica ─────
-const ModalCambiarEstado = ({ solicitud, flujoConfig, onConfirmar, onCancelar, procesando }) => {
-  const tipo        = (getField(solicitud, 'tipo') || 'ACCESO').toUpperCase();
-  const estadoActual = getField(solicitud, 'estado') || 'PENDIENTE';
-  const numero       = getField(solicitud, 'numero_solicitud');
-
-  // Flujo del derecho correspondiente
-  const estadosDef = (flujoConfig?.derechos?.[tipo]?.estados || [])
-    .filter(e => e.activo)
-    .sort((a, b) => a.orden - b.orden);
-
-  const defActual = estadosDef.find(e => e.id === estadoActual);
-
-  // Separar transiciones automáticas de las que elige el DPO
-  const todasTransiciones  = (defActual?.transiciones || []).filter(t => t.hacia);
-  const transAuto          = todasTransiciones.filter(t => t.condicion === 'automatica');
-  const transDPO           = todasTransiciones.filter(t => t.condicion !== 'automatica');
-
-  // Estado del modal
-  const [transSeleccionada, setTransSeleccionada] = useState(transDPO[0] || null);
-  const [camposValues,      setCamposValues]       = useState({});
-
-  // Al cambiar transición → limpiar campos
-  const seleccionarTrans = (tr) => {
-    setTransSeleccionada(tr);
-    setCamposValues({});
-  };
-
-  const setValor = (campoId, val) =>
-    setCamposValues(prev => ({ ...prev, [campoId]: val }));
-
-  const camposActuales = transSeleccionada?.campos_requeridos || [];
-
-  // Validar campos obligatorios de la transición seleccionada
-  const camposFaltantes = camposActuales.filter(c => {
-    if (!c.obligatorio) return false;
-    const v = camposValues[c.id];
-    return v === undefined || v === null || v === '' || v === false;
-  });
-
-  const puedeConfirmar = transSeleccionada?.hacia && camposFaltantes.length === 0;
-
-  const defDestino = estadosDef.find(e => e.id === transSeleccionada?.hacia);
-
-  // Sin transiciones disponibles
-  if (todasTransiciones.length === 0) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center">
-          <AlertCircle className="w-12 h-12 text-amber-400 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-gray-900 mb-2">Sin transiciones disponibles</h3>
-          <p className="text-sm text-gray-500 mb-5">
-            El estado <strong>{defActual?.nombre || estadoActual}</strong> no tiene transiciones configuradas
-            {defActual?.es_final && ' porque es un estado final'}.
-          </p>
-          <button onClick={onCancelar}
-            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 text-sm">
-            Cerrar
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[92vh] overflow-y-auto">
-        <div className="p-6">
-
-          {/* Header */}
-          <div className="flex items-start justify-between mb-5">
-            <div>
-              <h3 className="text-xl font-bold text-gray-900">Cambiar Estado</h3>
-              <p className="text-sm text-gray-400 mt-0.5">
-                {numero} · Derecho de <span className="font-medium text-gray-600">{tipo}</span>
-              </p>
-            </div>
-            <button onClick={onCancelar} className="text-gray-300 hover:text-gray-600 p-1">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Estado actual */}
-          <div className="flex items-center gap-3 mb-5 p-3 bg-gray-50 rounded-xl border border-gray-200">
-            <div className="flex-1">
-              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Estado actual</p>
-              <EstadoBadge estadoId={estadoActual} estadosDef={estadosDef} />
-              {defActual?.descripcion && (
-                <p className="text-xs text-gray-400 mt-1">{defActual.descripcion}</p>
-              )}
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0" />
-            <div className="flex-1 text-right">
-              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Destino seleccionado</p>
-              {transSeleccionada?.hacia
-                ? <EstadoBadge estadoId={transSeleccionada.hacia} estadosDef={estadosDef} />
-                : <span className="text-xs text-gray-400 italic">ninguno</span>}
-            </div>
-          </div>
-
-          {/* Transiciones automáticas — informativas */}
-          {transAuto.length > 0 && (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
-              <p className="text-xs font-semibold text-yellow-700 flex items-center gap-1.5 mb-2">
-                <Zap className="w-3.5 h-3.5" /> Transiciones automáticas (no requieren acción del DPO)
-              </p>
-              <div className="space-y-1">
-                {transAuto.map(tr => {
-                  const c = getColor(tr.color);
-                  return (
-                    <div key={tr.id} className="flex items-center gap-2 text-xs text-yellow-800">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.stroke }} />
-                      <span className="font-medium">{tr.etiqueta}</span>
-                      <ChevronRight className="w-3 h-3 opacity-50" />
-                      <span>{estadosDef.find(e => e.id === tr.hacia)?.nombre || tr.hacia}</span>
-                      {tr.condicion_campo && (
-                        <span className="text-yellow-600 ml-auto">
-                          cuando {tr.condicion_campo} = {tr.condicion_valor}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Transiciones que elige el DPO */}
-          {transDPO.length > 0 && (
-            <div className="mb-5">
-              <p className="text-sm font-semibold text-gray-700 mb-2">
-                Selecciona la acción a tomar:
-              </p>
-              <div className="space-y-2">
-                {transDPO.map(tr => {
-                  const c   = getColor(tr.color);
-                  const sel = transSeleccionada?.id === tr.id;
-                  const dst = estadosDef.find(e => e.id === tr.hacia);
-                  return (
-                    <button key={tr.id} onClick={() => seleccionarTrans(tr)}
-                      className={`w-full text-left px-4 py-3 rounded-xl border-2 transition-all ${
-                        sel
-                          ? `${c.bg} ${c.border} shadow-sm`
-                          : 'bg-white border-gray-200 hover:border-gray-300'
-                      }`}>
-                      <div className="flex items-center gap-3">
-                        {/* Indicador de color de la flecha */}
-                        <span className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ background: c.stroke }} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`font-semibold text-sm ${sel ? c.text : 'text-gray-800'}`}>
-                              {tr.etiqueta}
-                            </span>
-                            <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
-                            <EstadoBadge estadoId={tr.hacia} estadosDef={estadosDef} />
-                            {(tr.campos_requeridos || []).length > 0 && (
-                              <span className="text-xs text-purple-600 flex items-center gap-1">
-                                <CheckSquare className="w-3 h-3" />
-                                {tr.campos_requeridos.length} campo{tr.campos_requeridos.length > 1 ? 's' : ''}
-                              </span>
-                            )}
-                          </div>
-                          {tr.descripcion && (
-                            <p className="text-xs text-gray-400 mt-0.5 truncate">{tr.descripcion}</p>
-                          )}
-                        </div>
-                        {sel && (
-                          <span className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
-                            style={{ background: c.stroke }}>
-                            <svg viewBox="0 0 12 12" className="w-3 h-3 fill-white">
-                              <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" fill="none" />
-                            </svg>
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Campos requeridos de la transición seleccionada */}
-          {camposActuales.length > 0 && (
-            <div className="mb-5 space-y-3">
-              <p className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                <CheckSquare className="w-4 h-4 text-purple-500" />
-                Completa los campos para <span className="text-purple-600">{transSeleccionada?.etiqueta}</span>
-              </p>
-              {camposActuales.map(campo => (
-                <CampoInput key={campo.id} campo={campo}
-                  value={camposValues[campo.id]}
-                  onChange={val => setValor(campo.id, val)} />
-              ))}
-            </div>
-          )}
-
-          {/* Avisos de comportamiento del estado destino */}
-          {defDestino && (
-            <div className="space-y-2 mb-5">
-              {defDestino.requiere_confirmacion && (
-                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  Esta acción quedará registrada en el log de auditoría y no puede deshacerse.
-                </div>
-              )}
-              {defDestino.envia_email && (
-                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  Se enviará un email automático al titular al ejecutar este cambio.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Validación visible */}
-          {transSeleccionada && camposFaltantes.length > 0 && (
-            <p className="text-xs text-red-500 mb-4">
-              Campos obligatorios faltantes: {camposFaltantes.map(c => c.label).join(', ')}
-            </p>
-          )}
-
-          {/* Acciones */}
-          <div className="flex gap-3">
-            <button onClick={onCancelar} disabled={procesando}
-              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 text-sm">
-              Cancelar
-            </button>
-            <button
-              onClick={() => onConfirmar(transSeleccionada, camposValues)}
-              disabled={!puedeConfirmar || procesando}
-              className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 text-sm font-semibold">
-              {procesando
-                ? 'Guardando...'
-                : transSeleccionada
-                  ? `${transSeleccionada.etiqueta} →`
-                  : 'Selecciona una transición'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Componente principal ──────────────────────────────────
 const PanelDPO = () => {
   const location = useLocation();
 
-  const [solicitudes,    setSolicitudes]    = useState([]);
-  const [loading,        setLoading]        = useState(true);
-  const [flujoConfig,    setFlujoConfig]    = useState(null);
-  const [filtros,        setFiltros]        = useState({ estado: '', busqueda: '' });
-  const [filtroEspecial, setFiltroEspecial] = useState(null);
+  const [solicitudes,         setSolicitudes]         = useState([]);
+  const [loading,             setLoading]             = useState(true);
+  const [filtros,             setFiltros]             = useState({ estado: '', busqueda: '' });
+  const [filtroEspecial,      setFiltroEspecial]      = useState(null);
 
-  const [modalDetalle,       setModalDetalle]       = useState(null);
-  const [modalCambiarEstado, setModalCambiarEstado] = useState(null);
-  const [procesando,         setProcesando]         = useState(false);
+  const [modalDetalle,        setModalDetalle]        = useState(null);
+  const [modalCambiarEstado,  setModalCambiarEstado]  = useState(null);
+  const [nuevoEstado,         setNuevoEstado]         = useState('');
+  const [actorSeleccionado,   setActorSeleccionado]   = useState(null);   // { nombre, email } | null
+  const [actorLibre,          setActorLibre]          = useState('');     // texto libre si no hay actores
+  const [actoresDisponibles,  setActoresDisponibles]  = useState([]);     // actores del estado destino
+  const [flujoConfig,         setFlujoConfig]         = useState(null);   // flujo completo cargado
 
-  // Cargar flujoConfig al montar
-  useEffect(() => {
-    obtenerFlujoConfig().then(r => {
-      if (r.status === 'success') setFlujoConfig(r.data);
-    });
-  }, []);
+  const [modalResuelta,       setModalResuelta]       = useState(null);
+  const [urlDescarga,         setUrlDescarga]         = useState('');
+  const [formatoEntregado,    setFormatoEntregado]    = useState('PDF');
+  const [procesando,          setProcesando]          = useState(false);
 
-  // Filtro especial desde Dashboard
+  // ── Leer filtro desde Dashboard ────────────────────────────
   useEffect(() => {
     if (location.state?.filtro) {
       setFiltroEspecial(location.state.filtro);
@@ -388,252 +43,541 @@ const PanelDPO = () => {
     }
   }, [location.state]);
 
-  // Cargar solicitudes
-  const cargarSolicitudes = useCallback(async () => {
+  useEffect(() => { cargarSolicitudes(); }, []);
+
+  // Cargar flujoConfig una sola vez
+  useEffect(() => {
+    obtenerFlujoConfig().then(r => {
+      if (r.status === 'success') setFlujoConfig(r.data);
+    }).catch(() => {});
+  }, []);
+
+  const cargarSolicitudes = async () => {
     try {
       setLoading(true);
       const result = await obtenerTodasSolicitudes(filtros);
-      setSolicitudes(result.status === 'success' ? (result.data || []) : []);
-    } catch {
-      toast.error('Error al cargar solicitudes');
-      setSolicitudes([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filtros]);
+      if (result.status === 'success') setSolicitudes(result.data || []);
+      else toast.error('Error al cargar solicitudes');
+    } catch { toast.error('Error al cargar solicitudes'); }
+    finally { setLoading(false); }
+  };
 
-  useEffect(() => { cargarSolicitudes(); }, []);
+  const handleAplicarFiltros = () => cargarSolicitudes();
 
-  // Filtrado local
+  // ── Solicitudes filtradas ──────────────────────────────────
   const solicitudesFiltradas = (() => {
     if (!filtroEspecial) return solicitudes;
     if (filtroEspecial.por_vencer) {
-      const limit = new Date(Date.now() + 3 * 86400000);
+      const limite = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
       return solicitudes.filter(s => {
         const fl = new Date(s.fecha_limite);
-        return fl <= limit && !['RESUELTA', 'CERRADA'].includes(s.estado);
+        return s.estado !== 'RESUELTA' && s.estado !== 'CERRADA' && fl < limite;
       });
     }
-    if (filtroEspecial.sin_asignar)
-      return solicitudes.filter(s => !s.asignado_a && !['RESUELTA', 'CERRADA'].includes(s.estado));
-    if (filtroEspecial.estado)
-      return solicitudes.filter(s => s.estado === filtroEspecial.estado);
+    if (filtroEspecial.sin_asignar) return solicitudes.filter(s => !s.asignado_a && s.estado !== 'CERRADA' && s.estado !== 'RESUELTA');
+    if (filtroEspecial.estado) return solicitudes.filter(s => s.estado === filtroEspecial.estado);
     return solicitudes;
   })();
 
-  // Estados activos únicos para el filtro (extraídos del flujoConfig)
-  const todosEstados = (() => {
-    if (!flujoConfig) return [];
-    const seen = new Set();
-    return Object.values(flujoConfig.derechos || {})
-      .flatMap(d => d.estados || [])
-      .filter(e => { if (!e.activo || seen.has(e.id)) return false; seen.add(e.id); return true; })
-      .sort((a, b) => a.orden - b.orden);
-  })();
+  // ── Helpers ────────────────────────────────────────────────
+  const getFieldValue = (obj, fieldName) => {
+    if (!obj) return '';
+    for (const k of [fieldName, fieldName.toUpperCase(), fieldName.toLowerCase()]) {
+      if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
+    }
+    return '';
+  };
 
-  // ── Confirmar cambio de estado ───────────────────────────
-  const handleConfirmarCambio = async (transicion, camposValues) => {
-    if (!modalCambiarEstado || !transicion?.hacia) return;
+  const getSolicitudId = (solicitud) => {
+    if (!solicitud) return null;
+    for (const campo of ['id', 'ID', 'Id']) {
+      const v = solicitud[campo];
+      if (v && v.toString().trim()) return v.toString().trim();
+    }
+    for (const campo of ['numero_solicitud', 'NUMERO_SOLICITUD']) {
+      const v = solicitud[campo];
+      if (v && v.toString().trim()) return v.toString().trim();
+    }
+    return null;
+  };
+
+  const formatearFecha = (fecha) => {
+    if (!fecha) return 'Sin fecha';
+    try {
+      const d = new Date(fecha);
+      if (isNaN(d.getTime())) return 'Fecha inválida';
+      return d.toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return 'Fecha inválida'; }
+  };
+
+  // Obtener actores configurados para un estado y tipo de solicitud
+  const getActoresParaEstado = (estadoId, tipoSolicitud) => {
+    if (!flujoConfig) return [];
+    const tipo    = (tipoSolicitud || 'ACCESO').toUpperCase();
+    const estados = flujoConfig.derechos?.[tipo]?.estados || [];
+    const estado  = estados.find(e => e.id === estadoId);
+    return estado?.actores || [];
+  };
+
+  // Calcular fecha de término según SLA del estado
+  const getFechaTerminoSLA = (estadoId, tipoSolicitud) => {
+    if (!flujoConfig) return null;
+    const tipo    = (tipoSolicitud || 'ACCESO').toUpperCase();
+    const estados = flujoConfig.derechos?.[tipo]?.estados || [];
+    const estado  = estados.find(e => e.id === estadoId);
+    const slaDias = estado?.sla_dias || 0;
+    if (!slaDias) return null;
+    // Calcular días hábiles desde hoy
+    let dias = slaDias;
+    const fecha = new Date();
+    while (dias > 0) {
+      fecha.setDate(fecha.getDate() + 1);
+      const dow = fecha.getDay();
+      if (dow !== 0 && dow !== 6) dias--; // excluye sábado y domingo
+    }
+    return fecha;
+  };
+
+  // ── Handlers ───────────────────────────────────────────────
+  const handleVerDetalle = (solicitud) => setModalDetalle(solicitud);
+  const handleCerrarDetalle = () => setModalDetalle(null);
+
+  const handleAbrirCambiarEstado = (solicitud) => {
+    const estadoActualId   = getFieldValue(solicitud, 'estado') || 'PENDIENTE';
+    const tipo             = (getFieldValue(solicitud, 'tipo') || 'ACCESO').toUpperCase();
+    const estadosDerecho   = flujoConfig?.derechos?.[tipo]?.estados || [];
+    const defActual        = estadosDerecho.find(e => e.id === estadoActualId);
+    const transIds         = defActual?.transiciones_posibles || [];
+    const primerDestino    = transIds[0] || estadoActualId;
+
+    setModalCambiarEstado(solicitud);
+    setNuevoEstado(primerDestino);
+    setActorSeleccionado(null);
+    setActorLibre('');
+    setActoresDisponibles(getActoresParaEstado(primerDestino, tipo));
+  };
+
+  // Cuando cambia el estado destino, actualizar lista de actores
+  const handleCambioEstadoDestino = (estadoId) => {
+    setNuevoEstado(estadoId);
+    setActorSeleccionado(null);
+    setActorLibre('');
+    const tipo = getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO';
+    setActoresDisponibles(getActoresParaEstado(estadoId, tipo));
+  };
+
+  const handleCambiarEstado = async () => {
+    if (!modalCambiarEstado || !nuevoEstado) {
+      toast.error('Selecciona un estado válido');
+      return;
+    }
+
+    // Determinar quién queda asignado
+    let asignadoNombre = '';
+    let asignadoEmail  = '';
+    if (actorSeleccionado) {
+      asignadoNombre = actorSeleccionado.nombre;
+      asignadoEmail  = actorSeleccionado.email;
+    } else if (actorLibre.trim()) {
+      asignadoNombre = actorLibre.trim();
+    }
+
+    // Calcular fechas SLA
+    const tipo         = getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO';
+    const fechaTermino = getFechaTerminoSLA(nuevoEstado, tipo);
+
     try {
       setProcesando(true);
       const id = getSolicitudId(modalCambiarEstado);
       if (!id) { toast.error('No se pudo obtener el ID'); return; }
 
-      const nuevoEstado = transicion.hacia;
+      const result = await actualizarSolicitud(id, {
+        estado:             nuevoEstado,
+        asignado_a:         asignadoNombre,
+        asignado_email:     asignadoEmail,
+        asignado_en:        new Date().toISOString(),
+        fecha_entrada_estado: new Date().toISOString(),
+        fecha_termino_sla:  fechaTermino ? fechaTermino.toISOString() : '',
+      });
 
-      // Si hay url_datos en los campos → usar marcarComoResuelta para disparar email
-      if (nuevoEstado === 'RESUELTA' && camposValues.url_datos) {
-        const result = await marcarComoResuelta(
-          id,
-          camposValues.url_datos,
-          camposValues.formato_entrega || 'PDF'
-        );
-        if (result.status === 'success') {
-          toast.success('✅ Solicitud resuelta — email enviado al titular');
-          setModalCambiarEstado(null);
-          await cargarSolicitudes();
-        } else {
-          toast.error('Error: ' + (result.message || ''));
-        }
-        return;
-      }
-
-      // Caso general
-      const payload = {
-        estado:    nuevoEstado,
-        notas_dpo: camposValues.notas_dpo || camposValues.motivo_denegacion || '',
-        ...camposValues,
-      };
-
-      const result = await actualizarSolicitud(id, payload);
       if (result.status === 'success') {
-        toast.success(`✅ ${transicion.etiqueta} → ${nuevoEstado}`);
+        const msg = asignadoNombre
+          ? `✅ Estado actualizado y asignado a ${asignadoNombre}`
+          : '✅ Estado actualizado correctamente';
+        toast.success(msg);
         setModalCambiarEstado(null);
         await cargarSolicitudes();
       } else {
-        toast.error('Error al actualizar: ' + (result.message || ''));
+        toast.error('Error al actualizar estado: ' + (result.message || ''));
       }
-    } catch {
-      toast.error('Error inesperado al cambiar estado');
-    } finally {
-      setProcesando(false);
-    }
+    } catch { toast.error('Error al actualizar estado'); }
+    finally { setProcesando(false); }
   };
 
-  if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="text-center">
-        <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-        <p className="text-gray-500">Cargando solicitudes...</p>
+  const handleAbrirMarcarResuelta = (solicitud) => {
+    setModalResuelta(solicitud);
+    setUrlDescarga('');
+    setFormatoEntregado('PDF');
+  };
+
+  const handleMarcarResuelta = async () => {
+    if (!modalResuelta || !urlDescarga.trim()) {
+      toast.error('Ingresa la URL de descarga');
+      return;
+    }
+    try {
+      setProcesando(true);
+      const id = getSolicitudId(modalResuelta);
+      if (!id) { toast.error('No se pudo obtener el ID'); return; }
+      const result = await marcarComoResuelta(id, urlDescarga, formatoEntregado);
+      if (result.status === 'success') {
+        toast.success('✅ Solicitud resuelta. Email enviado al usuario.');
+        setModalResuelta(null);
+        await cargarSolicitudes();
+      } else {
+        toast.error('Error: ' + (result.message || ''));
+      }
+    } catch { toast.error('Error al marcar como resuelta'); }
+    finally { setProcesando(false); }
+  };
+
+  // ── Render ─────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Cargando solicitudes...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
 
         {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">Panel DPO</h1>
-          <p className="text-gray-400 text-sm">Gestión de solicitudes ARCOP — Ley 21.719</p>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Panel DPO</h1>
+          <p className="text-gray-600">Gestión de solicitudes de derechos ARCOP</p>
         </div>
 
         {/* Banner filtro especial */}
         {filtroEspecial && (
-          <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-            <span className="text-sm text-blue-700 font-medium flex-1">
-              {filtroEspecial.por_vencer   && '🔴 Filtrando: Por vencer (próximos 3 días)'}
-              {filtroEspecial.sin_asignar  && '🟡 Filtrando: Sin asignar'}
+          <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <span className="text-sm text-blue-700 font-medium">
+              {filtroEspecial.por_vencer  && '🔴 Filtrando: Solicitudes por vencer (próximos 3 días)'}
+              {filtroEspecial.sin_asignar && '🟡 Filtrando: Solicitudes sin asignar'}
               {filtroEspecial.estado === 'PENDIENTE' && '🔵 Filtrando: Pendientes de validación'}
             </span>
             <button onClick={() => setFiltroEspecial(null)}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium underline">
+              className="ml-auto text-sm text-blue-600 hover:text-blue-800 font-medium underline">
               Ver todas
             </button>
           </div>
         )}
 
         {/* Filtros */}
-        <div className="bg-white rounded-xl shadow-sm p-5 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Buscar</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input type="text" value={filtros.busqueda}
-                  onChange={e => setFiltros(p => ({ ...p, busqueda: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && cargarSolicitudes()}
-                  placeholder="Nombre, RUT o número..."
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-              </div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Search className="w-4 h-4 inline mr-1" /> Buscar
+              </label>
+              <input type="text" value={filtros.busqueda}
+                onChange={e => setFiltros({ ...filtros, busqueda: e.target.value })}
+                onKeyPress={e => e.key === 'Enter' && handleAplicarFiltros()}
+                placeholder="Nombre, RUT o email..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
             </div>
-
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Estado</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Filter className="w-4 h-4 inline mr-1" /> Estado
+              </label>
               <select value={filtros.estado}
-                onChange={e => setFiltros(p => ({ ...p, estado: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                onChange={e => setFiltros({ ...filtros, estado: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                 <option value="">Todos los estados</option>
-                {todosEstados.map(e => (
-                  <option key={e.id} value={e.id}>{e.nombre}</option>
+                {Object.entries(ESTADO_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
                 ))}
               </select>
             </div>
-
-            <div className="flex items-end gap-2">
-              <button onClick={cargarSolicitudes}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-1.5">
-                <Filter className="w-4 h-4" /> Filtrar
-              </button>
-              <button onClick={() => { setFiltros({ estado: '', busqueda: '' }); setTimeout(cargarSolicitudes, 50); }}
-                className="px-4 py-2 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 text-sm">
-                Limpiar
-              </button>
-            </div>
           </div>
+          <button onClick={handleAplicarFiltros}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+            Aplicar filtros
+          </button>
         </div>
-
-        {/* Contador */}
-        <p className="text-sm text-gray-400 mb-3">
-          {solicitudesFiltradas.length > 0
-            ? <>{solicitudesFiltradas.length} solicitud{solicitudesFiltradas.length !== 1 ? 'es' : ''}{filtroEspecial && <span className="ml-2 text-blue-500">(filtradas)</span>}</>
-            : 'No hay solicitudes para mostrar'}
-        </p>
 
         {/* Tabla */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm">
           <SolicitudesTable
             solicitudes={solicitudesFiltradas}
-            estadosDef={todosEstados}
-            onVerDetalle={sol => setModalDetalle(sol)}
-            onCambiarEstado={sol => setModalCambiarEstado(sol)}
-            onMarcarResuelta={null}   // integrado en el flujo dinámico
+            onVerDetalle={handleVerDetalle}
+            onCambiarEstado={handleAbrirCambiarEstado}
+            onMarcarResuelta={handleAbrirMarcarResuelta}
           />
         </div>
+
       </div>
 
-      {/* Modal detalle */}
+      {/* ── Modal Detalle ─────────────────────────────────── */}
       {modalDetalle && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-5">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Detalle de Solicitud</h2>
-                  <p className="text-sm text-gray-400 mt-1">{getField(modalDetalle, 'numero_solicitud')}</p>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-6">
+              <h3 className="text-xl font-bold text-gray-900">Detalle de Solicitud</h3>
+              <button onClick={handleCerrarDetalle} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                ['Nombre', 'nombre_completo'],
+                ['RUT', 'rut'],
+                ['Email', 'email'],
+                ['Teléfono', 'telefono'],
+                ['Estado', 'estado'],
+                ['Tipo', 'tipo'],
+                ['Fecha Solicitud', 'fecha_solicitud'],
+                ['Fecha Límite', 'fecha_limite'],
+              ].map(([label, field]) => (
+                <div key={field}>
+                  <label className="block text-sm font-medium text-gray-700">{label}</label>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {field.includes('fecha') ? formatearFecha(getFieldValue(modalDetalle, field)) : (getFieldValue(modalDetalle, field) || 'N/A')}
+                  </p>
                 </div>
-                <button onClick={() => setModalDetalle(null)} className="text-gray-300 hover:text-gray-600 p-1">
-                  <X className="w-5 h-5" />
-                </button>
+              ))}
+            </div>
+            {getFieldValue(modalDetalle, 'asignado_a') && (
+              <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
+                <User className="w-4 h-4 text-indigo-600" />
+                <span className="text-sm font-medium text-indigo-700">
+                  Asignado a: {getFieldValue(modalDetalle, 'asignado_a')}
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  ['Nombre',          getField(modalDetalle, 'nombre_completo')],
-                  ['RUT',             getField(modalDetalle, 'rut')],
-                  ['Email',           getField(modalDetalle, 'email')],
-                  ['Teléfono',        getField(modalDetalle, 'telefono') || 'No proporcionado'],
-                  ['Tipo de derecho', getField(modalDetalle, 'tipo')],
-                  ['Estado',         <EstadoBadge key="e" estadoId={getField(modalDetalle, 'estado')} estadosDef={todosEstados} />],
-                  ['Fecha solicitud', formatFecha(getField(modalDetalle, 'fecha_solicitud'))],
-                  ['Fecha límite',    formatFecha(getField(modalDetalle, 'fecha_limite'))],
-                ].map(([label, val]) => (
-                  <div key={label}>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
-                    <div className="mt-1 text-sm text-gray-900">{val}</div>
-                  </div>
-                ))}
+            )}
+            {getFieldValue(modalDetalle, 'notas_dpo') && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700">Notas DPO</label>
+                <p className="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
+                  {getFieldValue(modalDetalle, 'notas_dpo')}
+                </p>
               </div>
-              {getField(modalDetalle, 'notas_dpo') && (
-                <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Notas DPO</p>
-                  <p className="text-sm text-gray-800">{getField(modalDetalle, 'notas_dpo')}</p>
-                </div>
-              )}
-              <div className="flex justify-end mt-6 gap-3">
-                <button onClick={() => { setModalDetalle(null); setModalCambiarEstado(modalDetalle); }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium">
-                  Cambiar estado
-                </button>
-                <button onClick={() => setModalDetalle(null)}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 text-sm">
-                  Cerrar
-                </button>
-              </div>
+            )}
+            <div className="flex gap-3 mt-6 justify-end">
+              <button onClick={() => { handleCerrarDetalle(); handleAbrirCambiarEstado(modalDetalle); }}
+                className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium">
+                Cambiar Estado
+              </button>
+              <button onClick={handleCerrarDetalle}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium">
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal cambiar estado — dinámico */}
-      {modalCambiarEstado && flujoConfig && (
-        <ModalCambiarEstado
-          solicitud={modalCambiarEstado}
-          flujoConfig={flujoConfig}
-          procesando={procesando}
-          onCancelar={() => setModalCambiarEstado(null)}
-          onConfirmar={handleConfirmarCambio}
-        />
+      {/* ── Modal Cambiar Estado ──────────────────────────── */}
+      {modalCambiarEstado && (() => {
+        const tipo             = (getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO').toUpperCase();
+        const estadoActualId   = getFieldValue(modalCambiarEstado, 'estado') || 'PENDIENTE';
+        const numero           = getFieldValue(modalCambiarEstado, 'numero_solicitud') || getFieldValue(modalCambiarEstado, 'NUMERO_SOLICITUD');
+        const nombreTitular    = getFieldValue(modalCambiarEstado, 'nombre_completo');
+
+        // Obtener estados del flujo del tipo correcto
+        const estadosDerecho   = flujoConfig?.derechos?.[tipo]?.estados || [];
+        const defActual        = estadosDerecho.find(e => e.id === estadoActualId);
+        // Transiciones posibles desde el estado actual
+        const transicionesIds  = defActual?.transiciones_posibles || [];
+        const estadosDestino   = estadosDerecho.filter(e => transicionesIds.includes(e.id) && e.activo);
+        // Si no hay flujoConfig o no hay transiciones, mostrar selector completo como fallback
+        const usarFallback     = estadosDestino.length === 0;
+
+        const fechaTermino     = getFechaTerminoSLA(nuevoEstado, tipo);
+        const hayActores       = actoresDisponibles.length > 0;
+
+        // Campos requeridos del estado destino (campos_transicion del destino)
+        const defDestino       = estadosDerecho.find(e => e.id === nuevoEstado);
+        const camposDestino    = defDestino?.campos_transicion || [];
+
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+
+              <h3 className="text-xl font-bold text-gray-900 mb-1">Cambiar Estado</h3>
+              <p className="text-sm text-gray-500 mb-5">
+                Solicitud <span className="font-semibold text-gray-700">{numero}</span>
+                {nombreTitular && <> — <span className="font-semibold text-gray-700">{nombreTitular}</span></>}
+                {' '}— Tipo: <span className="font-semibold text-gray-700">{tipo}</span>
+              </p>
+
+              {/* Estado actual */}
+              <div className="mb-4 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
+                Estado actual: <strong className="text-gray-800">{defActual?.nombre || estadoActualId}</strong>
+              </div>
+
+              {/* Selector de estado destino */}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Mover a estado</label>
+                {usarFallback ? (
+                  // Fallback si no hay flujoConfig cargado
+                  <select value={nuevoEstado} onChange={e => handleCambioEstadoDestino(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    {['PENDIENTE','VALIDADA','EN_PROCESO','RESUELTA','CERRADA'].map(id => (
+                      <option key={id} value={id}>{id}</option>
+                    ))}
+                  </select>
+                ) : (
+                  // Opciones dinámicas desde el flujo configurado
+                  <div className="space-y-2">
+                    {estadosDestino.map(est => {
+                      const seleccionado = nuevoEstado === est.id;
+                      return (
+                        <label key={est.id}
+                          className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
+                            seleccionado ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}>
+                          <input type="radio" name="estadoDestino" className="w-4 h-4 accent-blue-600"
+                            checked={seleccionado}
+                            onChange={() => handleCambioEstadoDestino(est.id)} />
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-gray-800">{est.nombre}</p>
+                            {est.descripcion && <p className="text-xs text-gray-500 mt-0.5">{est.descripcion}</p>}
+                          </div>
+                          {est.envia_email && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Email titular</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Asignación de actor ── */}
+              {nuevoEstado && nuevoEstado !== estadoActualId && (
+                <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <User className="w-4 h-4 text-indigo-600" />
+                    <h4 className="text-sm font-semibold text-indigo-800">Responsable de la actividad</h4>
+                    {!hayActores && <span className="text-xs text-indigo-400">(opcional)</span>}
+                  </div>
+
+                  {hayActores ? (
+                    <div className="space-y-2">
+                      {actoresDisponibles.map((actor, i) => (
+                        <label key={i}
+                          className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                            actorSeleccionado?.email === actor.email
+                              ? 'border-indigo-500 bg-white'
+                              : 'border-transparent bg-white/60 hover:bg-white'
+                          }`}>
+                          <input type="radio" name="actor" className="w-4 h-4 accent-indigo-600"
+                            checked={actorSeleccionado?.email === actor.email}
+                            onChange={() => { setActorSeleccionado(actor); setActorLibre(''); }} />
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800">{actor.nombre}</p>
+                            {actor.email && <p className="text-xs text-gray-500">{actor.email}</p>}
+                          </div>
+                        </label>
+                      ))}
+                      {/* Opción "Otro" */}
+                      <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        !actorSeleccionado && actorLibre
+                          ? 'border-indigo-500 bg-white'
+                          : 'border-transparent bg-white/60 hover:bg-white'
+                      }`}>
+                        <input type="radio" name="actor" className="w-4 h-4 accent-indigo-600"
+                          checked={!actorSeleccionado && !!actorLibre}
+                          onChange={() => setActorSeleccionado(null)} />
+                        <input type="text" placeholder="Otro responsable..."
+                          value={actorLibre}
+                          onClick={() => setActorSeleccionado(null)}
+                          onChange={e => { setActorLibre(e.target.value); setActorSeleccionado(null); }}
+                          className="flex-1 text-sm border-b border-gray-300 focus:border-indigo-500 focus:outline-none bg-transparent py-0.5" />
+                      </label>
+                    </div>
+                  ) : (
+                    <input type="text" placeholder="Nombre del responsable (opcional)"
+                      value={actorLibre}
+                      onChange={e => setActorLibre(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-indigo-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                  )}
+                </div>
+              )}
+
+              {/* Info SLA */}
+              {fechaTermino && nuevoEstado !== estadoActualId && (
+                <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg mb-4 text-sm">
+                  <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-amber-700">
+                    <p>Plazo SLA del estado <strong>{defDestino?.nombre}</strong>: debe completarse antes del</p>
+                    <p className="font-bold text-amber-800 mt-0.5">
+                      {fechaTermino.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                    <p className="text-xs text-amber-600 mt-1">Se notificará al responsable asignado por email.</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setModalCambiarEstado(null)} disabled={procesando}
+                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">
+                  Cancelar
+                </button>
+                <button onClick={handleCambiarEstado}
+                  disabled={procesando || (!usarFallback && nuevoEstado === estadoActualId)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                  {procesando ? 'Guardando...' : 'Confirmar cambio'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Modal Marcar Resuelta ─────────────────────────── */}
+      {modalResuelta && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Marcar como Resuelta</h3>
+            <div className="space-y-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">URL de Descarga *</label>
+                <input type="url" value={urlDescarga} onChange={e => setUrlDescarga(e.target.value)}
+                  placeholder="https://drive.google.com/..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+                <p className="text-xs text-gray-500 mt-1">URL donde el usuario puede descargar sus datos</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Formato Entregado</label>
+                <select value={formatoEntregado} onChange={e => setFormatoEntregado(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                  <option value="PDF">PDF</option>
+                  <option value="CSV">CSV</option>
+                  <option value="JSON">JSON</option>
+                  <option value="XML">XML</option>
+                  <option value="Físico">Físico / Presencial</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setModalResuelta(null)} disabled={procesando}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">
+                Cancelar
+              </button>
+              <button onClick={handleMarcarResuelta} disabled={procesando || !urlDescarga.trim()}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                {procesando ? 'Enviando...' : 'Marcar Resuelta y Enviar Email'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
