@@ -1,15 +1,6 @@
 // ============================================================
-// FLOW DIAGRAM EDITOR v2 — @xyflow/react + dagre
-//
-// Usa @xyflow/react para todo el manejo de canvas:
-//   - Drag de nodos, zoom, pan → nativo de la librería
-//   - Drag-to-connect entre handles → nativo
-//   - Flechas bezier suaves que no se cruzan
-//   - MiniMap + Controls integrados
-//   - Auto-layout con dagre (botón "Ordenar")
-//
-// Nodos y aristas son custom para mostrar la info ARCOP.
-// Panel lateral aparece al seleccionar nodo o arista.
+// FLOW DIAGRAM EDITOR v3 — Nodos vibrantes sobre canvas dark
+// Paleta de colores rich por estado para máximo impacto visual
 // ============================================================
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,7 +9,6 @@ import {
   Background, BackgroundVariant,
   Controls, MiniMap,
   Panel,
-  addEdge,
   useNodesState, useEdgesState,
   Handle, Position,
   BaseEdge, EdgeLabelRenderer, getBezierPath,
@@ -27,7 +17,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import dagre from '@dagrejs/dagre';
 import {
-  X, Trash2, Plus, Zap, Hand,
+  X, Trash2, Zap, Hand,
   Mail, CheckSquare, LayoutGrid,
 } from 'lucide-react';
 import {
@@ -35,16 +25,40 @@ import {
   TIPOS_CAMPO, crearTransicion, crearCampoRequerido,
 } from '../services/flujoService';
 
+// ── Paleta de colores para el diagrama (rich/vibrant) ─────
+// Independiente de Tailwind — colores hex para usar en style={}
+const NODE_COLORS = {
+  yellow:  { bg: 'linear-gradient(135deg, #854D0E 0%, #A16207 100%)', border: '#EAB308', glow: '#EAB30860', text: '#FEF08A', sub: '#FDE047BB' },
+  blue:    { bg: 'linear-gradient(135deg, #1E3A5F 0%, #1D4ED8 100%)', border: '#3B82F6', glow: '#3B82F660', text: '#BFDBFE', sub: '#93C5FDBB' },
+  purple:  { bg: 'linear-gradient(135deg, #3B0764 0%, #7C3AED 100%)', border: '#A855F7', glow: '#A855F760', text: '#E9D5FF', sub: '#D8B4FEBB' },
+  green:   { bg: 'linear-gradient(135deg, #14532D 0%, #15803D 100%)', border: '#22C55E', glow: '#22C55E60', text: '#BBF7D0', sub: '#86EFACBB' },
+  gray:    { bg: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)', border: '#64748B', glow: '#64748B60', text: '#CBD5E1', sub: '#94A3B8BB' },
+  red:     { bg: 'linear-gradient(135deg, #7F1D1D 0%, #B91C1C 100%)', border: '#EF4444', glow: '#EF444460', text: '#FECACA', sub: '#FCA5A5BB' },
+  orange:  { bg: 'linear-gradient(135deg, #7C2D12 0%, #C2410C 100%)', border: '#F97316', glow: '#F9731660', text: '#FED7AA', sub: '#FDBA74BB' },
+  teal:    { bg: 'linear-gradient(135deg, #134E4A 0%, #0D9488 100%)', border: '#14B8A6', glow: '#14B8A660', text: '#99F6E4', sub: '#5EEAD4BB' },
+  indigo:  { bg: 'linear-gradient(135deg, #1E1B4B 0%, #4338CA 100%)', border: '#6366F1', glow: '#6366F160', text: '#C7D2FE', sub: '#A5B4FCBB' },
+  pink:    { bg: 'linear-gradient(135deg, #500724 0%, #BE185D 100%)', border: '#EC4899', glow: '#EC489960', text: '#FBCFE8', sub: '#F9A8D4BB' },
+};
+const getNC = (color) => NODE_COLORS[color] || NODE_COLORS.gray;
+
+// Colores de flechas (hex directo)
+const EDGE_COLORS = {
+  blue:   '#3B82F6', green:  '#22C55E', red:    '#EF4444',
+  orange: '#F97316', purple: '#A855F7', gray:   '#94A3B8',
+  teal:   '#14B8A6', yellow: '#EAB308', indigo: '#6366F1', pink: '#EC4899',
+};
+const getEC = (color) => EDGE_COLORS[color] || EDGE_COLORS.gray;
+
 const getC = (color) => COLOR_CLASSES[color] || COLOR_CLASSES.gray;
 
 // ── Dagre auto-layout ─────────────────────────────────────
-const NODE_W = 160;
-const NODE_H = 64;
+const NODE_W = 172;
+const NODE_H = 72;
 
 const applyDagreLayout = (nodes, edges, direction = 'LR') => {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: direction, nodesep: 60, ranksep: 100 });
+  g.setGraph({ rankdir: direction, nodesep: 70, ranksep: 110 });
   nodes.forEach(n => g.setNode(n.id, { width: NODE_W, height: NODE_H }));
   edges.forEach(e => g.setEdge(e.source, e.target));
   dagre.layout(g);
@@ -54,7 +68,7 @@ const applyDagreLayout = (nodes, edges, direction = 'LR') => {
   });
 };
 
-// ── Conversor flujoConfig → nodos/aristas xyflow ─────────
+// ── Conversor config → xyflow ─────────────────────────────
 const configToFlow = (estados) => {
   const nodes = estados
     .filter(e => e.activo)
@@ -69,17 +83,17 @@ const configToFlow = (estados) => {
   estados.filter(e => e.activo).forEach(src => {
     (src.transiciones || []).forEach(tr => {
       if (!tr.hacia) return;
+      const edgeColor = getEC(tr.color);
       edges.push({
         id:     tr.id,
         source: src.id,
         target: tr.hacia,
         type:   'transicionEdge',
         data:   { tr, srcId: src.id },
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18,
-                     color: getC(tr.color)?.stroke || '#6B7280' },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 20, height: 20, color: edgeColor },
         style: {
-          stroke:          getC(tr.color)?.stroke || '#6B7280',
-          strokeWidth:     2,
+          stroke:          edgeColor,
+          strokeWidth:     2.5,
           strokeDasharray: tr.condicion === 'automatica' ? '6 3' : undefined,
         },
         animated: tr.condicion === 'automatica',
@@ -90,119 +104,113 @@ const configToFlow = (estados) => {
   return { nodes, edges };
 };
 
-// ── Nodo custom ───────────────────────────────────────────
+// ── Nodo custom con color vibrante ────────────────────────
 const EstadoNode = ({ data, selected }) => {
   const { estado } = data;
-  const c     = getC(estado.color);
+  const nc    = getNC(estado.color);
   const esLey = estado.origen === 'ley' || estado.origen === 'ley_futura';
+  const nSalidas = (estado.transiciones || []).length;
 
   return (
     <div
-      className="rounded-xl border-2 transition-all select-none overflow-hidden"
+      className="rounded-2xl select-none overflow-hidden transition-all"
       style={{
-        width:       NODE_W,
-        minHeight:   NODE_H,
-        background:  c.fill,
-        borderColor: selected ? '#60A5FA' : c.stroke,
-        boxShadow:   selected
-          ? `0 0 0 3px ${c.stroke}55, 0 6px 24px rgba(0,0,0,0.45)`
-          : '0 4px 14px rgba(0,0,0,0.35)',
+        width:      NODE_W,
+        minHeight:  NODE_H,
+        background: nc.bg,
+        border:     `2px solid ${selected ? '#fff' : nc.border}`,
+        boxShadow:  selected
+          ? `0 0 0 3px ${nc.border}, 0 0 24px ${nc.glow}, 0 8px 32px rgba(0,0,0,0.5)`
+          : `0 0 12px ${nc.glow}, 0 4px 16px rgba(0,0,0,0.4)`,
       }}>
 
-      {/* Barra de color superior */}
-      <div className="h-1.5 w-full" style={{ background: c.stroke }} />
+      {/* Barra brillante superior */}
+      <div
+        style={{
+          height:     3,
+          background: `linear-gradient(90deg, transparent, ${nc.border}, transparent)`,
+        }} />
 
       <div className="px-3 py-2.5 relative">
 
         {/* Badge Ley */}
         {esLey && (
           <span
-            className="absolute top-1.5 right-2 text-xs font-bold px-1.5 py-0.5 rounded"
-            style={{
-              background: c.stroke,
-              color:      '#ffffff',
-              fontSize:   9,
-            }}>
-            L
+            className="absolute top-1.5 right-2 text-xs font-bold px-1.5 py-0.5 rounded-md"
+            style={{ background: nc.border + '33', color: nc.border, border: `1px solid ${nc.border}66`, fontSize: 9 }}>
+            LEY
           </span>
         )}
 
-        {/* Nombre del estado — texto blanco/claro */}
+        {/* Nombre */}
         <p
-          className="font-bold text-sm leading-tight truncate"
-          style={{ color: '#F1F5F9', maxWidth: 120 }}>
+          className="font-bold text-sm leading-tight"
+          style={{ color: nc.text, maxWidth: 130, textShadow: `0 1px 4px rgba(0,0,0,0.4)` }}>
           {estado.nombre}
         </p>
 
-        {/* Info secundaria — slate-400 para buen contraste */}
-        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          <span
-            className="text-xs"
-            style={{ color: '#94A3B8' }}>
-            {(estado.transiciones || []).length} salida
-            {(estado.transiciones || []).length !== 1 ? 's' : ''}
+        {/* Info secundaria */}
+        <div className="flex items-center gap-2 mt-1.5">
+          <span className="text-xs font-medium" style={{ color: nc.sub }}>
+            {nSalidas} salida{nSalidas !== 1 ? 's' : ''}
           </span>
           {estado.es_final && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
-              style={{ background: 'rgba(148,163,184,0.2)', color: '#CBD5E1' }}>
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
+              style={{ background: nc.border + '25', color: nc.text, border: `1px solid ${nc.border}50` }}>
               FINAL
             </span>
           )}
           {estado.envia_email && (
-            <Mail className="w-3 h-3" style={{ color: '#60A5FA' }} title="Envía email" />
+            <Mail className="w-3 h-3 flex-shrink-0" style={{ color: nc.sub }} />
           )}
           {estado.requiere_confirmacion && (
-            <CheckSquare className="w-3 h-3" style={{ color: '#A78BFA' }} title="Requiere confirmación" />
+            <CheckSquare className="w-3 h-3 flex-shrink-0" style={{ color: nc.sub }} />
           )}
         </div>
       </div>
 
-      {/* Handles de conexión */}
+      {/* Handles */}
       <Handle type="target" position={Position.Left}
-        style={{ background: c.stroke, width: 10, height: 10, border: '2px solid #0F172A' }} />
+        style={{ background: nc.border, width: 11, height: 11, border: '2.5px solid #0F172A', boxShadow: `0 0 6px ${nc.glow}` }} />
       <Handle type="source" position={Position.Right}
-        style={{ background: c.stroke, width: 10, height: 10, border: '2px solid #0F172A' }} />
+        style={{ background: nc.border, width: 11, height: 11, border: '2.5px solid #0F172A', boxShadow: `0 0 6px ${nc.glow}` }} />
       <Handle type="target" position={Position.Top} id="top"
-        style={{ background: c.stroke, width: 8, height: 8, border: '2px solid #0F172A', opacity: 0.7 }} />
+        style={{ background: nc.border, width: 8, height: 8, border: '2px solid #0F172A', opacity: 0.8 }} />
       <Handle type="source" position={Position.Bottom} id="bottom"
-        style={{ background: c.stroke, width: 8, height: 8, border: '2px solid #0F172A', opacity: 0.7 }} />
+        style={{ background: nc.border, width: 8, height: 8, border: '2px solid #0F172A', opacity: 0.8 }} />
     </div>
   );
 };
 
-
-// ── Arista custom con etiqueta clickeable ─────────────────
+// ── Arista custom con etiqueta ────────────────────────────
 const TransicionEdge = ({
   id, sourceX, sourceY, targetX, targetY,
   sourcePosition, targetPosition,
   data, selected, markerEnd, style,
 }) => {
   const { tr } = data;
-  const c = getC(tr.color);
+  const edgeColor = getEC(tr.color);
+  const esAuto    = tr.condicion === 'automatica';
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX, sourceY, sourcePosition,
     targetX, targetY, targetPosition,
   });
 
-  const labelW = Math.min(96, (tr.etiqueta?.length || 0) * 7 + 20);
-  const esAuto = tr.condicion === 'automatica';
-
   return (
     <>
+      {/* Halo glow cuando está seleccionada */}
+      {selected && (
+        <BaseEdge id={`${id}-halo`} path={edgePath}
+          style={{ stroke: edgeColor, strokeWidth: 10, opacity: 0.2, fill: 'none' }} />
+      )}
+
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd}
         style={{
           ...style,
-          strokeWidth: selected ? 3 : 2,
-          filter: selected ? `drop-shadow(0 0 4px ${c.stroke})` : undefined,
+          strokeWidth: selected ? 3.5 : 2.5,
+          filter:      selected ? `drop-shadow(0 0 5px ${edgeColor})` : `drop-shadow(0 0 2px ${edgeColor}80)`,
         }} />
-
-      {/* Halo de selección */}
-      {selected && (
-        <BaseEdge id={`${id}-halo`} path={edgePath}
-          style={{ stroke: c.stroke, strokeWidth: 10, opacity: 0.18, fill: 'none' }} />
-      )}
 
       {/* Etiqueta */}
       <EdgeLabelRenderer>
@@ -215,17 +223,17 @@ const TransicionEdge = ({
           }}
           className="nodrag nopan">
           <div
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all select-none"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold cursor-pointer select-none transition-all"
             style={{
-              background:   selected ? c.stroke : 'rgba(15,23,42,0.88)',
-              color:        selected ? 'white' : c.stroke,
-              border:       `1.5px solid ${selected ? 'transparent' : c.stroke + '80'}`,
-              boxShadow:    selected ? `0 0 8px ${c.stroke}60` : '0 2px 6px rgba(0,0,0,0.3)',
-              whiteSpace:   'nowrap',
-              maxWidth:     100,
+              background:  selected ? edgeColor : `rgba(10,14,23,0.92)`,
+              color:       selected ? '#fff' : edgeColor,
+              border:      `1.5px solid ${edgeColor}`,
+              boxShadow:   `0 2px 8px rgba(0,0,0,0.4), 0 0 6px ${edgeColor}40`,
+              whiteSpace:  'nowrap',
+              maxWidth:    110,
             }}>
             {esAuto && <Zap className="w-3 h-3 flex-shrink-0" />}
-            <span className="truncate" style={{ maxWidth: 80 }}>
+            <span className="truncate" style={{ maxWidth: 85 }}>
               {tr.etiqueta || '—'}
             </span>
           </div>
@@ -237,87 +245,103 @@ const TransicionEdge = ({
 
 // ── Panel lateral — estado ────────────────────────────────
 const PanelEstado = ({ estado, todos, onEditar, onEliminar, onAgregarTransicion, onCerrar }) => {
-  const c = getC(estado.color);
+  const nc    = getNC(estado.color);
   const esLey = estado.origen === 'ley' || estado.origen === 'ley_futura';
   const otros = todos.filter(e => e.id !== estado.id && e.activo);
 
   return (
     <div className="flex flex-col h-full text-sm">
-
-   <div className="px-4 py-3 flex items-center justify-between flex-shrink-0 border-b border-slate-700"
-        style={{ background: '#1E293B', borderLeft: `4px solid ${c.stroke}` }}>
-     <div>
-       <div className="flex items-center gap-2">
-         <span className="font-bold" style={{ color: '#F1F5F9' }}>{estado.nombre}</span>
-            {esLey && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 rounded font-semibold">Ley</span>}
+      {/* Header coloreado */}
+      <div
+        className="px-4 py-3 flex items-center justify-between flex-shrink-0"
+        style={{
+          background:  nc.bg,
+          borderBottom: `2px solid ${nc.border}`,
+          borderLeft:   `4px solid ${nc.border}`,
+        }}>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-sm" style={{ color: nc.text }}>{estado.nombre}</span>
+            {esLey && (
+              <span className="text-xs font-bold px-1.5 py-0.5 rounded"
+                style={{ background: nc.border + '30', color: nc.border, border: `1px solid ${nc.border}50` }}>
+                Ley
+              </span>
+            )}
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">{estado.articulo || 'Estado personalizado'}</p>
+          <p className="text-xs mt-0.5" style={{ color: nc.sub }}>{estado.articulo || 'Estado personalizado'}</p>
         </div>
-        <button onClick={onCerrar} className="text-gray-400 hover:text-gray-600 p-0.5">
+        <button onClick={onCerrar}
+          className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+          style={{ color: nc.sub }}>
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900">
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Descripción</label>
-          <textarea value={estado.descripcion || ''} rows={2} resize="none"
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Descripción</label>
+          <textarea value={estado.descripcion || ''} rows={2}
             onChange={e => onEditar({ descripcion: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 resize-none" />
+            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-xs text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
         </div>
 
         {!esLey && (
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Color</label>
+            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Color del nodo</label>
             <div className="flex flex-wrap gap-2">
-              {COLORES_ESTADO.map(col => (
-                <button key={col.value} onClick={() => onEditar({ color: col.value })}
-                  title={col.label}
-                  className="w-5 h-5 rounded-full border-2 transition-all"
+              {Object.entries(NODE_COLORS).map(([key, val]) => (
+                <button key={key} onClick={() => onEditar({ color: key })}
+                  title={key}
+                  className="w-6 h-6 rounded-full border-2 transition-all"
                   style={{
-                    background:  COLOR_CLASSES[col.value]?.stroke,
-                    borderColor: estado.color === col.value ? '#1E293B' : 'transparent',
-                    transform:   estado.color === col.value ? 'scale(1.35)' : 'scale(1)',
+                    background:  val.border,
+                    borderColor: estado.color === key ? '#fff' : 'transparent',
+                    transform:   estado.color === key ? 'scale(1.3)' : 'scale(1)',
+                    boxShadow:   estado.color === key ? `0 0 8px ${val.border}` : 'none',
                   }} />
               ))}
             </div>
           </div>
         )}
 
-        <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Comportamiento</label>
-          <div className="space-y-2">
-            {[
-              { key: 'requiere_confirmacion', label: 'Requiere confirmación' },
-              { key: 'envia_email',           label: 'Envía email al titular' },
-              { key: 'es_final',              label: 'Estado final (sin salidas)' },
-            ].map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={!!estado[key]}
-                  onChange={e => onEditar({ [key]: e.target.checked })}
-                  className="w-3.5 h-3.5 text-blue-600 rounded" />
-                <span className="text-xs text-gray-700">{label}</span>
-              </label>
-            ))}
-          </div>
+        <div className="flex gap-3">
+          <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+            <input type="checkbox" checked={!!estado.envia_email}
+              onChange={e => onEditar({ envia_email: e.target.checked })}
+              className="w-4 h-4 text-blue-500 rounded bg-slate-700 border-slate-500" />
+            <Mail className="w-3.5 h-3.5 text-blue-400" />
+            <span className="text-xs">Email</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+            <input type="checkbox" checked={!!estado.requiere_confirmacion}
+              onChange={e => onEditar({ requiere_confirmacion: e.target.checked })}
+              className="w-4 h-4 text-purple-500 rounded bg-slate-700 border-slate-500" />
+            <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-xs">Confirmación</span>
+          </label>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
             Agregar transición hacia
           </label>
           <div className="flex flex-wrap gap-1.5">
             {otros.map(dest => {
-              const dc = getC(dest.color);
+              const nc2     = getNC(dest.color);
               const yaExiste = (estado.transiciones || []).some(t => t.hacia === dest.id);
               return (
-                <button key={dest.id} disabled={yaExiste}
+                <button key={dest.id}
+                  disabled={yaExiste}
                   onClick={() => !yaExiste && onAgregarTransicion(dest.id)}
-                  className={`px-2 py-1 rounded-lg text-xs font-medium border transition-all ${
-                    yaExiste
-                      ? 'opacity-35 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400'
-                      : `${dc.bg} ${dc.text} ${dc.border} hover:shadow-sm`
-                  }`}>
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all"
+                  style={{
+                    background:  yaExiste ? 'rgba(255,255,255,0.05)' : nc2.bg,
+                    color:       yaExiste ? '#475569' : nc2.text,
+                    border:      `1.5px solid ${yaExiste ? '#334155' : nc2.border}`,
+                    opacity:     yaExiste ? 0.5 : 1,
+                    cursor:      yaExiste ? 'not-allowed' : 'pointer',
+                  }}>
                   {yaExiste ? '✓' : '+'} {dest.nombre}
                 </button>
               );
@@ -325,9 +349,11 @@ const PanelEstado = ({ estado, todos, onEditar, onEliminar, onAgregarTransicion,
           </div>
         </div>
 
-        {estado.origen === 'custom' && !estado.protegido && (
-          <button onClick={() => { if (window.confirm(`¿Eliminar "${estado.nombre}"?`)) onEliminar(); }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-xs">
+        {!esLey && estado.origen === 'custom' && (
+          <button
+            onClick={() => { if (window.confirm(`¿Eliminar "${estado.nombre}"?`)) onEliminar(); }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+            style={{ background: 'rgba(239,68,68,0.12)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)' }}>
             <Trash2 className="w-3.5 h-3.5" /> Eliminar estado
           </button>
         )}
@@ -340,49 +366,51 @@ const PanelEstado = ({ estado, todos, onEditar, onEliminar, onAgregarTransicion,
 const PanelTransicion = ({ tr, estadoSrc, estadoDst, todos,
                            onEditar, onEliminar, onCerrar,
                            onAgregarCampo, onEditarCampo, onEliminarCampo }) => {
-  const c = getC(tr.color);
+  const edgeColor = getEC(tr.color);
 
   return (
     <div className="flex flex-col h-full text-sm">
-      <div className="px-4 py-3 flex items-center justify-between flex-shrink-0 border-b border-gray-100 bg-gray-50">
+      <div className="px-4 py-3 flex items-center justify-between flex-shrink-0 bg-slate-800 border-b-2"
+           style={{ borderBottomColor: edgeColor }}>
         <div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: c.stroke }} />
-            <span className="font-bold text-gray-900">{tr.etiqueta || '(sin etiqueta)'}</span>
+            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: edgeColor, boxShadow: `0 0 6px ${edgeColor}` }} />
+            <span className="font-bold text-slate-100">{tr.etiqueta || '(sin etiqueta)'}</span>
             {tr.condicion === 'automatica' && (
-              <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded flex items-center gap-1">
+              <span className="text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
+                style={{ background: 'rgba(234,179,8,0.15)', color: '#FDE047', border: '1px solid rgba(234,179,8,0.3)' }}>
                 <Zap className="w-3 h-3" /> auto
               </span>
             )}
           </div>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-slate-400 mt-0.5">
             {estadoSrc?.nombre} → {estadoDst?.nombre || tr.hacia}
           </p>
         </div>
-        <button onClick={onCerrar} className="text-gray-400 hover:text-gray-600 p-0.5">
+        <button onClick={onCerrar} className="text-slate-400 hover:text-slate-200 p-0.5">
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-900">
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Etiqueta *</label>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Etiqueta *</label>
           <input value={tr.etiqueta || ''} onChange={e => onEditar({ etiqueta: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-            placeholder="Ej: Aprobada, Denegar..." />
+            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-100 focus:ring-2 focus:ring-blue-500"
+            placeholder="Ej: Aprobar, Denegar..." />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Descripción / ayuda</label>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Descripción</label>
           <input value={tr.descripcion || ''} onChange={e => onEditar({ descripcion: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-100 focus:ring-2 focus:ring-blue-500"
             placeholder="Texto de ayuda para el DPO" />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Estado destino</label>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Estado destino</label>
           <select value={tr.hacia || ''} onChange={e => onEditar({ hacia: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-100 focus:ring-2 focus:ring-blue-500">
             <option value="">Seleccionar...</option>
             {todos.filter(e => e.id !== estadoSrc?.id).map(e => (
               <option key={e.id} value={e.id}>{e.nombre}</option>
@@ -391,74 +419,68 @@ const PanelTransicion = ({ tr, estadoSrc, estadoDst, todos,
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Color de la flecha</label>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Color de la flecha</label>
           <div className="flex flex-wrap gap-2">
-            {COLORES_TRANSICION.map(col => (
-              <button key={col.value} onClick={() => onEditar({ color: col.value })} title={col.label}
-                className="w-5 h-5 rounded-full border-2 transition-all"
+            {Object.entries(EDGE_COLORS).map(([key, hex]) => (
+              <button key={key} onClick={() => onEditar({ color: key })} title={key}
+                className="w-6 h-6 rounded-full border-2 transition-all"
                 style={{
-                  background:  COLOR_CLASSES[col.value]?.stroke || '#6B7280',
-                  borderColor: tr.color === col.value ? '#1E293B' : 'transparent',
-                  transform:   tr.color === col.value ? 'scale(1.35)' : 'scale(1)',
+                  background:  hex,
+                  borderColor: tr.color === key ? '#fff' : 'transparent',
+                  transform:   tr.color === key ? 'scale(1.35)' : 'scale(1)',
+                  boxShadow:   tr.color === key ? `0 0 8px ${hex}` : 'none',
                 }} />
             ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Tipo de condición</label>
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Tipo</label>
           <div className="flex gap-2">
-            <button onClick={() => onEditar({ condicion: 'dpo_elige', condicion_campo: null, condicion_valor: null })}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                tr.condicion !== 'automatica' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-300 hover:border-blue-400'}`}>
+            <button onClick={() => onEditar({ condicion: 'dpo_elige' })}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+              style={tr.condicion !== 'automatica'
+                ? { background: '#1D4ED8', color: '#BFDBFE', border: '1px solid #3B82F6' }
+                : { background: 'transparent', color: '#64748B', border: '1px solid #334155' }}>
               <Hand className="w-3.5 h-3.5" /> DPO elige
             </button>
             <button onClick={() => onEditar({ condicion: 'automatica' })}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                tr.condicion === 'automatica' ? 'bg-yellow-500 text-white border-yellow-500' : 'bg-white text-gray-500 border-gray-300 hover:border-yellow-400'}`}>
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
+              style={tr.condicion === 'automatica'
+                ? { background: '#854D0E', color: '#FEF08A', border: '1px solid #EAB308' }
+                : { background: 'transparent', color: '#64748B', border: '1px solid #334155' }}>
               <Zap className="w-3.5 h-3.5" /> Automática
             </button>
           </div>
         </div>
 
-        {tr.condicion === 'automatica' && (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-xl space-y-2">
-            <div>
-              <label className="block text-xs font-semibold text-yellow-700 mb-1">Campo que dispara</label>
-              <input value={tr.condicion_campo || ''} onChange={e => onEditar({ condicion_campo: e.target.value })}
-                className="w-full px-2.5 py-1.5 border border-yellow-300 rounded-lg text-xs bg-white"
-                placeholder="Ej: identidad_validada" />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-yellow-700 mb-1">Valor que activa</label>
-              <input value={tr.condicion_valor || ''} onChange={e => onEditar({ condicion_valor: e.target.value })}
-                className="w-full px-2.5 py-1.5 border border-yellow-300 rounded-lg text-xs bg-white"
-                placeholder="Ej: TRUE" />
-            </div>
-          </div>
-        )}
-
+        {/* Campos requeridos */}
         <div>
-          <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-            Campos que completa el DPO al tomar esta transición
+          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            Campos requeridos al transicionar
           </label>
-          <div className="space-y-2 mb-2">
+          <div className="space-y-1.5 mb-2">
             {(tr.campos_requeridos || []).map(campo => (
-              <div key={campo.id} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                <input value={campo.label}
-                  onChange={e => onEditarCampo(campo.id, { label: e.target.value })}
-                  className="flex-1 text-xs bg-transparent border-none focus:outline-none font-medium text-gray-800 min-w-0" />
-                <select value={campo.tipo} onChange={e => onEditarCampo(campo.id, { tipo: e.target.value })}
-                  className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white flex-shrink-0">
-                  {TIPOS_CAMPO.map(t => <option key={t.value} value={t.value}>{t.value}</option>)}
-                </select>
-                <button onClick={() => onEditarCampo(campo.id, { obligatorio: !campo.obligatorio })}
+              <div key={campo.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #334155' }}>
+                <span className="flex-1 text-xs text-slate-200">{campo.label}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded"
+                  style={{ background: 'rgba(255,255,255,0.08)', color: '#94A3B8' }}>{campo.tipo}</span>
+                <button
                   title={campo.obligatorio ? 'Obligatorio' : 'Opcional'}
-                  className={`text-xs px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${campo.obligatorio ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-400'}`}>
+                  onClick={() => onEditarCampo(campo.id, { obligatorio: !campo.obligatorio })}
+                  className="text-xs px-1.5 py-0.5 rounded font-bold flex-shrink-0"
+                  style={campo.obligatorio
+                    ? { background: 'rgba(239,68,68,0.15)', color: '#FCA5A5' }
+                    : { background: 'rgba(255,255,255,0.05)', color: '#64748B' }}>
                   {campo.obligatorio ? '*' : 'opt'}
                 </button>
                 <button onClick={() => onEliminarCampo(campo.id)}
-                  className="text-gray-300 hover:text-red-500 flex-shrink-0"><Trash2 className="w-3 h-3" /></button>
+                  className="flex-shrink-0" style={{ color: '#475569' }}
+                  onMouseOver={e => e.currentTarget.style.color = '#FCA5A5'}
+                  onMouseOut={e => e.currentTarget.style.color = '#475569'}>
+                  <Trash2 className="w-3 h-3" />
+                </button>
               </div>
             ))}
           </div>
@@ -466,15 +488,20 @@ const PanelTransicion = ({ tr, estadoSrc, estadoDst, todos,
             {TIPOS_CAMPO.map(tc => (
               <button key={tc.value}
                 onClick={() => onAgregarCampo({ tipo: tc.value, label: tc.label.split('/')[0].trim() })}
-                className="py-1.5 text-xs border border-dashed border-gray-300 text-gray-400 rounded-lg hover:border-blue-400 hover:text-blue-600 transition-all px-1 truncate">
+                className="py-1.5 text-xs rounded-lg transition-all"
+                style={{ border: '1px dashed #334155', color: '#64748B', background: 'transparent' }}
+                onMouseOver={e => { e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.color = '#60A5FA'; }}
+                onMouseOut={e => { e.currentTarget.style.borderColor = '#334155'; e.currentTarget.style.color = '#64748B'; }}>
                 + {tc.value}
               </button>
             ))}
           </div>
         </div>
 
-        <button onClick={() => { if (window.confirm(`¿Eliminar "${tr.etiqueta}"?`)) onEliminar(); }}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 text-xs">
+        <button
+          onClick={() => { if (window.confirm(`¿Eliminar "${tr.etiqueta}"?`)) onEliminar(); }}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+          style={{ background: 'rgba(239,68,68,0.12)', color: '#FCA5A5', border: '1px solid rgba(239,68,68,0.3)' }}>
           <Trash2 className="w-3.5 h-3.5" /> Eliminar transición
         </button>
       </div>
@@ -482,11 +509,11 @@ const PanelTransicion = ({ tr, estadoSrc, estadoDst, todos,
   );
 };
 
-// ── Tipos custom para ReactFlow ───────────────────────────
+// ── Tipos custom ──────────────────────────────────────────
 const nodeTypes = { estadoNode: EstadoNode };
 const edgeTypes = { transicionEdge: TransicionEdge };
 
-// ── Editor interno (dentro del ReactFlowProvider) ─────────
+// ── Editor interno ────────────────────────────────────────
 const DiagramaInterno = ({ estados, hook, derechoKey }) => {
   const {
     editarEstado, eliminarEstado,
@@ -497,18 +524,16 @@ const DiagramaInterno = ({ estados, hook, derechoKey }) => {
 
   const activos = estados.filter(e => e.activo);
 
-  // Inicializar con layout dagre si los nodos no tienen posición guardada
   const initialFlow = useMemo(() => {
     const { nodes, edges } = configToFlow(activos);
     const sinPos = nodes.filter(n => !activos.find(e => e.id === n.id)?.pos_x);
     if (sinPos.length > 0) return { nodes: applyDagreLayout(nodes, edges), edges };
     return { nodes, edges };
-  }, []); // Solo al montar
+  }, []);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialFlow.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow.edges);
 
-  // Sincronizar cuando cambia el config externo (ediciones desde panel)
   useEffect(() => {
     const { nodes: newNodes, edges: newEdges } = configToFlow(activos);
     setNodes(prev => newNodes.map(n => {
@@ -518,16 +543,13 @@ const DiagramaInterno = ({ estados, hook, derechoKey }) => {
     setEdges(newEdges);
   }, [estados]);
 
-  // Selección
   const [selNode, setSelNode] = useState(null);
   const [selEdge, setSelEdge] = useState(null);
 
-  // Drag → guardar posición en config
   const onNodeDragStop = useCallback((_, node) => {
     moverNodo(derechoKey, node.id, node.position.x, node.position.y);
   }, [moverNodo, derechoKey]);
 
-  // Drag-to-connect → crear transición
   const onConnect = useCallback((params) => {
     const src = activos.find(e => e.id === params.source);
     if (!src) return;
@@ -538,32 +560,16 @@ const DiagramaInterno = ({ estados, hook, derechoKey }) => {
     );
   }, [activos, agregarTransicion, derechoKey]);
 
-  // Click en nodo
-  const onNodeClick = useCallback((_, node) => {
-    setSelEdge(null);
-    setSelNode(node.id);
-  }, []);
+  const onNodeClick  = useCallback((_, node) => { setSelEdge(null); setSelNode(node.id); }, []);
+  const onEdgeClick  = useCallback((_, edge) => { setSelNode(null); setSelEdge({ estadoId: edge.data.srcId, trId: edge.id }); }, []);
+  const onPaneClick  = useCallback(() => { setSelNode(null); setSelEdge(null); }, []);
 
-  // Click en arista
-  const onEdgeClick = useCallback((_, edge) => {
-    setSelNode(null);
-    setSelEdge({ estadoId: edge.data.srcId, trId: edge.id });
-  }, []);
-
-  // Click en canvas → deseleccionar
-  const onPaneClick = useCallback(() => {
-    setSelNode(null);
-    setSelEdge(null);
-  }, []);
-
-  // Auto-layout
   const handleLayout = useCallback(() => {
     const laid = applyDagreLayout(nodes, edges);
     setNodes(laid);
     laid.forEach(n => moverNodo(derechoKey, n.id, n.position.x, n.position.y));
   }, [nodes, edges, setNodes, moverNodo, derechoKey]);
 
-  // Panel data
   const estadoSel = selNode ? activos.find(e => e.id === selNode) : null;
   const flechaSel = selEdge ? (() => {
     const src = activos.find(e => e.id === selEdge.estadoId);
@@ -572,13 +578,12 @@ const DiagramaInterno = ({ estados, hook, derechoKey }) => {
     return src && tr ? { src, tr, dst } : null;
   })() : null;
 
-  // Resaltar nodo/arista seleccionada
   const nodesWithSel = nodes.map(n => ({ ...n, selected: n.id === selNode }));
   const edgesWithSel = edges.map(e => ({ ...e, selected: e.id === selEdge?.trId }));
 
   return (
     <div className="flex rounded-2xl overflow-hidden border border-slate-700"
-         style={{ height: 520 }}>
+         style={{ height: 540 }}>
 
       {/* Canvas */}
       <div className="flex-1 relative">
@@ -595,43 +600,63 @@ const DiagramaInterno = ({ estados, hook, derechoKey }) => {
           onPaneClick={onPaneClick}
           onNodeDragStop={onNodeDragStop}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
+          fitViewOptions={{ padding: 0.25 }}
           deleteKeyCode={null}
           proOptions={{ hideAttribution: true }}
           defaultEdgeOptions={{ type: 'transicionEdge' }}
-          connectionLineStyle={{ stroke: '#60A5FA', strokeWidth: 2, strokeDasharray: '6 3' }}>
+          connectionLineStyle={{ stroke: '#60A5FA', strokeWidth: 2.5, strokeDasharray: '6 3' }}>
 
-          <Background variant={BackgroundVariant.Dots}
-            color="rgba(148,163,184,0.18)" gap={24} size={1.5}
-            style={{ background: '#0F172A' }} />
+          <Background
+            variant={BackgroundVariant.Dots}
+            color="rgba(148,163,184,0.12)"
+            gap={28}
+            size={1.5}
+            style={{ background: 'linear-gradient(135deg, #0A0F1E 0%, #0F172A 50%, #0D1B2A 100%)' }}
+          />
 
           <Controls
             style={{ background: '#1E293B', border: '1px solid #334155' }}
             className="[&>button]:!bg-slate-800 [&>button]:!border-slate-600 [&>button]:!text-slate-300 [&>button:hover]:!bg-slate-700" />
 
           <MiniMap
-            nodeColor={n => getC(activos.find(e => e.id === n.id)?.color)?.stroke || '#6B7280'}
-            maskColor="rgba(15,23,42,0.7)"
-            style={{ background: '#1E293B', border: '1px solid #334155' }} />
+            nodeColor={n => {
+              const estado = activos.find(e => e.id === n.id);
+              return getNC(estado?.color)?.border || '#64748B';
+            }}
+            maskColor="rgba(10,14,23,0.75)"
+            style={{ background: '#1E293B', border: '1px solid #334155', borderRadius: 12 }} />
 
-          {/* Botón auto-layout */}
+          {/* Botón ordenar */}
           <Panel position="top-left">
             <button onClick={handleLayout}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-800 border border-slate-600 text-slate-300 rounded-xl hover:bg-slate-700 text-xs font-medium transition-all shadow-lg">
-              <LayoutGrid className="w-3.5 h-3.5" /> Ordenar automáticamente
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+              style={{
+                background:  'rgba(30,41,59,0.95)',
+                border:      '1px solid #334155',
+                color:       '#94A3B8',
+                backdropFilter: 'blur(8px)',
+                boxShadow:   '0 4px 12px rgba(0,0,0,0.3)',
+              }}
+              onMouseOver={e => e.currentTarget.style.borderColor = '#60A5FA'}
+              onMouseOut={e => e.currentTarget.style.borderColor = '#334155'}>
+              <LayoutGrid className="w-3.5 h-3.5" style={{ color: '#60A5FA' }} />
+              Ordenar automáticamente
             </button>
           </Panel>
 
           {/* Leyenda */}
           <Panel position="bottom-left">
-            <div className="flex items-center gap-4 text-xs text-slate-400 bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-700/60">
+            <div className="flex items-center gap-4 text-xs px-3 py-2 rounded-xl"
+              style={{ background: 'rgba(10,14,23,0.9)', border: '1px solid #1E293B', color: '#64748B', backdropFilter: 'blur(8px)' }}>
               <span className="flex items-center gap-1.5">
-                <span className="w-4 h-0.5 bg-blue-400 inline-block" /> DPO elige
+                <span className="w-5 h-0.5 inline-block rounded" style={{ background: '#3B82F6' }} />
+                DPO elige
               </span>
               <span className="flex items-center gap-1.5">
-                <span style={{ display:'inline-block', width:16, height:2, borderTop:'2px dashed #FBBF24' }} /> Automática
+                <span className="w-5 inline-block" style={{ borderTop: '2px dashed #EAB308', display: 'inline-block' }} />
+                Automática
               </span>
-              <span>Arrastra handle para conectar</span>
+              <span style={{ color: '#475569' }}>Arrastra handle para conectar</span>
             </div>
           </Panel>
         </ReactFlow>
@@ -639,8 +664,8 @@ const DiagramaInterno = ({ estados, hook, derechoKey }) => {
 
       {/* Panel lateral */}
       {(estadoSel || flechaSel) && (
-        <div className="w-72 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col"
-             style={{ maxHeight: 520, overflowY: 'hidden' }}>
+        <div className="w-72 flex-shrink-0 flex flex-col border-l border-slate-700"
+             style={{ maxHeight: 540, overflowY: 'hidden', background: '#0F172A' }}>
           {estadoSel && (
             <PanelEstado
               estado={estadoSel}
