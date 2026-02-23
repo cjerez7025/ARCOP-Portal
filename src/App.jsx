@@ -11,7 +11,7 @@ import FormularioSolicitud from './components/FormularioSolicitud';
 import ValidarIdentidad from './pages/ValidarIdentidad';
 import Seguimiento from './pages/Seguimiento';
 import PanelDPO from './pages/PanelDPO';
-
+import Reportes from './pages/Reportes';
 // Páginas nuevas
 import Dashboard from './pages/Dashboard';
 import Configuracion from './pages/Configuracion';
@@ -31,6 +31,7 @@ function App() {
           {/* Rutas DPO */}
           <Route path="/dpo" element={<PanelDPO />} />
           <Route path="/dpo/dashboard" element={<Dashboard />} />
+            <Route path="/dpo/reportes" element={<Reportes />} />  
           <Route path="/dpo/configuracion" element={<Configuracion />} />
           {/* <Route path="/dpo/reportes" element={<Reportes />} /> */}
           
