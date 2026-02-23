@@ -285,9 +285,7 @@ const FormularioSolicitud = () => {
     const meta = tipoSeleccionado?.meta;
     const cfg  = DERECHOS_CONFIG[tipoSeleccionado?.key];
     return (
-      <div style={{
-        minHeight:      '100vh',
-        background:     '#0E0E17',
+      <div className="arcop-portal-publico" style={{
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
@@ -296,7 +294,7 @@ const FormularioSolicitud = () => {
         <div className="animate-fade-up" style={{
           width:        '100%',
           maxWidth:     '440px',
-          background:   '#141420',
+          background:   'var(--bg-surface)',
           borderRadius: '20px',
           border:       '1px solid rgba(255,255,255,0.08)',
           padding:      '40px',
@@ -326,7 +324,7 @@ const FormularioSolicitud = () => {
 
           {/* Info row */}
           <div style={{
-            background:   'rgba(30,30,48,0.8)',
+            background:   'var(--bg-overlay)',
             borderRadius: '12px',
             border:       '1px solid rgba(255,255,255,0.07)',
             padding:      '20px',
@@ -400,7 +398,7 @@ const FormularioSolicitud = () => {
   // ── Loading ─────────────────────────────────────────────
   if (loadingConfig) {
     return (
-      <div style={{ minHeight: '100vh', background: '#0E0E17', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="arcop-portal-publico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Loader size={28} color="var(--text-muted)" className="animate-spin" />
       </div>
     );
@@ -412,9 +410,7 @@ const FormularioSolicitud = () => {
     const entries  = Object.entries(derechos).filter(([, dc]) => dc.activo !== false);
 
     return (
-      <div style={{
-        minHeight:      '100vh',
-        background:     '#0E0E17',
+      <div className="arcop-portal-publico" style={{
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
@@ -531,7 +527,7 @@ const FormularioSolicitud = () => {
   const { identidad, especificos } = getCamposParaFormulario(tipoSeleccionado.key);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0E0E17', padding: '2rem 1rem 4rem' }}>
+    <div className="arcop-portal-publico" style={{ padding: '2rem 1rem 4rem' }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
 
         {/* Back */}
@@ -588,7 +584,7 @@ const FormularioSolicitud = () => {
 
         {/* Card formulario */}
         <div className="animate-fade-up" style={{
-          background:   '#141420',
+          background:   'var(--bg-surface)',
           borderRadius: '20px',
           border:       '1px solid rgba(255,255,255,0.08)',
           overflow:     'hidden',

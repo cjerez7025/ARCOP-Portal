@@ -1,6 +1,6 @@
 // ============================================================
-// useFlujoConfig — Hook
-// v2 — Agrega mutaciones para SLA y actores responsables
+// useFlujoConfig — Hook v3
+// Agrega moverNodo(derechoKey, estadoId, x, y) para FlowDiagramEditor
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -85,7 +85,6 @@ const useFlujoConfig = () => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
       if (!e) return;
-      // Protegidos: solo permiten editar campos no estructurales
       if (e.protegido) {
         const permitidos = [
           'descripcion', 'envia_email', 'requiere_confirmacion',
@@ -121,6 +120,16 @@ const useFlujoConfig = () => {
     });
   };
 
+  // ── moverNodo — guarda posición XY del nodo en el diagrama ──
+  const moverNodo = (derechoKey, estadoId, x, y) => {
+    update(c => {
+      const e = getEstado(c, derechoKey, estadoId);
+      if (!e) return;
+      e.pos_x = Math.round(x);
+      e.pos_y = Math.round(y);
+    });
+  };
+
   const agregarEstado = (derechoKey, override = {}) => {
     update(c => {
       const estados = c.derechos[derechoKey].estados;
@@ -135,7 +144,7 @@ const useFlujoConfig = () => {
       if (!e || e.protegido || e.origen === 'ley') return;
       c.derechos[derechoKey].estados = c.derechos[derechoKey].estados.filter(s => s.id !== estadoId);
       c.derechos[derechoKey].estados.forEach(s => {
-        s.transiciones_posibles = s.transiciones_posibles.filter(t => t !== estadoId);
+        s.transiciones_posibles = (s.transiciones_posibles || []).filter(t => t !== estadoId);
       });
     });
   };
@@ -152,6 +161,7 @@ const useFlujoConfig = () => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
       if (!e) return;
+      e.campos_transicion = e.campos_transicion || [];
       e.campos_transicion.push(crearCampoTransicion(override));
     });
   };
@@ -160,7 +170,7 @@ const useFlujoConfig = () => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
       if (!e) return;
-      const campo = e.campos_transicion.find(f => f.id === campoId);
+      const campo = (e.campos_transicion || []).find(f => f.id === campoId);
       if (campo) Object.assign(campo, changes);
     });
   };
@@ -169,11 +179,11 @@ const useFlujoConfig = () => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
       if (!e) return;
-      e.campos_transicion = e.campos_transicion.filter(f => f.id !== campoId);
+      e.campos_transicion = (e.campos_transicion || []).filter(f => f.id !== campoId);
     });
   };
 
-  // ── Transiciones posibles ─────────────────────────────────
+  // ── Transiciones ──────────────────────────────────────────
 
   const toggleTransicion = (derechoKey, estadoId, targetId) => {
     update(c => {
@@ -183,6 +193,33 @@ const useFlujoConfig = () => {
       const idx = e.transiciones_posibles.indexOf(targetId);
       if (idx === -1) e.transiciones_posibles.push(targetId);
       else            e.transiciones_posibles.splice(idx, 1);
+    });
+  };
+
+  // Usado por FlowDiagramEditor para agregar/editar/eliminar transiciones del grafo
+  const agregarTransicion = (derechoKey, estadoId, transicion) => {
+    update(c => {
+      const e = getEstado(c, derechoKey, estadoId);
+      if (!e) return;
+      if (!e.transiciones) e.transiciones = [];
+      e.transiciones.push(transicion);
+    });
+  };
+
+  const editarTransicion = (derechoKey, estadoId, transicionId, changes) => {
+    update(c => {
+      const e = getEstado(c, derechoKey, estadoId);
+      if (!e) return;
+      const tr = (e.transiciones || []).find(t => t.id === transicionId);
+      if (tr) Object.assign(tr, changes);
+    });
+  };
+
+  const eliminarTransicion = (derechoKey, estadoId, transicionId) => {
+    update(c => {
+      const e = getEstado(c, derechoKey, estadoId);
+      if (!e) return;
+      e.transiciones = (e.transiciones || []).filter(t => t.id !== transicionId);
     });
   };
 
@@ -222,8 +259,7 @@ const useFlujoConfig = () => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
       if (!e) return;
-      if (!e.actores) e.actores = [];
-      e.actores = e.actores.filter(a => a.id !== actorId);
+      e.actores = (e.actores || []).filter(a => a.id !== actorId);
     });
   };
 
@@ -240,9 +276,13 @@ const useFlujoConfig = () => {
     // Estados
     toggleEstado, editarEstado, toggleProtegidoPorLey,
     moverEstado, agregarEstado, eliminarEstado, restaurarDerecho,
+    // Posición en diagrama ← NUEVO
+    moverNodo,
+    // Transiciones del grafo (FlowDiagramEditor)
+    agregarTransicion, editarTransicion, eliminarTransicion,
     // Campos transición
     agregarCampoTransicion, editarCampoTransicion, eliminarCampoTransicion,
-    // Transiciones
+    // Transiciones posibles (lista)
     toggleTransicion,
     // SLA
     editarSLA,

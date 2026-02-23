@@ -1,6 +1,7 @@
 // ============================================================
-// TAB FLUJOS — v2
-// Agrega configuración de SLA y actores responsables por estado
+// TAB FLUJOS — v3
+// Vista lista (editar) + Vista diagrama (FlowDiagramEditor)
+// Toggle Editar | Diagrama en el header del derecho activo
 // ============================================================
 
 import React, { useState } from 'react';
@@ -9,11 +10,13 @@ import {
   Eye, EyeOff, AlertCircle, Edit2, Check, X,
   ArrowRight, Mail, Shield, ShieldOff, GitBranch,
   CheckSquare, AlertTriangle, Clock, User, UserPlus,
+  Settings,
 } from 'lucide-react';
 import {
   DERECHOS_META_FLUJO, COLORES_ESTADO, TIPOS_CAMPO_TRANSICION,
   crearCampoTransicion, COLOR_CLASSES, getColor,
 } from '../services/flujoService';
+import FlowDiagramEditor from './FlowDiagramEditor';
 
 // ── Badge de color ────────────────────────────────────────
 const Badge = ({ color, children }) => {
@@ -40,29 +43,29 @@ const CampoTransicionRow = ({ campo, protegido, onEditar, onEliminar }) => {
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
       {editando ? (
-        <div className="flex-1 flex items-center gap-2 flex-wrap">
+        <>
           <input value={draft.label} onChange={e => setDraft(p => ({ ...p, label: e.target.value }))}
-            className="flex-1 px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none" placeholder="Etiqueta" />
+            className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
           <select value={draft.tipo} onChange={e => setDraft(p => ({ ...p, tipo: e.target.value }))}
-            className="px-2 py-1 text-xs border border-gray-300 rounded">
+            className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none">
             {TIPOS_CAMPO_TRANSICION.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
           <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
             <input type="checkbox" checked={draft.obligatorio} onChange={e => setDraft(p => ({ ...p, obligatorio: e.target.checked }))} className="w-3 h-3" />
-            Obligatorio
+            Requerido
           </label>
-          <button onClick={confirmar} className="p-1 text-green-600 hover:bg-green-100 rounded"><Check className="w-3.5 h-3.5" /></button>
-          <button onClick={() => setEditando(false)} className="p-1 text-gray-400 hover:bg-gray-200 rounded"><X className="w-3.5 h-3.5" /></button>
-        </div>
+          <button onClick={confirmar} className="p-1 text-green-600 hover:bg-green-50 rounded"><Check className="w-3.5 h-3.5" /></button>
+          <button onClick={() => setEditando(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="w-3.5 h-3.5" /></button>
+        </>
       ) : (
         <>
-          <span className="text-sm font-medium text-gray-800 flex-1">{campo.label}</span>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{campo.tipo}</span>
-          {campo.obligatorio && <span className="text-xs text-red-600 font-medium">*</span>}
+          <span className="flex-1 text-xs text-gray-700 font-medium">{campo.label}</span>
+          <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{campo.tipo}</span>
+          {campo.obligatorio && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">*</span>}
           {!protegido && (
             <>
-              <button onClick={() => setEditando(true)} className="p-1 text-gray-400 hover:text-blue-600 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
-              <button onClick={onEliminar} className="p-1 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setEditando(true)} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="w-3 h-3" /></button>
+              <button onClick={onEliminar} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
             </>
           )}
         </>
@@ -71,137 +74,87 @@ const CampoTransicionRow = ({ campo, protegido, onEditar, onEliminar }) => {
   );
 };
 
-// ── Fila de actor responsable ─────────────────────────────
-const ActorRow = ({ actor, onEditar, onEliminar }) => {
-  const [editando, setEditando] = useState(!actor.nombre); // nuevo actor abre en edición
-  const [draft, setDraft] = useState({ nombre: actor.nombre, email: actor.email });
-  const confirmar = () => {
-    if (!draft.nombre.trim()) return;
-    onEditar(draft);
-    setEditando(false);
+// ── Panel de estado (fila expandible) ─────────────────────
+const PanelEstado = ({
+  estado, todos, isFirst, isLast,
+  onToggle, onEditar, onToggleProtegido, onMover, onEliminar,
+  onAgregarCampo, onEditarCampo, onEliminarCampo,
+  onToggleTransicion, onEditarSLA,
+  onAgregarActor, onEditarActor, onEliminarActor,
+}) => {
+  const [expandido,    setExpandido]    = useState(false);
+  const [editandoNombre, setEditandoNombre] = useState(false);
+  const [borrador,     setBorrador]     = useState(estado.nombre);
+  const [editandoSLA,  setEditandoSLA]  = useState(false);
+  const [slaForm,      setSlaForm]      = useState({
+    sla_dias:        estado.sla_dias        ?? 15,
+    sla_alerta_dias: estado.sla_alerta_dias ?? 3,
+  });
+
+  const c      = getColor(estado.color);
+  const esLeyNativo = estado.origen === 'ley';
+
+  const confirmarNombre = () => {
+    if (borrador.trim()) onEditar(estado.id, { nombre: borrador.trim() });
+    setEditandoNombre(false);
   };
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100">
-      {editando ? (
-        <div className="flex-1 flex items-center gap-2 flex-wrap">
-          <input
-            value={draft.nombre}
-            onChange={e => setDraft(p => ({ ...p, nombre: e.target.value }))}
-            className="flex-1 min-w-[120px] px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none"
-            placeholder="Nombre del responsable"
-            autoFocus
-          />
-          <input
-            value={draft.email}
-            onChange={e => setDraft(p => ({ ...p, email: e.target.value }))}
-            className="flex-1 min-w-[160px] px-2 py-1 text-xs border border-blue-300 rounded focus:outline-none"
-            placeholder="email@empresa.cl"
-            type="email"
-          />
-          <button onClick={confirmar} className="p-1 text-green-600 hover:bg-green-100 rounded"><Check className="w-3.5 h-3.5" /></button>
-          <button onClick={() => { if (!actor.nombre) onEliminar(); else setEditando(false); }}
-            className="p-1 text-gray-400 hover:bg-gray-200 rounded"><X className="w-3.5 h-3.5" /></button>
-        </div>
-      ) : (
-        <>
-          <User className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-          <span className="text-sm font-medium text-gray-800 flex-1">{actor.nombre}</span>
-          {actor.email && (
-            <span className="text-xs text-gray-500 flex items-center gap-1">
-              <Mail className="w-3 h-3" />{actor.email}
-            </span>
-          )}
-          <button onClick={() => setEditando(true)} className="p-1 text-gray-400 hover:text-blue-600 rounded"><Edit2 className="w-3.5 h-3.5" /></button>
-          <button onClick={onEliminar} className="p-1 text-gray-400 hover:text-red-600 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-        </>
-      )}
-    </div>
-  );
-};
-
-// ── Panel de edición de un estado ─────────────────────────
-const PanelEstado = ({
-  estado, todos, isFirst, isLast,
-  onToggle, onEditar, onToggleProtegido,
-  onMover, onEliminar,
-  onAgregarCampo, onEditarCampo, onEliminarCampo,
-  onToggleTransicion,
-  onEditarSLA,
-  onAgregarActor, onEditarActor, onEliminarActor,
-}) => {
-  const [expandido, setExpandido] = useState(false);
-  const [editandoNombre, setEditandoNombre] = useState(false);
-  const [draft, setDraft] = useState({
-    nombre:      estado.nombre,
-    descripcion: estado.descripcion,
-    color:       estado.color,
-    articulo:    estado.articulo || '',
-  });
-
-  const c          = getColor(estado.color);
-  const esLeyNativo = estado.origen === 'ley';
-  const esLeyFutura = estado.origen === 'ley_futura';
-  const esCustom    = estado.origen === 'custom';
-
-  const confirmarNombre = () => { onEditar(estado.id, draft); setEditandoNombre(false); };
-
-  const actores     = estado.actores     || [];
-  const sla_dias    = estado.sla_dias    ?? 0;
-  const sla_alerta  = estado.sla_alerta_dias ?? 0;
-  const tieneSLA    = sla_dias > 0;
-
-  const origenBadge = esLeyNativo
-    ? <span className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full">Ley</span>
-    : esLeyFutura
-    ? <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1"><Shield className="w-3 h-3" />Ley futura</span>
-    : <span className="text-xs bg-purple-100 text-purple-700 border border-purple-200 px-2 py-0.5 rounded-full">Custom</span>;
-
-  return (
-    <div className={`border rounded-xl overflow-hidden transition-all ${
-      estado.activo ? `border-gray-200 ${expandido ? 'shadow-md' : ''}` : 'border-gray-100 opacity-50'
-    }`}>
-      {/* Cabecera */}
-      <div className={`flex items-center gap-3 px-4 py-3 ${expandido ? 'bg-gray-50 border-b border-gray-200' : 'bg-white hover:bg-gray-50'}`}>
-
-        {/* Orden / mover */}
-        <div className="flex flex-col gap-0.5">
-          <button disabled={isFirst || esLeyNativo} onClick={() => onMover(estado.id, 'up')}
-            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed rounded">
-            <ChevronUp className="w-3 h-3" />
+    <div className={`border rounded-xl transition-all ${estado.activo ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}`}>
+      {/* Fila principal */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        {/* Mover */}
+        <div className="flex flex-col gap-0.5 flex-shrink-0">
+          <button disabled={isFirst} onClick={() => onMover(estado.id, 'up')}
+            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed">
+            <ChevronUp className="w-3.5 h-3.5" />
           </button>
-          <button disabled={isLast || esLeyNativo} onClick={() => onMover(estado.id, 'down')}
-            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed rounded">
-            <ChevronDown className="w-3 h-3" />
+          <button disabled={isLast} onClick={() => onMover(estado.id, 'down')}
+            className="p-0.5 text-gray-300 hover:text-gray-600 disabled:opacity-20 disabled:cursor-not-allowed">
+            <ChevronDown className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Badge + nombre */}
-        <div className="flex-1 flex items-center gap-2 min-w-0">
-          <Badge color={estado.color}>{estado.nombre}</Badge>
-          {origenBadge}
-
-          {/* Indicadores rápidos */}
-          <div className="flex items-center gap-1 ml-1">
-            {estado.envia_email && <Mail className="w-3.5 h-3.5 text-blue-400" title="Envía email" />}
-            {estado.requiere_confirmacion && <CheckSquare className="w-3.5 h-3.5 text-purple-400" title="Requiere confirmación" />}
-            {tieneSLA && (
-              <span className="flex items-center gap-0.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-                <Clock className="w-3 h-3" />{sla_dias}d
+        {/* Badge nombre */}
+        {editandoNombre ? (
+          <div className="flex items-center gap-2 flex-1">
+            <input value={borrador} onChange={e => setBorrador(e.target.value)}
+              className="flex-1 px-2 py-1 border border-blue-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onKeyDown={e => e.key === 'Enter' && confirmarNombre()} autoFocus />
+            <button onClick={confirmarNombre} className="p-1 text-green-600 hover:bg-green-50 rounded"><Check className="w-4 h-4" /></button>
+            <button onClick={() => setEditandoNombre(false)} className="p-1 text-gray-400 hover:bg-gray-100 rounded"><X className="w-4 h-4" /></button>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center gap-2 flex-wrap">
+            <Badge color={estado.color}>{estado.nombre}</Badge>
+            {esLeyNativo && (
+              <span className="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full font-semibold">Ley</span>
+            )}
+            {estado.origen === 'ley_futura' && (
+              <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> Protegido
               </span>
             )}
-            {actores.length > 0 && (
-              <span className="flex items-center gap-0.5 text-xs text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full">
-                <User className="w-3 h-3" />{actores.length}
+            {/* Indicadores */}
+            {estado.envia_email && <Mail className="w-4 h-4 text-blue-400" title="Envía email" />}
+            {estado.requiere_confirmacion && <CheckSquare className="w-4 h-4 text-green-500" title="Requiere confirmación" />}
+            {(estado.sla_dias > 0) && (
+              <span className="flex items-center gap-1 text-xs bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full">
+                <Clock className="w-3 h-3" /> {estado.sla_dias}d
               </span>
             )}
-            {estado.campos_transicion?.length > 0 && (
-              <span className="text-xs text-gray-500">
-                {estado.campos_transicion.length} campo{estado.campos_transicion.length > 1 ? 's' : ''}
+            {(estado.actores || []).length > 0 && (
+              <span className="flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full">
+                <User className="w-3 h-3" /> {estado.actores.length}
+              </span>
+            )}
+            {(estado.transiciones || []).length > 0 && (
+              <span className="text-xs text-gray-400">
+                {(estado.transiciones || []).length} transición{(estado.transiciones || []).length !== 1 ? 'es' : ''}
               </span>
             )}
           </div>
-        </div>
+        )}
 
         {/* Acciones */}
         <div className="flex items-center gap-1 flex-shrink-0">
@@ -216,7 +169,7 @@ const PanelEstado = ({
           )}
           {!esLeyNativo && (
             <button onClick={() => onToggleProtegido(estado.id)}
-              title={estado.protegido ? 'Quitar protección' : 'Marcar como ley futura'}
+              title={estado.protegido ? 'Quitar protección' : 'Marcar como protegido'}
               className={`p-1.5 rounded ${estado.protegido ? 'text-amber-600 bg-amber-50' : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'}`}>
               {estado.protegido ? <Shield className="w-4 h-4" /> : <ShieldOff className="w-4 h-4" />}
             </button>
@@ -227,282 +180,223 @@ const PanelEstado = ({
               {estado.activo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           )}
-          {esCustom && !estado.protegido && (
-            <button onClick={() => {
-              if (window.confirm(`¿Eliminar el estado "${estado.nombre}"?`)) onEliminar(estado.id);
-            }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
         </div>
       </div>
 
       {/* Panel expandido */}
       {expandido && (
-        <div className="bg-white px-5 py-4 space-y-6">
-
-          {/* Descripción */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Descripción</label>
-            <textarea value={draft.descripcion}
-              onChange={e => { setDraft(p => ({ ...p, descripcion: e.target.value })); onEditar(estado.id, { descripcion: e.target.value }); }}
-              rows={2} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Descripción del estado para el DPO..." />
+        <div className="border-t border-gray-100 px-4 py-4 space-y-5">
+          {/* Opciones del estado */}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!estado.envia_email}
+                onChange={e => onEditar(estado.id, { envia_email: e.target.checked })}
+                className="w-4 h-4 text-blue-600 rounded" />
+              <span className="text-sm text-gray-700 flex items-center gap-1.5"><Mail className="w-4 h-4 text-blue-400" /> Envía email al titular</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!estado.requiere_confirmacion}
+                onChange={e => onEditar(estado.id, { requiere_confirmacion: e.target.checked })}
+                className="w-4 h-4 text-green-600 rounded" />
+              <span className="text-sm text-gray-700 flex items-center gap-1.5"><CheckSquare className="w-4 h-4 text-green-500" /> Requiere confirmación</span>
+            </label>
           </div>
 
-          {/* Color — solo editable si no es ley nativo */}
-          {!esLeyNativo && (
-            <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Color del badge</label>
-              <div className="flex flex-wrap gap-2">
-                {COLORES_ESTADO.map(col => (
-                  <button key={col.value}
-                    onClick={() => { setDraft(p => ({ ...p, color: col.value })); onEditar(estado.id, { color: col.value }); }}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold border-2 transition-all ${
-                      COLOR_CLASSES[col.value]?.bg} ${COLOR_CLASSES[col.value]?.text} ${
-                      draft.color === col.value ? 'ring-2 ring-offset-1 ring-gray-400 scale-110' : 'opacity-60 hover:opacity-100'}`}>
+          {/* Color */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Color del estado</p>
+            <div className="flex flex-wrap gap-2">
+              {COLORES_ESTADO.map(col => {
+                const cc = getColor(col.value);
+                return (
+                  <button key={col.value} onClick={() => onEditar(estado.id, { color: col.value })}
+                    title={col.label}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${cc.bg} ${cc.text} ${cc.border} ${estado.color === col.value ? 'ring-2 ring-offset-1 ring-gray-400 scale-105' : 'opacity-70 hover:opacity-100'}`}>
                     {col.label}
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
-
-          {/* Opciones */}
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-              <input type="checkbox" checked={estado.envia_email}
-                onChange={e => onEditar(estado.id, { envia_email: e.target.checked })}
-                className="w-4 h-4 accent-blue-600" />
-              <Mail className="w-4 h-4 text-blue-500" /> Envía email al titular
-            </label>
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-              <input type="checkbox" checked={estado.requiere_confirmacion}
-                onChange={e => onEditar(estado.id, { requiere_confirmacion: e.target.checked })}
-                className="w-4 h-4 accent-purple-600" />
-              <CheckSquare className="w-4 h-4 text-purple-500" /> Requiere confirmación DPO
-            </label>
           </div>
 
-          {/* ── SLA ─────────────────────────────────────────── */}
-          <div className="border border-amber-200 rounded-xl p-4 bg-amber-50">
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-amber-600" />
-              <h4 className="text-sm font-semibold text-amber-800">SLA — Plazo máximo en este estado</h4>
-            </div>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div>
-                <label className="block text-xs text-amber-700 mb-1 font-medium">Días hábiles máximos</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number" min="0" max="30"
-                    value={sla_dias}
-                    onChange={e => onEditarSLA(estado.id, { sla_dias: e.target.value })}
-                    className="w-20 px-2 py-1.5 text-sm border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:outline-none bg-white"
-                  />
-                  <span className="text-xs text-amber-600">días hábiles</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-amber-700 mb-1 font-medium">Alertar con anticipación</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number" min="0" max="30"
-                    value={sla_alerta}
-                    onChange={e => onEditarSLA(estado.id, { sla_alerta_dias: e.target.value })}
-                    className="w-20 px-2 py-1.5 text-sm border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:outline-none bg-white"
-                  />
-                  <span className="text-xs text-amber-600">días antes</span>
-                </div>
-              </div>
-            </div>
-            {tieneSLA && sla_alerta > 0 && (
-              <p className="mt-2 text-xs text-amber-600">
-                Se alertará al responsable cuando queden <strong>{sla_alerta}</strong> día{sla_alerta > 1 ? 's' : ''} para el vencimiento ({sla_dias - sla_alerta} día{sla_dias - sla_alerta !== 1 ? 's' : ''} después de entrar al estado).
+          {/* SLA */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-500" /> SLA (días hábiles)
               </p>
-            )}
-            {sla_dias === 0 && (
-              <p className="mt-2 text-xs text-amber-500 italic">Sin SLA configurado — el estado no tiene plazo máximo.</p>
+              {!editandoSLA ? (
+                <button onClick={() => setEditandoSLA(true)} className="text-xs text-blue-600 hover:underline">Editar</button>
+              ) : (
+                <div className="flex gap-2">
+                  <button onClick={() => { onEditarSLA(estado.id, slaForm); setEditandoSLA(false); }}
+                    className="text-xs text-green-600 font-medium hover:underline">Guardar</button>
+                  <button onClick={() => setEditandoSLA(false)} className="text-xs text-gray-400 hover:underline">Cancelar</button>
+                </div>
+              )}
+            </div>
+            {editandoSLA ? (
+              <div className="flex gap-4 items-center bg-amber-50 rounded-lg px-3 py-2 border border-amber-200">
+                <label className="text-xs text-gray-700 flex items-center gap-2">
+                  Plazo límite:
+                  <input type="number" min="0" max="60" value={slaForm.sla_dias}
+                    onChange={e => setSlaForm(p => ({ ...p, sla_dias: parseInt(e.target.value) || 0 }))}
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
+                  días
+                </label>
+                <label className="text-xs text-gray-700 flex items-center gap-2">
+                  Alerta a:
+                  <input type="number" min="0" max="30" value={slaForm.sla_alerta_dias}
+                    onChange={e => setSlaForm(p => ({ ...p, sla_alerta_dias: parseInt(e.target.value) || 0 }))}
+                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
+                  días
+                </label>
+              </div>
+            ) : (
+              <div className="flex gap-4 text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+                <span>Plazo: <strong>{estado.sla_dias ?? 15} días</strong></span>
+                <span>Alerta: <strong>{estado.sla_alerta_dias ?? 3} días antes</strong></span>
+              </div>
             )}
           </div>
 
-          {/* ── Actores responsables ─────────────────────────── */}
-          <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-indigo-600" />
-                <h4 className="text-sm font-semibold text-indigo-800">Actores responsables</h4>
-                <span className="text-xs text-indigo-500">Al asignar, solo aparecerán estos responsables</span>
-              </div>
-              <button
-                onClick={() => onAgregarActor(estado.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-white border border-indigo-300 rounded-lg hover:bg-indigo-100 transition-colors">
+          {/* Actores */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-indigo-500" /> Actores responsables
+              </p>
+              <button onClick={() => onAgregarActor(estado.id)}
+                className="flex items-center gap-1 text-xs text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg transition-colors">
                 <UserPlus className="w-3.5 h-3.5" /> Agregar
               </button>
             </div>
-
-            {actores.length === 0 ? (
-              <p className="text-xs text-indigo-400 italic">
-                Sin actores configurados — el DPO podrá escribir libremente el responsable.
-              </p>
+            {(estado.actores || []).length === 0 ? (
+              <p className="text-xs text-gray-400 italic bg-gray-50 rounded-lg px-3 py-2">Sin actores asignados</p>
             ) : (
               <div className="space-y-2">
-                {actores.map(actor => (
-                  <ActorRow
-                    key={actor.id}
-                    actor={actor}
-                    onEditar={(changes) => onEditarActor(estado.id, actor.id, changes)}
-                    onEliminar={() => onEliminarActor(estado.id, actor.id)}
-                  />
+                {(estado.actores || []).map((actor, i) => (
+                  <div key={actor.id || i} className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+                    <User className="w-3.5 h-3.5 text-indigo-500 flex-shrink-0" />
+                    <input value={actor.nombre || ''} placeholder="Nombre del actor"
+                      onChange={e => onEditarActor(estado.id, actor.id, { nombre: e.target.value })}
+                      className="flex-1 bg-transparent border-none text-sm text-gray-700 focus:outline-none" />
+                    <input value={actor.rol || ''} placeholder="Rol"
+                      onChange={e => onEditarActor(estado.id, actor.id, { rol: e.target.value })}
+                      className="w-28 bg-transparent border-none text-xs text-gray-500 focus:outline-none" />
+                    <button onClick={() => onEliminarActor(estado.id, actor.id)}
+                      className="p-0.5 text-gray-300 hover:text-red-500 flex-shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* ── Transiciones posibles ────────────────────────── */}
+          {/* Transiciones */}
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Transiciones posibles desde este estado
-            </label>
-            {todos.filter(e => e.id !== estado.id).length === 0 ? (
-              <p className="text-sm text-gray-400 italic">No hay otros estados disponibles</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <ArrowRight className="w-3.5 h-3.5" /> Transiciones desde este estado
+            </p>
+            {(estado.transiciones || []).length === 0 ? (
+              <p className="text-xs text-gray-400 italic bg-gray-50 rounded-lg px-3 py-2">Sin transiciones configuradas</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
-                {todos.filter(e => e.id !== estado.id).map(target => {
-                  const seleccionado = estado.transiciones_posibles?.includes(target.id);
-                  const ct = getColor(target.color);
+              <div className="space-y-1.5">
+                {(estado.transiciones || []).map(tr => {
+                  const cc = COLOR_CLASSES[tr.color] || COLOR_CLASSES.gray;
                   return (
-                    <button key={target.id}
-                      onClick={() => onToggleTransicion(estado.id, target.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border-2 transition-all ${
-                        seleccionado ? `${ct.bg} ${ct.text} border-current` : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-400'
-                      }`}>
-                      {seleccionado && <ArrowRight className="w-3 h-3" />}
-                      {target.nombre}
-                    </button>
+                    <div key={tr.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${cc.bg} ${cc.border}`}>
+                      <ArrowRight className={`w-3.5 h-3.5 flex-shrink-0 ${cc.text}`} />
+                      <span className={`text-xs font-semibold flex-1 ${cc.text}`}>{tr.etiqueta || '(sin etiqueta)'}</span>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input type="checkbox" checked={tr.activo !== false}
+                          onChange={() => onToggleTransicion(estado.id, tr.id)}
+                          className="w-3 h-3 rounded" />
+                        <span className="text-xs text-gray-500">activa</span>
+                      </label>
+                    </div>
                   );
                 })}
               </div>
             )}
           </div>
 
-          {/* ── Campos que el DPO completa al transicionar ───── */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              Campos que debe completar el DPO al mover a este estado
-            </label>
-            {estado.campos_transicion?.length === 0 && (
-              <p className="text-xs text-gray-400 italic mb-2">Ninguno. El DPO puede mover sin completar campos adicionales.</p>
-            )}
-            <div className="space-y-2">
-              {(estado.campos_transicion || []).map(campo => (
-                <CampoTransicionRow
-                  key={campo.id}
-                  campo={campo}
-                  protegido={esLeyNativo}
-                  onEditar={(changes) => onEditarCampo(estado.id, campo.id, changes)}
-                  onEliminar={() => onEliminarCampo(estado.id, campo.id)}
-                />
-              ))}
-            </div>
-            <button onClick={() => onAgregarCampo(estado.id)}
-              className="mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all text-xs">
-              <Plus className="w-3.5 h-3.5" /> Agregar campo requerido
+          {/* Eliminar estado custom */}
+          {!esLeyNativo && !estado.protegido && (
+            <button onClick={() => { if (window.confirm(`¿Eliminar estado "${estado.nombre}"?`)) onEliminar(estado.id); }}
+              className="flex items-center gap-2 text-xs text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg border border-red-200 transition-colors">
+              <Trash2 className="w-3.5 h-3.5" /> Eliminar estado
             </button>
-          </div>
-
-          {/* ── Artículo (ley futura/custom) ─────────────────── */}
-          {!esLeyNativo && (
-            <div className="pt-2 border-t border-gray-100">
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-xs text-amber-700 font-medium mb-1">
-                    {estado.protegido ? 'Estado protegido por ley futura' : 'Estado personalizado'}. No podrá eliminarse ni desactivarse.
-                  </p>
-                  {estado.protegido && (
-                    <input value={draft.articulo}
-                      onChange={e => { setDraft(p => ({ ...p, articulo: e.target.value })); onEditar(estado.id, { articulo: e.target.value }); }}
-                      className="mt-1 w-full px-2 py-1 text-xs border border-amber-300 rounded focus:outline-none bg-white"
-                      placeholder="Ej: Art. 12° Ley 21.719 (modificación 2026)" />
-                  )}
-                </div>
-              </div>
-            </div>
           )}
-
         </div>
       )}
     </div>
   );
 };
 
-// ── Modal: nuevo estado custom ────────────────────────────
+// ── Modal nuevo estado ────────────────────────────────────
 const ModalNuevoEstado = ({ estadosExistentes, onConfirmar, onCancelar }) => {
   const [form, setForm] = useState({
-    nombre: '', descripcion: '', color: 'gray',
-    requiere_confirmacion: false, envia_email: false,
-    protegido: false, articulo: '',
-    sla_dias: 0, sla_alerta_dias: 0, actores: [],
+    nombre: '', color: 'blue', descripcion: '',
+    envia_email: false, requiere_confirmacion: false,
+    sla_dias: 15, sla_alerta_dias: 3,
   });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Nuevo estado personalizado</h3>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <h3 className="text-lg font-bold text-gray-900">➕ Nuevo estado personalizado</h3>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Nombre *</label>
-            <input value={form.nombre} onChange={e => set('nombre', e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="Ej: PENDIENTE_APROBACION" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-1">Descripción</label>
-            <textarea value={form.descripcion} onChange={e => set('descripcion', e.target.value)} rows={2}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-              placeholder="¿Qué sucede en este estado?" />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 mb-2">Color</label>
-            <div className="flex flex-wrap gap-2">
-              {COLORES_ESTADO.map(col => (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del estado *</label>
+          <input value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Ej: En Revisión Legal"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
+          <div className="flex flex-wrap gap-2">
+            {COLORES_ESTADO.map(col => {
+              const cc = getColor(col.value);
+              return (
                 <button key={col.value} onClick={() => set('color', col.value)}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${
-                    COLOR_CLASSES[col.value]?.bg} ${COLOR_CLASSES[col.value]?.text} ${
-                    form.color === col.value ? 'ring-2 ring-offset-1 ring-gray-400' : 'opacity-60'}`}>
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${cc.bg} ${cc.text} ${cc.border} ${form.color === col.value ? 'ring-2 ring-offset-1 ring-gray-400 scale-105' : 'opacity-60 hover:opacity-100'}`}>
                   {col.label}
                 </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.envia_email} onChange={e => set('envia_email', e.target.checked)} className="w-4 h-4" />
-              Envía email
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={form.requiere_confirmacion} onChange={e => set('requiere_confirmacion', e.target.checked)} className="w-4 h-4" />
-              Requiere confirmación
-            </label>
-          </div>
-          <div className="flex gap-4">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">SLA (días hábiles)</label>
-              <input type="number" min="0" value={form.sla_dias} onChange={e => set('sla_dias', parseInt(e.target.value) || 0)}
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Alertar antes (días)</label>
-              <input type="number" min="0" value={form.sla_alerta_dias} onChange={e => set('sla_alerta_dias', parseInt(e.target.value) || 0)}
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
-            </div>
+              );
+            })}
           </div>
         </div>
 
-        <div className="flex gap-3 mt-6">
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.envia_email} onChange={e => set('envia_email', e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
+            <span className="text-sm text-gray-700">Envía email</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.requiere_confirmacion} onChange={e => set('requiere_confirmacion', e.target.checked)} className="w-4 h-4 text-green-600 rounded" />
+            <span className="text-sm text-gray-700">Requiere confirmación</span>
+          </label>
+        </div>
+
+        <div className="flex gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">SLA (días)</label>
+            <input type="number" min="0" value={form.sla_dias}
+              onChange={e => set('sla_dias', parseInt(e.target.value) || 0)}
+              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Alerta (días)</label>
+            <input type="number" min="0" value={form.sla_alerta_dias}
+              onChange={e => set('sla_alerta_dias', parseInt(e.target.value) || 0)}
+              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2">
           <button onClick={onCancelar}
             className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm">
             Cancelar
@@ -533,6 +427,7 @@ const TabFlujos = ({ hook }) => {
   } = hook;
 
   const [derechoActivo, setDerechoActivo] = useState('ACCESO');
+  const [vista,         setVista]         = useState('lista'); // 'lista' | 'diagrama'
   const [modalNuevo,    setModalNuevo]    = useState(false);
 
   if (loading || !config) {
@@ -551,11 +446,11 @@ const TabFlujos = ({ hook }) => {
   const estados  = getEstadosOrdenados(derechoActivo);
 
   const DERECHO_COLORS = {
-    blue:   { sidebar: 'border-blue-500 bg-blue-50',    header: 'bg-blue-600' },
-    yellow: { sidebar: 'border-yellow-500 bg-yellow-50', header: 'bg-yellow-500' },
-    red:    { sidebar: 'border-red-500 bg-red-50',      header: 'bg-red-600' },
-    orange: { sidebar: 'border-orange-500 bg-orange-50', header: 'bg-orange-500' },
-    green:  { sidebar: 'border-green-500 bg-green-50',  header: 'bg-green-600' },
+    blue:   { sidebar: 'border-blue-500 bg-blue-50',     header: 'from-blue-700 to-blue-600'    },
+    yellow: { sidebar: 'border-yellow-500 bg-yellow-50', header: 'from-yellow-600 to-yellow-500' },
+    red:    { sidebar: 'border-red-500 bg-red-50',       header: 'from-red-700 to-red-600'      },
+    orange: { sidebar: 'border-orange-500 bg-orange-50', header: 'from-orange-600 to-orange-500' },
+    green:  { sidebar: 'border-green-500 bg-green-50',   header: 'from-green-700 to-green-600'  },
   };
   const dc = DERECHO_COLORS[meta.color] || DERECHO_COLORS.blue;
 
@@ -569,93 +464,136 @@ const TabFlujos = ({ hook }) => {
         </p>
       </div>
 
-      <div className="flex gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-        {/* Sidebar derechos */}
-        <div className="w-48 flex-shrink-0 space-y-1">
+        {/* Sidebar */}
+        <div className="lg:col-span-1 space-y-1.5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Derechos ARCOP</p>
           {derechos.map(key => {
-            const m  = DERECHOS_META_FLUJO[key];
+            const m   = DERECHOS_META_FLUJO[key];
             const dc2 = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
-            const activo = key === derechoActivo;
+            const est = config.derechos?.[key]?.estados || [];
             return (
-              <button key={key} onClick={() => setDerechoActivo(key)}
-                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium border-l-4 transition-all text-left ${
-                  activo ? dc2.sidebar + ' text-gray-800' : 'border-transparent text-gray-500 hover:bg-gray-100'}`}>
-                <span>{m.icono}</span>
-                <span>{m.nombre}</span>
+              <button key={key}
+                onClick={() => { setDerechoActivo(key); setVista('lista'); }}
+                className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
+                  derechoActivo === key
+                    ? `${dc2.sidebar} border-2`
+                    : 'border-gray-200 hover:border-gray-300 bg-white'
+                }`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-800">{m.icono} {m.nombre}</span>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                    {est.filter(e => e.activo !== false).length} estados
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">{m.articulo}</p>
               </button>
             );
           })}
         </div>
 
-        {/* Panel derecho */}
-        <div className="flex-1 min-w-0">
+        {/* Panel principal */}
+        <div className="lg:col-span-3 space-y-4">
 
-          {/* Header */}
-          <div className={`${dc.header} text-white rounded-t-xl px-5 py-4 flex items-center justify-between`}>
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-lg">{meta.icono}</span>
-                <h3 className="font-bold text-lg">Derecho de {meta.nombre}</h3>
-                <span className="text-xs opacity-75 bg-white/20 px-2 py-0.5 rounded-full">{meta.articulo}</span>
+          {/* Header con toggle Editar | Diagrama */}
+          <div className={`bg-gradient-to-r ${dc.header} rounded-2xl px-5 py-4`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-white text-lg">{meta.icono} Derecho de {meta.nombre}</h3>
+                <p className="text-sm text-white/75 mt-0.5">
+                  {estados.filter(e => e.activo !== false).length} estados activos
+                </p>
               </div>
-              <p className="text-xs opacity-80">{estados.filter(e => e.activo).length} estados activos</p>
-            </div>
-            <button onClick={() => {
-              if (window.confirm('¿Restaurar este flujo a los estados legales por defecto?'))
-                restaurarDerecho(derechoActivo);
-            }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white/20 hover:bg-white/30 rounded-lg transition-colors">
-              <RotateCcw className="w-3.5 h-3.5" /> Restaurar defaults
-            </button>
-          </div>
+              <div className="flex items-center gap-2">
 
-          {/* Lista de estados */}
-          <div className="border border-t-0 border-gray-200 rounded-b-xl p-4 bg-white space-y-3">
+                {/* Toggle lista / diagrama */}
+                <div className="flex bg-white/20 rounded-xl p-1 gap-1">
+                  <button onClick={() => setVista('lista')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      vista === 'lista' ? 'bg-white text-gray-800 shadow-sm' : 'text-white/80 hover:bg-white/10'
+                    }`}>
+                    <Settings className="w-3.5 h-3.5" /> Editar
+                  </button>
+                  <button onClick={() => setVista('diagrama')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      vista === 'diagrama' ? 'bg-white text-gray-800 shadow-sm' : 'text-white/80 hover:bg-white/10'
+                    }`}>
+                    <GitBranch className="w-3.5 h-3.5" /> Diagrama
+                  </button>
+                </div>
 
-            {/* Leyenda */}
-            <div className="flex flex-wrap gap-3 pb-3 border-b border-gray-100 text-xs text-gray-500">
-              <span className="flex items-center gap-1.5"><span className="w-4 h-4 bg-blue-100 border border-blue-200 rounded text-blue-700 text-center text-xs leading-4">L</span> Obligatorio por ley</span>
-              <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-500" /> Protegido</span>
-              <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-blue-500" /> Envía email</span>
-              <span className="flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5 text-purple-500" /> Requiere confirmación</span>
-              <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> SLA configurado</span>
-              <span className="flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-indigo-500" /> Actores asignados</span>
-            </div>
-
-            {estados.map((estado, idx) => (
-              <PanelEstado
-                key={estado.id}
-                estado={estado}
-                todos={estados}
-                isFirst={idx === 0}
-                isLast={idx === estados.length - 1}
-                onToggle={(id)                  => toggleEstado(derechoActivo, id)}
-                onEditar={(id, changes)          => editarEstado(derechoActivo, id, changes)}
-                onToggleProtegido={(id)          => toggleProtegidoPorLey(derechoActivo, id)}
-                onMover={(id, dir)               => moverEstado(derechoActivo, id, dir)}
-                onEliminar={(id)                 => eliminarEstado(derechoActivo, id)}
-                onAgregarCampo={(id)             => agregarCampoTransicion(derechoActivo, id)}
-                onEditarCampo={(eid, cid, ch)    => editarCampoTransicion(derechoActivo, eid, cid, ch)}
-                onEliminarCampo={(eid, cid)      => eliminarCampoTransicion(derechoActivo, eid, cid)}
-                onToggleTransicion={(eid, tid)   => toggleTransicion(derechoActivo, eid, tid)}
-                onEditarSLA={(id, sla)           => editarSLA(derechoActivo, id, sla)}
-                onAgregarActor={(id)             => agregarActor(derechoActivo, id)}
-                onEditarActor={(eid, aid, ch)    => editarActor(derechoActivo, eid, aid, ch)}
-                onEliminarActor={(eid, aid)      => eliminarActor(derechoActivo, eid, aid)}
-              />
-            ))}
-
-            <button onClick={() => setModalNuevo(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all text-sm">
-              <Plus className="w-4 h-4" /> Agregar estado personalizado
-            </button>
-
-            <div className="flex items-start gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
-              <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
-              Los cambios se aplican al Panel DPO después de guardar.
-              Los estados de origen <span className="font-medium mx-0.5">Ley</span> no pueden eliminarse.
+                <button
+                  onClick={() => {
+                    if (window.confirm(`¿Restaurar flujo de ${meta.nombre} a los estados por defecto?`))
+                      restaurarDerecho(derechoActivo);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/90 bg-white/20 border border-white/30 rounded-xl hover:bg-white/30">
+                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar defaults
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* ── Vista Diagrama ── */}
+          {vista === 'diagrama' && (
+            <FlowDiagramEditor
+              estados={estados}
+              hook={hook}
+              derechoKey={derechoActivo}
+            />
+          )}
+
+          {/* ── Vista Lista ── */}
+          {vista === 'lista' && (
+            <div className="space-y-3">
+              {/* Leyenda */}
+              <div className="flex flex-wrap gap-3 text-xs text-gray-500 bg-white rounded-xl border border-gray-200 px-4 py-2.5">
+                <span className="font-semibold text-gray-400 uppercase tracking-wider">Leyenda:</span>
+                <span className="flex items-center gap-1.5"><span className="text-blue-500 font-bold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">L</span> Obligatorio por ley</span>
+                <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-500" /> Protegido</span>
+                <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-blue-400" /> Envía email</span>
+                <span className="flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5 text-green-500" /> Requiere confirmación</span>
+                <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> SLA configurado</span>
+                <span className="flex items-center gap-1.5"><User className="w-3.5 h-3.5 text-indigo-500" /> Actores asignados</span>
+              </div>
+
+              {estados.map((estado, idx) => (
+                <PanelEstado
+                  key={estado.id}
+                  estado={estado}
+                  todos={estados}
+                  isFirst={idx === 0}
+                  isLast={idx === estados.length - 1}
+                  onToggle={(id)                  => toggleEstado(derechoActivo, id)}
+                  onEditar={(id, changes)          => editarEstado(derechoActivo, id, changes)}
+                  onToggleProtegido={(id)          => toggleProtegidoPorLey(derechoActivo, id)}
+                  onMover={(id, dir)               => moverEstado(derechoActivo, id, dir)}
+                  onEliminar={(id)                 => eliminarEstado(derechoActivo, id)}
+                  onAgregarCampo={(id)             => agregarCampoTransicion(derechoActivo, id)}
+                  onEditarCampo={(eid, cid, ch)    => editarCampoTransicion(derechoActivo, eid, cid, ch)}
+                  onEliminarCampo={(eid, cid)      => eliminarCampoTransicion(derechoActivo, eid, cid)}
+                  onToggleTransicion={(eid, tid)   => toggleTransicion(derechoActivo, eid, tid)}
+                  onEditarSLA={(id, sla)           => editarSLA(derechoActivo, id, sla)}
+                  onAgregarActor={(id)             => agregarActor(derechoActivo, id)}
+                  onEditarActor={(eid, aid, ch)    => editarActor(derechoActivo, eid, aid, ch)}
+                  onEliminarActor={(eid, aid)      => eliminarActor(derechoActivo, eid, aid)}
+                />
+              ))}
+
+              <button onClick={() => setModalNuevo(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all text-sm">
+                <Plus className="w-4 h-4" /> Agregar estado personalizado
+              </button>
+
+              <div className="flex items-start gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
+                <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
+                Los cambios se aplican al Panel DPO después de guardar.
+                Los estados de origen <span className="font-medium mx-0.5">Ley</span> no pueden eliminarse.
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 

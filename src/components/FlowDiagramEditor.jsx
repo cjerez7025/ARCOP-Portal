@@ -93,68 +93,84 @@ const configToFlow = (estados) => {
 // ── Nodo custom ───────────────────────────────────────────
 const EstadoNode = ({ data, selected }) => {
   const { estado } = data;
-  const c    = getC(estado.color);
+  const c     = getC(estado.color);
   const esLey = estado.origen === 'ley' || estado.origen === 'ley_futura';
 
   return (
     <div
-      className={`rounded-xl border-2 transition-all select-none overflow-hidden shadow-lg`}
+      className="rounded-xl border-2 transition-all select-none overflow-hidden"
       style={{
-        width: NODE_W,
-        minHeight: NODE_H,
-        background: c.fill,
-        borderColor: selected ? '#1E293B' : c.stroke,
-        boxShadow: selected
-          ? `0 0 0 3px ${c.stroke}55, 0 4px 20px rgba(0,0,0,0.3)`
-          : '0 4px 12px rgba(0,0,0,0.15)',
+        width:       NODE_W,
+        minHeight:   NODE_H,
+        background:  c.fill,
+        borderColor: selected ? '#60A5FA' : c.stroke,
+        boxShadow:   selected
+          ? `0 0 0 3px ${c.stroke}55, 0 6px 24px rgba(0,0,0,0.45)`
+          : '0 4px 14px rgba(0,0,0,0.35)',
       }}>
 
-      {/* Barra de color top */}
+      {/* Barra de color superior */}
       <div className="h-1.5 w-full" style={{ background: c.stroke }} />
 
       <div className="px-3 py-2.5 relative">
+
         {/* Badge Ley */}
         {esLey && (
           <span
-            className="absolute top-1.5 right-2 text-white text-xs font-bold px-1.5 py-0.5 rounded"
-            style={{ background: c.stroke, fontSize: 9 }}>L</span>
+            className="absolute top-1.5 right-2 text-xs font-bold px-1.5 py-0.5 rounded"
+            style={{
+              background: c.stroke,
+              color:      '#ffffff',
+              fontSize:   9,
+            }}>
+            L
+          </span>
         )}
 
-        {/* Nombre */}
-        <p className={`font-bold text-sm leading-tight ${c.text}`}
-           style={{ color: '#1E293B', maxWidth: 120 }}>
+        {/* Nombre del estado — texto blanco/claro */}
+        <p
+          className="font-bold text-sm leading-tight truncate"
+          style={{ color: '#F1F5F9', maxWidth: 120 }}>
           {estado.nombre}
         </p>
 
-        {/* Info */}
+        {/* Info secundaria — slate-400 para buen contraste */}
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-          <span className="text-xs text-gray-500">
-            {(estado.transiciones || []).length} salida{(estado.transiciones || []).length !== 1 ? 's' : ''}
+          <span
+            className="text-xs"
+            style={{ color: '#94A3B8' }}>
+            {(estado.transiciones || []).length} salida
+            {(estado.transiciones || []).length !== 1 ? 's' : ''}
           </span>
           {estado.es_final && (
-            <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">FINAL</span>
+            <span
+              className="text-xs px-1.5 py-0.5 rounded-full font-semibold"
+              style={{ background: 'rgba(148,163,184,0.2)', color: '#CBD5E1' }}>
+              FINAL
+            </span>
           )}
           {estado.envia_email && (
-            <Mail className="w-3 h-3 text-blue-500" title="Envía email" />
+            <Mail className="w-3 h-3" style={{ color: '#60A5FA' }} title="Envía email" />
           )}
           {estado.requiere_confirmacion && (
-            <CheckSquare className="w-3 h-3 text-purple-500" title="Requiere confirmación" />
+            <CheckSquare className="w-3 h-3" style={{ color: '#A78BFA' }} title="Requiere confirmación" />
           )}
         </div>
       </div>
 
-      {/* Handles */}
+      {/* Handles de conexión */}
       <Handle type="target" position={Position.Left}
-        style={{ background: c.stroke, width: 10, height: 10, border: '2px solid white' }} />
+        style={{ background: c.stroke, width: 10, height: 10, border: '2px solid #0F172A' }} />
       <Handle type="source" position={Position.Right}
-        style={{ background: c.stroke, width: 10, height: 10, border: '2px solid white' }} />
+        style={{ background: c.stroke, width: 10, height: 10, border: '2px solid #0F172A' }} />
       <Handle type="target" position={Position.Top} id="top"
-        style={{ background: c.stroke, width: 8, height: 8, border: '2px solid white', opacity: 0.6 }} />
+        style={{ background: c.stroke, width: 8, height: 8, border: '2px solid #0F172A', opacity: 0.7 }} />
       <Handle type="source" position={Position.Bottom} id="bottom"
-        style={{ background: c.stroke, width: 8, height: 8, border: '2px solid white', opacity: 0.6 }} />
+        style={{ background: c.stroke, width: 8, height: 8, border: '2px solid #0F172A', opacity: 0.7 }} />
     </div>
   );
 };
+
 
 // ── Arista custom con etiqueta clickeable ─────────────────
 const TransicionEdge = ({
@@ -227,11 +243,12 @@ const PanelEstado = ({ estado, todos, onEditar, onEliminar, onAgregarTransicion,
 
   return (
     <div className="flex flex-col h-full text-sm">
-      <div className="px-4 py-3 flex items-center justify-between flex-shrink-0 border-b border-gray-100"
-           style={{ background: c.fill, borderLeft: `4px solid ${c.stroke}` }}>
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-gray-900">{estado.nombre}</span>
+
+   <div className="px-4 py-3 flex items-center justify-between flex-shrink-0 border-b border-slate-700"
+        style={{ background: '#1E293B', borderLeft: `4px solid ${c.stroke}` }}>
+     <div>
+       <div className="flex items-center gap-2">
+         <span className="font-bold" style={{ color: '#F1F5F9' }}>{estado.nombre}</span>
             {esLey && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 rounded font-semibold">Ley</span>}
           </div>
           <p className="text-xs text-gray-400 mt-0.5">{estado.articulo || 'Estado personalizado'}</p>
