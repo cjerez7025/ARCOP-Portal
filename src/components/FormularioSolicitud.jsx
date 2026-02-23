@@ -287,7 +287,7 @@ const FormularioSolicitud = () => {
     return (
       <div style={{
         minHeight:      '100vh',
-        background:     'var(--bg-base)',
+        background:     '#0E0E17',
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
@@ -296,7 +296,7 @@ const FormularioSolicitud = () => {
         <div className="animate-fade-up" style={{
           width:        '100%',
           maxWidth:     '440px',
-          background:   'var(--bg-surface)',
+          background:   '#141420',
           borderRadius: '20px',
           border:       '1px solid rgba(255,255,255,0.08)',
           padding:      '40px',
@@ -326,7 +326,7 @@ const FormularioSolicitud = () => {
 
           {/* Info row */}
           <div style={{
-            background:   'var(--bg-overlay)',
+            background:   'rgba(30,30,48,0.8)',
             borderRadius: '12px',
             border:       '1px solid rgba(255,255,255,0.07)',
             padding:      '20px',
@@ -400,7 +400,7 @@ const FormularioSolicitud = () => {
   // ── Loading ─────────────────────────────────────────────
   if (loadingConfig) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ minHeight: '100vh', background: '#0E0E17', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Loader size={28} color="var(--text-muted)" className="animate-spin" />
       </div>
     );
@@ -414,7 +414,7 @@ const FormularioSolicitud = () => {
     return (
       <div style={{
         minHeight:      '100vh',
-        background:     'var(--bg-base)',
+        background:     '#0E0E17',
         display:        'flex',
         alignItems:     'center',
         justifyContent: 'center',
@@ -531,7 +531,7 @@ const FormularioSolicitud = () => {
   const { identidad, especificos } = getCamposParaFormulario(tipoSeleccionado.key);
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', padding: '2rem 1rem 4rem' }}>
+    <div style={{ minHeight: '100vh', background: '#0E0E17', padding: '2rem 1rem 4rem' }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
 
         {/* Back */}
@@ -588,7 +588,7 @@ const FormularioSolicitud = () => {
 
         {/* Card formulario */}
         <div className="animate-fade-up" style={{
-          background:   'var(--bg-surface)',
+          background:   '#141420',
           borderRadius: '20px',
           border:       '1px solid rgba(255,255,255,0.08)',
           overflow:     'hidden',
@@ -612,7 +612,7 @@ const FormularioSolicitud = () => {
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {identidad.map(campo => (
-                  <CampoRenderer
+                  <CampoRenderer dark={true}
                     key={campo.id}
                     campo={campo}
                     register={register}
@@ -643,7 +643,7 @@ const FormularioSolicitud = () => {
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {especificos.map(campo => (
-                    <CampoRenderer
+                    <CampoRenderer dark={true}
                       key={campo.id}
                       campo={campo}
                       register={register}
@@ -666,7 +666,7 @@ const FormularioSolicitud = () => {
                 display:      'flex',
                 alignItems:   'flex-start',
                 gap:          '12px',
-                background:   errors.acepta_terminos ? 'rgba(239,68,68,0.08)' : 'var(--bg-overlay)',
+                background:   errors.acepta_terminos ? 'rgba(239,68,68,0.08)' : 'rgba(30,30,48,0.8)',
                 border:       `1px solid ${errors.acepta_terminos ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.07)'}`,
                 borderRadius: '12px',
                 padding:      '16px',

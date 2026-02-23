@@ -9,10 +9,10 @@
 
 :root {
   /* Superficies */
-  --bg-base:      #0A0A0F;
-  --bg-surface:   #111118;
-  --bg-elevated:  #16161F;
-  --bg-overlay:   #1C1C28;
+  --bg-base:      #0E0E17;
+  --bg-surface:   #141420;
+  --bg-elevated:  #1A1A2E;
+  --bg-overlay:   #1E1E30;
 
   /* Bordes */
   --border-subtle: rgba(255,255,255,0.07);
@@ -116,4 +116,35 @@ textarea:focus-visible {
   outline: none;
   border-color: rgba(99,102,241,0.5);
   box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+}
+
+/* ── Input dark global (usado por CampoRenderer con dark=true) ── */
+.arcop-input-dark {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(28, 28, 40, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #F0F0F5;
+  font-size: 14px;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  -webkit-font-smoothing: antialiased;
+}
+.arcop-input-dark::placeholder {
+  color: #4A4A62;
+}
+.arcop-input-dark:focus {
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+/* Select dark — flecha personalizada */
+select.arcop-input-dark {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A5A72' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
 }
