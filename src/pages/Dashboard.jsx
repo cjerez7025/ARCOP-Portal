@@ -1,268 +1,266 @@
+// ============================================================
+// Dashboard v2 — Sin emojis, estética institucional refinada
+// ============================================================
+
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader, AlertTriangle, TrendingUp, ArrowRight, Eye } from 'lucide-react';
+import {
+  Loader, AlertTriangle, TrendingUp, ArrowRight, Eye,
+  ClipboardList, BarChart2, Settings, AlertOctagon
+} from 'lucide-react';
 import { obtenerTodasSolicitudes, obtenerEstadisticas } from '../services/dpoService';
 import DashboardStats from '../components/dpo/DashboardStats';
 import GraficosPanel from '../components/dpo/GraficosPanel';
 
-const Dashboard = () => {
-  const [stats, setStats] = useState(null);
-  const [solicitudes, setSolicitudes] = useState([]);
-  const [loading, setLoading] = useState(true);
+const ESTADO_STYLES = {
+  PENDIENTE:  { label: 'Pendiente',  cls: 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'    },
+  VALIDADA:   { label: 'Validada',   cls: 'bg-sky-50 text-sky-700 ring-1 ring-sky-200'          },
+  EN_PROCESO: { label: 'En Proceso', cls: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200' },
+  RESUELTA:   { label: 'Resuelta',   cls: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' },
+  CERRADA:    { label: 'Cerrada',    cls: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'   },
+};
 
-  useEffect(() => {
-    cargarDatos();
-  }, []);
+const Dashboard = () => {
+  const [stats, setStats]             = useState(null);
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [loading, setLoading]         = useState(true);
+
+  useEffect(() => { cargarDatos(); }, []);
 
   const cargarDatos = async () => {
     try {
       setLoading(true);
-      console.log('📊 Cargando datos del dashboard...');
-
-      const [statsResult, solicitudesResult] = await Promise.all([
+      const [statsRes, solRes] = await Promise.all([
         obtenerEstadisticas(),
-        obtenerTodasSolicitudes({})
+        obtenerTodasSolicitudes({}),
       ]);
-
-      if (statsResult.status === 'success') {
-        setStats(statsResult.data);
-        console.log('✅ Estadísticas cargadas:', statsResult.data);
-      }
-
-      if (solicitudesResult.status === 'success') {
-        setSolicitudes(solicitudesResult.data);
-        console.log('✅ Solicitudes cargadas:', solicitudesResult.data.length);
-      }
-    } catch (error) {
-      console.error('❌ Error al cargar dashboard:', error);
+      if (statsRes.status === 'success') setStats(statsRes.data);
+      if (solRes.status   === 'success') setSolicitudes(solRes.data);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Cargando dashboard...</p>
-        </div>
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-slate-400">
+        <Loader className="w-8 h-8 animate-spin" />
+        <span className="text-sm font-medium">Cargando datos...</span>
       </div>
-    );
-  }
+    </div>
+  );
 
-  // Solicitudes recientes (últimas 5)
-  const solicitudesRecientes = [...solicitudes]
+  const recientes = [...solicitudes]
     .sort((a, b) => new Date(b.fecha_solicitud) - new Date(a.fecha_solicitud))
     .slice(0, 5);
 
-  // ── Alertas con filtro ──────────────────────────────────────
+  // Alertas
   const alertas = [];
-
-  if (stats && stats.por_vencer > 0) {
-    alertas.push({
-      tipo: 'urgente',
-      icono: AlertTriangle,
-      mensaje: `${stats.por_vencer} solicitud${stats.por_vencer > 1 ? 'es' : ''} ${stats.por_vencer > 1 ? 'vencen' : 'vence'} en menos de 3 días`,
-      color: 'text-red-600',
-      bg: 'bg-red-50',
-      border: 'border-red-200',
-      filtro: { por_vencer: true }      // ✅ filtro para PanelDPO
-    });
-  }
+  if (stats?.por_vencer > 0) alertas.push({
+    icon:   AlertOctagon,
+    msg:    `${stats.por_vencer} solicitud${stats.por_vencer > 1 ? 'es' : ''} vence${stats.por_vencer > 1 ? 'n' : ''} en menos de 3 días`,
+    color:  'text-rose-700',
+    bg:     'bg-rose-50',
+    border: 'border-rose-200',
+    filtro: { por_vencer: true },
+  });
 
   const sinAsignar = solicitudes.filter(
-    s => !s.asignado_a && s.estado !== 'CERRADA' && s.estado !== 'RESUELTA'
+    s => !s.asignado_a && !['CERRADA','RESUELTA'].includes(s.estado)
   ).length;
-  if (sinAsignar > 0) {
-    alertas.push({
-      tipo: 'warning',
-      icono: AlertTriangle,
-      mensaje: `${sinAsignar} solicitud${sinAsignar > 1 ? 'es' : ''} sin asignar`,
-      color: 'text-yellow-600',
-      bg: 'bg-yellow-50',
-      border: 'border-yellow-200',
-      filtro: { sin_asignar: true }     // ✅ filtro para PanelDPO
-    });
-  }
+  if (sinAsignar > 0) alertas.push({
+    icon:   AlertTriangle,
+    msg:    `${sinAsignar} solicitud${sinAsignar > 1 ? 'es' : ''} sin responsable asignado`,
+    color:  'text-amber-700',
+    bg:     'bg-amber-50',
+    border: 'border-amber-200',
+    filtro: { sin_asignar: true },
+  });
 
-  const pendientesValidacion = solicitudes.filter(s => s.estado === 'PENDIENTE').length;
-  if (pendientesValidacion > 3) {
-    alertas.push({
-      tipo: 'info',
-      icono: TrendingUp,
-      mensaje: `${pendientesValidacion} solicitudes pendientes de validación`,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-      border: 'border-blue-200',
-      filtro: { estado: 'PENDIENTE' }   // ✅ filtro para PanelDPO
-    });
-  }
+  const pendVal = solicitudes.filter(s => s.estado === 'PENDIENTE').length;
+  if (pendVal > 3) alertas.push({
+    icon:   TrendingUp,
+    msg:    `${pendVal} solicitudes pendientes de validación`,
+    color:  'text-sky-700',
+    bg:     'bg-sky-50',
+    border: 'border-sky-200',
+    filtro: { estado: 'PENDIENTE' },
+  });
 
-  const getEstadoBadge = (estado) => {
-    const badges = {
-      'PENDIENTE':  'bg-yellow-100 text-yellow-800',
-      'VALIDADA':   'bg-blue-100 text-blue-800',
-      'EN_PROCESO': 'bg-purple-100 text-purple-800',
-      'RESUELTA':   'bg-green-100 text-green-800',
-      'CERRADA':    'bg-gray-100 text-gray-800'
-    };
-    return badges[estado] || 'bg-gray-100 text-gray-800';
-  };
+  const ACCIONES = [
+    {
+      to:     '/dpo',
+      icon:   ClipboardList,
+      titulo: 'Gestionar Solicitudes',
+      desc:   'Revisar y cambiar el estado de las solicitudes activas',
+      color:  'text-indigo-600',
+      bg:     'bg-indigo-50',
+    },
+    {
+      to:     '/dpo/reportes',
+      icon:   BarChart2,
+      titulo: 'Generar Reportes',
+      desc:   'Exportar métricas y datos de cumplimiento',
+      color:  'text-emerald-600',
+      bg:     'bg-emerald-50',
+    },
+    {
+      to:     '/dpo/configuracion',
+      icon:   Settings,
+      titulo: 'Configuración',
+      desc:   'Ajustes del sistema, flujos y notificaciones',
+      color:  'text-slate-600',
+      bg:     'bg-slate-100',
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-slate-50 py-8 px-4">
       <div className="max-w-7xl mx-auto space-y-8">
 
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-          <p className="text-gray-600">Vista general del sistema de gestión ARCOP</p>
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-xs font-semibold tracking-widest uppercase text-indigo-500 mb-1">
+              Panel de control
+            </p>
+            <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+            <p className="text-sm text-slate-400 mt-0.5">
+              Sistema de gestión ARCOP — Ley 21.719
+            </p>
+          </div>
+          <button
+            onClick={cargarDatos}
+            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-md hover:bg-white transition-colors"
+          >
+            Actualizar
+          </button>
         </div>
 
-        {/* Estadísticas */}
+        {/* Stats */}
         {stats && <DashboardStats stats={stats} />}
 
         {/* Alertas */}
         {alertas.length > 0 && (
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">⚠️ Alertas Importantes</h2>
-            <div className="space-y-3">
-              {alertas.map((alerta, index) => {
-                const IconoAlerta = alerta.icono;
-                return (
-                  <div
-                    key={index}
-                    className={`${alerta.bg} border ${alerta.border} rounded-lg p-4 flex items-center gap-3`}
+          <div className="space-y-2">
+            <h2 className="text-xs font-semibold tracking-widest uppercase text-slate-400">
+              Alertas activas
+            </h2>
+            {alertas.map((a, i) => {
+              const Icon = a.icon;
+              return (
+                <div key={i}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${a.bg} ${a.border}`}
+                >
+                  <Icon className={`w-4 h-4 flex-shrink-0 ${a.color}`} strokeWidth={2} />
+                  <p className={`text-sm font-medium flex-grow ${a.color}`}>{a.msg}</p>
+                  <Link
+                    to="/dpo"
+                    state={{ filtro: a.filtro }}
+                    className={`flex items-center gap-1 text-xs font-semibold ${a.color} hover:opacity-70 whitespace-nowrap`}
                   >
-                    <IconoAlerta className={`w-6 h-6 ${alerta.color} flex-shrink-0`} />
-                    <p className={`font-medium ${alerta.color} flex-grow`}>{alerta.mensaje}</p>
-
-                    {/* ✅ Link con state que lleva el filtro al PanelDPO */}
-                    <Link
-                      to="/dpo"
-                      state={{ filtro: alerta.filtro }}
-                      className={`text-sm ${alerta.color} hover:underline flex items-center gap-1 whitespace-nowrap`}
-                    >
-                      Ver solicitudes
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
+                    Ver <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* Gráficos */}
         {solicitudes.length > 0 && <GraficosPanel solicitudes={solicitudes} />}
 
-        {/* Solicitudes Recientes */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">📋 Solicitudes Recientes</h2>
-            <Link
-              to="/dpo"
-              className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center gap-1"
+        {/* Solicitudes recientes */}
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+            <h2 className="text-sm font-bold text-slate-900">Solicitudes recientes</h2>
+            <Link to="/dpo"
+              className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
             >
-              Ver todas
-              <ArrowRight className="w-4 h-4" />
+              Ver todas <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 
-          {solicitudesRecientes.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No hay solicitudes recientes</p>
+          {recientes.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">Sin solicitudes registradas</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Número
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Nombre
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Fecha
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Acciones
-                    </th>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                    {['Número','Titular','Email','Estado','Fecha',''].map(h => (
+                      <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {solicitudesRecientes.map((sol) => (
-                    <tr key={sol.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {sol.numero_solicitud}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
-                        {sol.nombre_completo}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {sol.email}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEstadoBadge(sol.estado)}`}>
-                          {sol.estado}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        {new Date(sol.fecha_solicitud).toLocaleDateString('es-CL')}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          to={`/seguimiento/${sol.numero_solicitud}`}
-                          target="_blank"
-                          className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                        >
-                          <Eye className="w-4 h-4" />
-                          Ver
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-slate-100">
+                  {recientes.map(sol => {
+                    const est = ESTADO_STYLES[sol.estado] || ESTADO_STYLES.CERRADA;
+                    return (
+                      <tr key={sol.id || sol.numero_solicitud}
+                        className="hover:bg-slate-50 transition-colors"
+                      >
+                        <td className="px-5 py-3 font-mono text-xs font-semibold text-slate-700">
+                          {sol.numero_solicitud}
+                        </td>
+                        <td className="px-5 py-3 font-medium text-slate-800">
+                          {sol.nombre_completo}
+                        </td>
+                        <td className="px-5 py-3 text-slate-500">
+                          {sol.email}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${est.cls}`}>
+                            {est.label}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-slate-400 tabular-nums">
+                          {new Date(sol.fecha_solicitud).toLocaleDateString('es-CL')}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Link
+                            to={`/seguimiento/${sol.numero_solicitud}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> Ver
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </div>
 
-        {/* Acciones Rápidas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link
-            to="/dpo"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-all hover:-translate-y-1"
-          >
-            <div className="text-3xl mb-3">📋</div>
-            <h3 className="font-semibold text-gray-900 mb-2">Gestionar Solicitudes</h3>
-            <p className="text-sm text-gray-600">Ver y gestionar todas las solicitudes</p>
-          </Link>
-
-          <Link
-            to="/dpo/reportes"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-all hover:-translate-y-1"
-          >
-            <div className="text-3xl mb-3">📊</div>
-            <h3 className="font-semibold text-gray-900 mb-2">Generar Reportes</h3>
-            <p className="text-sm text-gray-600">Exportar datos y métricas</p>
-          </Link>
-
-          <Link
-            to="/dpo/configuracion"
-            className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-all hover:-translate-y-1"
-          >
-            <div className="text-3xl mb-3">⚙️</div>
-            <h3 className="font-semibold text-gray-900 mb-2">Configuración</h3>
-            <p className="text-sm text-gray-600">Ajustes del sistema</p>
-          </Link>
+        {/* Acciones rápidas */}
+        <div>
+          <h2 className="text-xs font-semibold tracking-widest uppercase text-slate-400 mb-3">
+            Acciones rápidas
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {ACCIONES.map(({ to, icon: Icon, titulo, desc, color, bg }) => (
+              <Link key={to} to={to}
+                className="group flex items-start gap-4 bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-300 hover:shadow-sm transition-all"
+              >
+                <div className={`flex-shrink-0 w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
+                  <Icon className={`w-4 h-4 ${color}`} strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors">
+                    {titulo}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{desc}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
 
       </div>

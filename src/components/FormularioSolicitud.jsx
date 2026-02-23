@@ -1,41 +1,235 @@
 // ============================================================
-// FORMULARIO SOLICITUD — Versión dinámica
-// Lee campos desde useFormularioConfig → formularioService → adapter
+// FORMULARIO SOLICITUD v3 — Fintech Dark
+// DM Serif Display + DM Sans | Dark surfaces | SVG icons inline
+// Sin dependencias extras. CSS variables + Tailwind.
 // ============================================================
 
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Send, CheckCircle, Loader, AlertCircle } from 'lucide-react';
+import { Send, CheckCircle, Loader, AlertCircle, ChevronLeft, ArrowRight, Lock } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { formatearRUT } from '../utils/validators';
 import useFormularioConfig from '../hooks/useFormularioConfig';
 import CampoRenderer from './CampoRenderer';
 import adapter from '../adapters';
 
-// Helpers para generar solicitud
-const generarId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+// ── Helpers ────────────────────────────────────────────────
+const generarId     = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 const generarNumero = () => `SOL-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
-const generarToken = () => Math.random().toString(36).substr(2) + Math.random().toString(36).substr(2);
+const generarToken  = () => Math.random().toString(36).substr(2) + Math.random().toString(36).substr(2);
 const calcularFechaLimite = () => {
   const f = new Date(); let d = 0;
   while (d < 15) { f.setDate(f.getDate() + 1); if (f.getDay() !== 0 && f.getDay() !== 6) d++; }
   return f.toISOString();
 };
 
-const COLOR_MAP = {
-  blue:   { card: 'border-blue-500 bg-blue-50',   badge: 'bg-blue-100 text-blue-800',   btn: 'bg-blue-600 hover:bg-blue-700'   },
-  yellow: { card: 'border-yellow-500 bg-yellow-50', badge: 'bg-yellow-100 text-yellow-800', btn: 'bg-yellow-600 hover:bg-yellow-700' },
-  red:    { card: 'border-red-500 bg-red-50',     badge: 'bg-red-100 text-red-800',     btn: 'bg-red-600 hover:bg-red-700'     },
-  orange: { card: 'border-orange-500 bg-orange-50', badge: 'bg-orange-100 text-orange-800', btn: 'bg-orange-600 hover:bg-orange-700' },
-  green:  { card: 'border-green-500 bg-green-50', badge: 'bg-green-100 text-green-800', btn: 'bg-green-600 hover:bg-green-700' },
+// ── SVG Icons custom por derecho ──────────────────────────
+// Completamente independientes de lucide versión
+const IconAcceso = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/>
+    <path d="M21 21l-4.35-4.35"/>
+    <path d="M11 8v6M8 11h6"/>
+  </svg>
+);
+
+const IconRectificacion = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
+const IconCancelacion = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg>
+);
+
+const IconOposicion = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+  </svg>
+);
+
+const IconPortabilidad = ({ size = 22, color = 'currentColor' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+    <path d="M3 6h18"/>
+  </svg>
+);
+
+// ── Config visual por derecho ─────────────────────────────
+const DERECHOS_CONFIG = {
+  ACCESO: {
+    Icon:      IconAcceso,
+    color:     '#3B82F6',
+    colorDim:  'rgba(59,130,246,0.12)',
+    glow:      'rgba(59,130,246,0.25)',
+    gradient:  'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.03) 100%)',
+    artNum:    '5°',
+  },
+  RECTIFICACION: {
+    Icon:      IconRectificacion,
+    color:     '#F59E0B',
+    colorDim:  'rgba(245,158,11,0.12)',
+    glow:      'rgba(245,158,11,0.25)',
+    gradient:  'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(245,158,11,0.03) 100%)',
+    artNum:    '6°',
+  },
+  CANCELACION: {
+    Icon:      IconCancelacion,
+    color:     '#EF4444',
+    colorDim:  'rgba(239,68,68,0.12)',
+    glow:      'rgba(239,68,68,0.25)',
+    gradient:  'linear-gradient(135deg, rgba(239,68,68,0.15) 0%, rgba(239,68,68,0.03) 100%)',
+    artNum:    '7°',
+  },
+  OPOSICION: {
+    Icon:      IconOposicion,
+    color:     '#8B5CF6',
+    colorDim:  'rgba(139,92,246,0.12)',
+    glow:      'rgba(139,92,246,0.25)',
+    gradient:  'linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(139,92,246,0.03) 100%)',
+    artNum:    '8°',
+  },
+  PORTABILIDAD: {
+    Icon:      IconPortabilidad,
+    color:     '#10B981',
+    colorDim:  'rgba(16,185,129,0.12)',
+    glow:      'rgba(16,185,129,0.25)',
+    gradient:  'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.03) 100%)',
+    artNum:    '9°',
+  },
 };
 
+// ── Componente Card de derecho ─────────────────────────────
+const DerechoCard = ({ keyDerecho, meta, onSeleccionar, index }) => {
+  const [hovered, setHovered] = useState(false);
+  const cfg = DERECHOS_CONFIG[keyDerecho];
+  if (!cfg) return null;
+  const { Icon, color, colorDim, glow, gradient, artNum } = cfg;
+
+  return (
+    <button
+      onClick={() => onSeleccionar(keyDerecho, meta)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={`animate-fade-up stagger-${index + 1}`}
+      style={{
+        display:       'block',
+        width:         '100%',
+        textAlign:     'left',
+        background:    hovered ? gradient : 'rgba(22,22,31,0.8)',
+        border:        `1px solid ${hovered ? color + '40' : 'rgba(255,255,255,0.08)'}`,
+        borderRadius:  '16px',
+        padding:       '24px',
+        cursor:        'pointer',
+        transition:    'all 0.2s cubic-bezier(.22,.68,0,1.1)',
+        transform:     hovered ? 'translateY(-2px)' : 'translateY(0)',
+        boxShadow:     hovered ? `0 8px 32px ${glow}, 0 0 0 1px ${color}20` : '0 1px 3px rgba(0,0,0,0.4)',
+        position:      'relative',
+        overflow:      'hidden',
+      }}
+    >
+      {/* Número artículo como watermark de fondo */}
+      <span style={{
+        position:   'absolute',
+        right:      '-8px',
+        bottom:     '-20px',
+        fontSize:   '120px',
+        fontFamily: 'var(--font-display)',
+        fontWeight: 400,
+        color:      hovered ? color + '14' : 'rgba(255,255,255,0.04)',
+        lineHeight: 1,
+        pointerEvents: 'none',
+        userSelect: 'none',
+        transition: 'color 0.3s',
+      }}>
+        {artNum}
+      </span>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', position: 'relative' }}>
+        {/* Chip icono */}
+        <div style={{
+          flexShrink: 0,
+          width:   '44px',
+          height:  '44px',
+          borderRadius: '12px',
+          background: hovered ? color + '22' : colorDim,
+          border:  `1px solid ${hovered ? color + '50' : color + '25'}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'all 0.2s',
+        }}>
+          <Icon size={20} color={hovered ? color : color + 'BB'} />
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Header con badge Art */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '15px',
+              fontWeight: 600,
+              fontFamily: 'var(--font-body)',
+              color: hovered ? '#F0F0F5' : '#C8C8D8',
+              transition: 'color 0.2s',
+            }}>
+              Derecho de {meta.nombre}
+            </h3>
+            <span style={{
+              fontSize:     '10px',
+              fontWeight:   700,
+              letterSpacing:'0.08em',
+              textTransform:'uppercase',
+              color:        hovered ? color : color + '80',
+              transition:   'color 0.2s',
+            }}>
+              Art. {artNum}
+            </span>
+          </div>
+
+          <p style={{
+            margin:     0,
+            fontSize:   '13px',
+            color:      hovered ? '#9090A8' : '#5A5A72',
+            lineHeight: 1.5,
+            transition: 'color 0.2s',
+          }}>
+            {meta.descripcion}
+          </p>
+        </div>
+
+        {/* Arrow */}
+        <div style={{
+          flexShrink: 0,
+          opacity:    hovered ? 1 : 0,
+          transform:  hovered ? 'translateX(0)' : 'translateX(-4px)',
+          transition: 'all 0.2s',
+          color,
+        }}>
+          <ArrowRight size={16} />
+        </div>
+      </div>
+    </button>
+  );
+};
+
+// ── Componente principal ───────────────────────────────────
 const FormularioSolicitud = () => {
   const { config, loading: loadingConfig, getCamposParaFormulario } = useFormularioConfig();
 
-  const [loading, setLoading]               = useState(false);
-  const [success, setSuccess]               = useState(false);
-  const [solicitudCreada, setSolicitudCreada] = useState(null);
+  const [loading,          setLoading]          = useState(false);
+  const [success,          setSuccess]          = useState(false);
+  const [solicitudCreada,  setSolicitudCreada]  = useState(null);
   const [tipoSeleccionado, setTipoSeleccionado] = useState(null);
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
@@ -67,21 +261,18 @@ const FormularioSolicitud = () => {
         ip_origen:        window.location.hostname,
         user_agent:       navigator.userAgent,
         creado_en:        new Date().toISOString(),
-        // datos del formulario
         ...data,
         email:      data.email?.toLowerCase(),
         categorias: JSON.stringify(data.categorias || []),
       };
 
       const result = await adapter.createSolicitud(solicitud);
-
       if (result.status === 'error') throw new Error(result.message);
 
-      setSolicitudCreada({ numero_solicitud: numero, tipo: tipoSeleccionado.key });
+      setSolicitudCreada({ numero_solicitud: numero });
       setSuccess(true);
-      toast.success('¡Solicitud enviada exitosamente!');
+      toast.success('Solicitud enviada');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-
     } catch (err) {
       toast.error(err.message || 'Error al enviar solicitud');
     } finally {
@@ -92,44 +283,125 @@ const FormularioSolicitud = () => {
   // ── Pantalla éxito ──────────────────────────────────────
   if (success && solicitudCreada) {
     const meta = tipoSeleccionado?.meta;
+    const cfg  = DERECHOS_CONFIG[tipoSeleccionado?.key];
     return (
-      <div className="max-w-2xl mx-auto p-6">
-        <div className="bg-white rounded-lg shadow-lg p-8 text-center">
-          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Solicitud Registrada!</h2>
-          <p className="text-gray-600 mb-6">Tu solicitud de <strong>{meta?.nombre}</strong> ha sido registrada.</p>
-          <div className="bg-gray-50 rounded-lg p-4 mb-6 text-left space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Número:</span>
-              <span className="font-bold">{solicitudCreada.numero_solicitud}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Tipo:</span>
-              <span>{meta?.icono} {meta?.nombre}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Estado:</span>
-              <span className="text-yellow-700 font-medium">Pendiente de validación</span>
-            </div>
+      <div style={{
+        minHeight:      '100vh',
+        background:     'var(--bg-base)',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        padding:        '2rem 1rem',
+      }}>
+        <div className="animate-fade-up" style={{
+          width:        '100%',
+          maxWidth:     '440px',
+          background:   'var(--bg-surface)',
+          borderRadius: '20px',
+          border:       '1px solid rgba(255,255,255,0.08)',
+          padding:      '40px',
+          textAlign:    'center',
+        }}>
+          {/* Check circle */}
+          <div style={{
+            width:          '56px',
+            height:         '56px',
+            borderRadius:   '50%',
+            background:     'rgba(16,185,129,0.15)',
+            border:         '1px solid rgba(16,185,129,0.3)',
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'center',
+            margin:         '0 auto 20px',
+          }}>
+            <CheckCircle size={26} color="#10B981" strokeWidth={2} />
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left text-sm text-blue-800">
-            <strong>Próximo paso:</strong> Revisa tu email y confirma tu identidad con el link que enviamos.
-            El link expira en 30 minutos.
+
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '26px', color: '#F0F0F5', marginBottom: '8px' }}>
+            Solicitud registrada
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '28px' }}>
+            Su solicitud de <strong style={{ color: cfg?.color }}>{meta?.nombre}</strong> fue recibida correctamente.
+          </p>
+
+          {/* Info row */}
+          <div style={{
+            background:   'var(--bg-overlay)',
+            borderRadius: '12px',
+            border:       '1px solid rgba(255,255,255,0.07)',
+            padding:      '20px',
+            marginBottom: '20px',
+            textAlign:    'left',
+          }}>
+            {[
+              { label: 'Número', value: solicitudCreada.numero_solicitud, mono: true },
+              { label: 'Derecho', value: `${meta?.articulo} — ${meta?.nombre}` },
+              { label: 'Estado', value: 'Pendiente de validación', highlight: '#F59E0B' },
+            ].map(({ label, value, mono, highlight }) => (
+              <div key={label} style={{
+                display:       'flex',
+                justifyContent:'space-between',
+                alignItems:    'center',
+                padding:       '8px 0',
+                borderBottom:  '1px solid rgba(255,255,255,0.05)',
+              }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+                <span style={{
+                  fontSize:   '13px',
+                  fontWeight: 600,
+                  color:      highlight || '#F0F0F5',
+                  fontFamily: mono ? 'monospace' : 'inherit',
+                }}>{value}</span>
+              </div>
+            ))}
           </div>
-          <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); }}
-            className="text-blue-600 hover:text-blue-700 font-medium underline text-sm">
-            ← Enviar otra solicitud
+
+          {/* Alerta */}
+          <div style={{
+            display:      'flex',
+            alignItems:   'flex-start',
+            gap:          '10px',
+            background:   'rgba(99,102,241,0.1)',
+            border:       '1px solid rgba(99,102,241,0.25)',
+            borderRadius: '10px',
+            padding:      '14px',
+            textAlign:    'left',
+            marginBottom: '24px',
+          }}>
+            <AlertCircle size={15} color="#818CF8" style={{ flexShrink: 0, marginTop: '1px' }} />
+            <p style={{ fontSize: '13px', color: '#A5B4FC', margin: 0, lineHeight: 1.5 }}>
+              Revise su email y confirme su identidad con el enlace enviado.
+              Expira en <strong>30 minutos</strong>.
+            </p>
+          </div>
+
+          <button
+            onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); }}
+            style={{
+              background: 'none',
+              border:     'none',
+              cursor:     'pointer',
+              display:    'flex',
+              alignItems: 'center',
+              gap:        '6px',
+              fontSize:   '13px',
+              color:      'var(--text-secondary)',
+              margin:     '0 auto',
+            }}
+          >
+            <ChevronLeft size={14} />
+            Enviar otra solicitud
           </button>
         </div>
       </div>
     );
   }
 
-  // ── Cargando config ─────────────────────────────────────
+  // ── Loading ─────────────────────────────────────────────
   if (loadingConfig) {
     return (
-      <div className="max-w-3xl mx-auto p-6 flex justify-center items-center py-16">
-        <Loader className="w-8 h-8 animate-spin text-blue-600" />
+      <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader size={28} color="var(--text-muted)" className="animate-spin" />
       </div>
     );
   }
@@ -137,137 +409,336 @@ const FormularioSolicitud = () => {
   // ── Pantalla selección de derecho ───────────────────────
   if (!tipoSeleccionado) {
     const derechos = config?.derechos || {};
-    return (
-      <div className="max-w-3xl mx-auto p-6">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">Ejercer mis Derechos ARCOP</h1>
-          <p className="text-gray-600">Seleccione el derecho que desea ejercer según la Ley 21.719</p>
-        </div>
+    const entries  = Object.entries(derechos).filter(([, dc]) => dc.activo !== false);
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(derechos).map(([key, dc]) => {
-            if (dc.activo === false) return null;
-            // Importar meta desde formularioService via config
-            const { DERECHOS_META } = require('../services/formularioService');
-            const meta = DERECHOS_META[key];
-            if (!meta) return null;
-            const c = COLOR_MAP[meta.color];
-            return (
-              <button key={key} onClick={() => handleSeleccionar(key, meta)}
-                className="text-left p-5 rounded-xl border-2 border-gray-200 bg-white hover:shadow-md transition-all hover:-translate-y-0.5">
-                <div className="flex items-start gap-4">
-                  <span className="text-3xl">{meta.icono}</span>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg mb-1">Derecho de {meta.nombre}</h3>
-                    <p className="text-sm text-gray-600">{meta.descripcion}</p>
-                    <p className="text-xs text-gray-400 mt-1">{meta.articulo} Ley 21.719</p>
-                  </div>
+    return (
+      <div style={{
+        minHeight:      '100vh',
+        background:     'var(--bg-base)',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        padding:        '3rem 1rem',
+      }}>
+        {/* Glow de fondo decorativo */}
+        <div style={{
+          position:     'fixed',
+          top:          '20%',
+          left:         '50%',
+          transform:    'translateX(-50%)',
+          width:        '600px',
+          height:       '300px',
+          background:   'radial-gradient(ellipse, rgba(99,102,241,0.06) 0%, transparent 70%)',
+          pointerEvents:'none',
+          zIndex:       0,
+        }} />
+
+        <div style={{ width: '100%', maxWidth: '640px', position: 'relative', zIndex: 1 }}>
+
+          {/* Header */}
+          <div className="animate-fade-up" style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <div style={{
+              display:        'inline-flex',
+              alignItems:     'center',
+              gap:            '6px',
+              background:     'rgba(99,102,241,0.1)',
+              border:         '1px solid rgba(99,102,241,0.2)',
+              borderRadius:   '20px',
+              padding:        '4px 14px',
+              fontSize:       '11px',
+              fontWeight:     600,
+              letterSpacing:  '0.1em',
+              textTransform:  'uppercase',
+              color:          '#818CF8',
+              marginBottom:   '20px',
+            }}>
+              <Lock size={10} />
+              Portal ARCOP · Ley 21.719
+            </div>
+
+            <h1 style={{
+              fontFamily:   'var(--font-display)',
+              fontSize:     'clamp(32px, 5vw, 48px)',
+              fontWeight:   400,
+              color:        '#F0F0F5',
+              lineHeight:   1.1,
+              marginBottom: '12px',
+              letterSpacing:'-0.02em',
+            }}>
+              Ejercer mis<br />
+              <em style={{ color: '#818CF8', fontStyle: 'italic' }}>Derechos</em> ARCOP
+            </h1>
+
+            <p style={{
+              fontSize:   '14px',
+              color:      'var(--text-secondary)',
+              maxWidth:   '380px',
+              margin:     '0 auto',
+              lineHeight: 1.6,
+            }}>
+              Seleccione el derecho que desea ejercer conforme a la Ley 21.719 de Protección de Datos Personales.
+            </p>
+          </div>
+
+          {/* Grid de cards */}
+          <div style={{
+            display:             'grid',
+            gridTemplateColumns: entries.length === 5 ? 'repeat(2, 1fr)' : 'repeat(2, 1fr)',
+            gap:                 '12px',
+          }}>
+            {entries.map(([key, ], i) => {
+              const { DERECHOS_META } = require('../services/formularioService');
+              const meta = DERECHOS_META[key];
+              if (!meta) return null;
+              // Card de portabilidad (5ta) ocupa todo el ancho
+              const isLast = i === entries.length - 1 && entries.length % 2 !== 0;
+              return (
+                <div key={key} style={{ gridColumn: isLast ? '1 / -1' : 'auto' }}>
+                  <DerechoCard
+                    keyDerecho={key}
+                    meta={meta}
+                    onSeleccionar={handleSeleccionar}
+                    index={i}
+                  />
                 </div>
-              </button>
-            );
-          })}
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="animate-fade-up stagger-5" style={{
+            display:        'flex',
+            alignItems:     'center',
+            justifyContent: 'center',
+            gap:            '6px',
+            marginTop:      '32px',
+            fontSize:       '12px',
+            color:          'var(--text-muted)',
+          }}>
+            <Lock size={11} />
+            Datos protegidos conforme a la Ley 21.719 — Chile
+          </div>
+
         </div>
-        <p className="text-center text-xs text-gray-500 mt-6">
-          🔒 Sus datos están protegidos según la Ley 21.719
-        </p>
       </div>
     );
   }
 
-  // ── Formulario dinámico ─────────────────────────────────
-  const { meta } = tipoSeleccionado;
-  const colores  = COLOR_MAP[meta.color];
+  // ── Formulario dinámico ────────────────────────────────
+  const { meta }                   = tipoSeleccionado;
+  const cfg                        = DERECHOS_CONFIG[tipoSeleccionado.key] || {};
+  const { Icon, color, gradient }  = cfg;
   const { identidad, especificos } = getCamposParaFormulario(tipoSeleccionado.key);
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="bg-white rounded-lg shadow-lg p-8">
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', padding: '2rem 1rem 4rem' }}>
+      <div style={{ maxWidth: '560px', margin: '0 auto' }}>
 
-        {/* Header */}
-        <div className="mb-6">
-          <button onClick={() => setTipoSeleccionado(null)}
-            className="text-sm text-gray-500 hover:text-gray-700 mb-4 block">
-            ← Cambiar tipo de solicitud
-          </button>
-          <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium mb-3 ${colores.badge}`}>
-            {meta.icono} Derecho de {meta.nombre}
-          </span>
-          <h1 className="text-2xl font-bold text-gray-900">Solicitud de {meta.nombre}</h1>
-          <p className="text-gray-600 mt-1">{meta.descripcion}</p>
+        {/* Back */}
+        <button
+          onClick={() => setTipoSeleccionado(null)}
+          style={{
+            display:    'flex',
+            alignItems: 'center',
+            gap:        '6px',
+            background: 'none',
+            border:     'none',
+            cursor:     'pointer',
+            fontSize:   '13px',
+            color:      'var(--text-secondary)',
+            marginBottom:'24px',
+            padding:    0,
+          }}
+        >
+          <ChevronLeft size={15} />
+          Cambiar tipo de solicitud
+        </button>
+
+        {/* Header del formulario */}
+        <div className="animate-fade-up" style={{ marginBottom: '28px' }}>
+          <div style={{
+            display:     'inline-flex',
+            alignItems:  'center',
+            gap:         '8px',
+            background:  color + '15',
+            border:      `1px solid ${color}30`,
+            borderRadius:'20px',
+            padding:     '4px 12px 4px 8px',
+            marginBottom:'14px',
+          }}>
+            {Icon && <Icon size={14} color={color} />}
+            <span style={{ fontSize: '11px', fontWeight: 700, color, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              Derecho de {meta.nombre} · {meta.articulo}
+            </span>
+          </div>
+          <h1 style={{
+            fontFamily:   'var(--font-display)',
+            fontSize:     '28px',
+            fontWeight:   400,
+            color:        '#F0F0F5',
+            margin:       '0 0 6px',
+            letterSpacing:'-0.01em',
+          }}>
+            Solicitud de {meta.nombre}
+          </h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+            {meta.descripcion}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+        {/* Card formulario */}
+        <div className="animate-fade-up" style={{
+          background:   'var(--bg-surface)',
+          borderRadius: '20px',
+          border:       '1px solid rgba(255,255,255,0.08)',
+          overflow:     'hidden',
+        }}>
+          {/* Línea de acento top */}
+          <div style={{ height: '2px', background: `linear-gradient(90deg, ${color}, transparent)` }} />
 
-          {/* Campos de identidad */}
-          <div className="border-b border-gray-100 pb-5">
-            <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Datos Personales</h2>
-            <div className="space-y-4">
-              {identidad.map(campo => (
-                <CampoRenderer
-                  key={campo.id}
-                  campo={campo}
-                  register={register}
-                  watch={watch}
-                  setValue={campo.tipo === 'rut' ? setValue : undefined}
-                  errors={errors}
-                />
-              ))}
-            </div>
-          </div>
+          <form onSubmit={handleSubmit(onSubmit)} style={{ padding: '28px' }}>
 
-          {/* Campos específicos del derecho */}
-          {especificos.length > 0 && (
-            <div className="border-b border-gray-100 pb-5">
-              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
-                Detalles de la Solicitud
-              </h2>
-              <div className="space-y-4">
-                {especificos.map(campo => (
+            {/* Datos personales */}
+            <div style={{ marginBottom: '28px' }}>
+              <p style={{
+                fontSize:     '10px',
+                fontWeight:   700,
+                letterSpacing:'0.12em',
+                textTransform:'uppercase',
+                color:        'var(--text-muted)',
+                marginBottom: '16px',
+              }}>
+                Datos personales
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {identidad.map(campo => (
                   <CampoRenderer
                     key={campo.id}
                     campo={campo}
                     register={register}
                     watch={watch}
-                    setValue={setValue}
+                    setValue={campo.tipo === 'rut' ? setValue : undefined}
                     errors={errors}
                   />
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Términos */}
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-            <label className="flex items-start cursor-pointer">
-              <input
-                {...register('acepta_terminos', { required: 'Debes aceptar los términos' })}
-                type="checkbox"
-                className="w-5 h-5 text-blue-600 rounded mt-0.5"
-              />
-              <span className="ml-3 text-sm text-gray-700">
-                Declaro que la información es verídica y acepto el tratamiento de mis datos para
-                gestionar esta solicitud conforme a la <strong>Ley 21.719</strong>.
-                <span className="text-red-500"> *</span>
-              </span>
-            </label>
-            {errors.acepta_terminos && (
-              <p className="mt-2 text-sm text-red-600 ml-8 flex items-center gap-1">
-                <AlertCircle className="w-4 h-4" />{errors.acepta_terminos.message}
-              </p>
+            {/* Detalles del derecho */}
+            {especificos.length > 0 && (
+              <div style={{
+                borderTop:    '1px solid rgba(255,255,255,0.06)',
+                paddingTop:   '24px',
+                marginBottom: '28px',
+              }}>
+                <p style={{
+                  fontSize:     '10px',
+                  fontWeight:   700,
+                  letterSpacing:'0.12em',
+                  textTransform:'uppercase',
+                  color:        'var(--text-muted)',
+                  marginBottom: '16px',
+                }}>
+                  Detalles de la solicitud
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {especificos.map(campo => (
+                    <CampoRenderer
+                      key={campo.id}
+                      campo={campo}
+                      register={register}
+                      watch={watch}
+                      setValue={setValue}
+                      errors={errors}
+                    />
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
 
-          {/* Submit */}
-          <button type="submit" disabled={loading}
-            className={`w-full flex items-center justify-center px-6 py-4 text-white font-medium text-lg rounded-lg transition-all shadow-lg disabled:opacity-50 ${colores.btn}`}>
-            {loading
-              ? <><Loader className="animate-spin mr-3 h-6 w-6" />Enviando...</>
-              : <><Send className="mr-3 h-6 w-6" />Enviar Solicitud de {meta.nombre}</>
-            }
-          </button>
+            {/* Términos */}
+            <div style={{
+              borderTop:  '1px solid rgba(255,255,255,0.06)',
+              paddingTop: '24px',
+              marginBottom:'24px',
+            }}>
+              <label style={{
+                display:      'flex',
+                alignItems:   'flex-start',
+                gap:          '12px',
+                background:   errors.acepta_terminos ? 'rgba(239,68,68,0.08)' : 'var(--bg-overlay)',
+                border:       `1px solid ${errors.acepta_terminos ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.07)'}`,
+                borderRadius: '12px',
+                padding:      '16px',
+                cursor:       'pointer',
+              }}>
+                <input
+                  {...register('acepta_terminos', { required: 'Debe aceptar para continuar' })}
+                  type="checkbox"
+                  style={{ width: '15px', height: '15px', marginTop: '2px', flexShrink: 0, accentColor: color }}
+                />
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  Declaro que la información es verídica y acepto el tratamiento de mis datos
+                  para gestionar esta solicitud conforme a la{' '}
+                  <strong style={{ color: '#F0F0F5' }}>Ley 21.719</strong>.
+                </span>
+              </label>
+              {errors.acepta_terminos && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+                  <AlertCircle size={12} color="#EF4444" />
+                  <span style={{ fontSize: '12px', color: '#EF4444' }}>{errors.acepta_terminos.message}</span>
+                </div>
+              )}
+            </div>
 
-          <p className="text-xs text-center text-gray-500">🔒 Sus datos están protegidos según la Ley 21.719</p>
-        </form>
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width:          '100%',
+                display:        'flex',
+                alignItems:     'center',
+                justifyContent: 'center',
+                gap:            '8px',
+                padding:        '14px 24px',
+                background:     loading ? 'rgba(255,255,255,0.05)' : color,
+                border:         'none',
+                borderRadius:   '12px',
+                color:          '#fff',
+                fontSize:       '14px',
+                fontWeight:     600,
+                fontFamily:     'var(--font-body)',
+                cursor:         loading ? 'not-allowed' : 'pointer',
+                opacity:        loading ? 0.6 : 1,
+                transition:     'all 0.2s',
+                boxShadow:      loading ? 'none' : `0 4px 20px ${color}40`,
+              }}
+            >
+              {loading ? (
+                <><Loader size={15} className="animate-spin" /> Enviando...</>
+              ) : (
+                <><Send size={15} /> Enviar Solicitud</>
+              )}
+            </button>
+
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          display:        'flex',
+          alignItems:     'center',
+          justifyContent: 'center',
+          gap:            '6px',
+          marginTop:      '20px',
+          fontSize:       '11px',
+          color:          'var(--text-muted)',
+        }}>
+          <Lock size={11} />
+          Datos protegidos conforme a la Ley 21.719 — Chile
+        </div>
+
       </div>
     </div>
   );

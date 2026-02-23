@@ -1,243 +1,252 @@
-    import React, { useState } from 'react';
+// ============================================================
+// Navbar v3 — Fintech dark, glassmorphism sutil
+// ============================================================
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { FileText, Menu, X, Home, Search, LayoutDashboard } from 'lucide-react';
+import {
+  ShieldCheck, Menu, X,
+  LayoutDashboard, ClipboardList, BarChart2,
+  Settings, Home, Search, ChevronRight
+} from 'lucide-react';
+
+const NAV_DPO = [
+  { to: '/dpo/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+  { to: '/dpo',               label: 'Solicitudes',   icon: ClipboardList   },
+  { to: '/dpo/reportes',      label: 'Reportes',      icon: BarChart2       },
+  { to: '/dpo/configuracion', label: 'Configuración', icon: Settings        },
+];
+
+const NAV_PUBLIC = [
+  { to: '/',       label: 'Inicio',       icon: Home   },
+  { to: '/buscar', label: 'Mi Solicitud', icon: Search },
+];
 
 const Navbar = () => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const location        = useLocation();
+  const isDPO           = location.pathname.startsWith('/dpo');
 
-  // Detectar si estamos en zona DPO
-  const isDPOZone = location.pathname.startsWith('/dpo');
+  const isActive = (path) =>
+    path === '/dpo' ? location.pathname === '/dpo' : location.pathname.startsWith(path);
 
-  const isActive = (path) => {
-    return location.pathname === path;
-  };
+  const navItems = isDPO ? NAV_DPO : NAV_PUBLIC;
 
   return (
-    <nav className="bg-white shadow-sm sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          
-          {/* Logo y título */}
-          <div className="flex items-center">
-            <Link to="/" className="flex items-center space-x-3 hover:opacity-80 transition-opacity">
-              <div className="bg-blue-600 p-2 rounded-lg">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">Portal ARCOP</h1>
-                <p className="text-xs text-gray-500">Ley 21.719</p>
-              </div>
-            </Link>
-          </div>
+    <nav style={{
+      position:       'sticky',
+      top:            0,
+      zIndex:         50,
+      background:     'rgba(10,10,15,0.85)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      borderBottom:   '1px solid rgba(255,255,255,0.07)',
+    }}>
+      <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '56px' }}>
 
-          {/* Navegación Desktop */}
-          <div className="hidden md:flex items-center space-x-1">
-            {isDPOZone ? (
-              // Menú DPO
-              <>
-                <Link
-                  to="/dpo/dashboard"
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive('/dpo/dashboard')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <LayoutDashboard className="w-4 h-4 inline mr-2" />
-                  Dashboard
+          {/* Logo */}
+          <Link to={isDPO ? '/dpo/dashboard' : '/'} style={{
+            display:        'flex',
+            alignItems:     'center',
+            gap:            '10px',
+            textDecoration: 'none',
+          }}>
+            <div style={{
+              width:          '32px',
+              height:         '32px',
+              borderRadius:   '8px',
+              background:     'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+              display:        'flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              boxShadow:      '0 2px 12px rgba(99,102,241,0.35)',
+            }}>
+              <ShieldCheck size={16} color="#fff" strokeWidth={2.5} />
+            </div>
+            <div style={{ lineHeight: 1 }}>
+              <span style={{
+                display:      'block',
+                fontSize:     '14px',
+                fontWeight:   700,
+                color:        '#F0F0F5',
+                letterSpacing:'-0.01em',
+                fontFamily:   'var(--font-body)',
+              }}>
+                Portal ARCOP
+              </span>
+              <span style={{
+                display:      'block',
+                fontSize:     '9px',
+                fontWeight:   600,
+                color:        '#5A5A72',
+                letterSpacing:'0.12em',
+                textTransform:'uppercase',
+              }}>
+                Ley 21.719
+              </span>
+            </div>
+
+            {isDPO && (
+              <div style={{
+                marginLeft:    '12px',
+                paddingLeft:   '12px',
+                borderLeft:    '1px solid rgba(255,255,255,0.1)',
+                fontSize:      '9px',
+                fontWeight:    700,
+                letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+                color:         '#818CF8',
+                background:    'rgba(99,102,241,0.1)',
+                padding:       '3px 10px',
+                borderRadius:  '20px',
+              }}>
+                Zona DPO
+              </div>
+            )}
+          </Link>
+
+          {/* Nav desktop */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}
+               className="hidden-mobile">
+            {navItems.map(({ to, label, icon: Icon }) => {
+              const active = isActive(to);
+              return (
+                <Link key={to} to={to} style={{
+                  display:        'flex',
+                  alignItems:     'center',
+                  gap:            '6px',
+                  padding:        '6px 12px',
+                  borderRadius:   '8px',
+                  fontSize:       '13px',
+                  fontWeight:     active ? 600 : 400,
+                  color:          active ? '#F0F0F5' : '#6B6B85',
+                  background:     active ? 'rgba(255,255,255,0.07)' : 'transparent',
+                  textDecoration: 'none',
+                  transition:     'all 0.15s',
+                }}>
+                  <Icon size={14} strokeWidth={active ? 2.5 : 2} />
+                  {label}
                 </Link>
-                <Link
-                  to="/dpo"
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive('/dpo')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  📋 Solicitudes
-                </Link>
-                <Link
-                  to="/dpo/reportes"
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive('/dpo/reportes')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  📊 Reportes
-                </Link>
-                <Link
-                  to="/dpo/configuracion"
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive('/dpo/configuracion')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  ⚙️ Configuración
-                </Link>
-                <div className="border-l border-gray-300 h-8 mx-2"></div>
-                <Link
-                  to="/"
-                  className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  ← Portal Público
-                </Link>
-              </>
+              );
+            })}
+
+            {!isDPO ? (
+              <Link to="/dpo/dashboard" style={{
+                marginLeft:     '8px',
+                display:        'flex',
+                alignItems:     'center',
+                gap:            '6px',
+                padding:        '6px 14px',
+                borderRadius:   '8px',
+                fontSize:       '13px',
+                fontWeight:     600,
+                background:     'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+                color:          '#fff',
+                textDecoration: 'none',
+                boxShadow:      '0 2px 10px rgba(99,102,241,0.3)',
+              }}>
+                Panel DPO
+                <ChevronRight size={13} />
+              </Link>
             ) : (
-              // Menú Público
-              <>
-                <Link
-                  to="/"
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive('/')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <Home className="w-4 h-4 inline mr-2" />
-                  Inicio
-                </Link>
-                <Link
-                  to="/buscar"
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isActive('/buscar')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <Search className="w-4 h-4 inline mr-2" />
-                  Mi Solicitud
-                </Link>
-                <div className="border-l border-gray-300 h-8 mx-2"></div>
-                <Link
-                  to="/dpo/dashboard"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                >
-                  👨‍💼 Panel DPO
-                </Link>
-              </>
+              <Link to="/" style={{
+                marginLeft:     '8px',
+                display:        'flex',
+                alignItems:     'center',
+                gap:            '6px',
+                padding:        '6px 12px',
+                borderRadius:   '8px',
+                fontSize:       '13px',
+                fontWeight:     400,
+                color:          '#6B6B85',
+                border:         '1px solid rgba(255,255,255,0.08)',
+                textDecoration: 'none',
+              }}>
+                <Home size={13} />
+                Portal
+              </Link>
             )}
           </div>
 
-          {/* Botón menú móvil */}
-          <div className="flex items-center md:hidden">
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-lg text-gray-600 hover:bg-gray-100"
-            >
-              {mobileMenuOpen ? (
-                <X className="w-6 h-6" />
-              ) : (
-                <Menu className="w-6 h-6" />
-              )}
-            </button>
-          </div>
+          {/* Hamburger mobile */}
+          <button
+            onClick={() => setOpen(!open)}
+            style={{
+              background: 'none',
+              border:     'none',
+              cursor:     'pointer',
+              color:      '#6B6B85',
+              padding:    '4px',
+              display:    'none',
+            }}
+            className="show-mobile"
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
 
-      {/* Menú móvil */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white">
-          <div className="px-4 py-3 space-y-1">
-            {isDPOZone ? (
-              // Menú móvil DPO
-              <>
-                <Link
-                  to="/dpo/dashboard"
-                  className={`block px-4 py-3 rounded-lg font-medium ${
-                    isActive('/dpo/dashboard')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <LayoutDashboard className="w-4 h-4 inline mr-2" />
-                  Dashboard
-                </Link>
-                <Link
-                  to="/dpo"
-                  className={`block px-4 py-3 rounded-lg font-medium ${
-                    isActive('/dpo')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  📋 Solicitudes
-                </Link>
-                <Link
-                  to="/dpo/reportes"
-                  className={`block px-4 py-3 rounded-lg font-medium ${
-                    isActive('/dpo/reportes')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  📊 Reportes
-                </Link>
-                <Link
-                  to="/dpo/configuracion"
-                  className={`block px-4 py-3 rounded-lg font-medium ${
-                    isActive('/dpo/configuracion')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  ⚙️ Configuración
-                </Link>
-                <div className="border-t border-gray-200 my-2"></div>
-                <Link
-                  to="/"
-                  className="block px-4 py-3 text-gray-600 hover:text-gray-900 font-medium"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  ← Portal Público
-                </Link>
-              </>
+      {/* Mobile menu */}
+      {open && (
+        <div style={{
+          borderTop:  '1px solid rgba(255,255,255,0.06)',
+          background: 'rgba(10,10,15,0.98)',
+          padding:    '12px 24px 20px',
+        }}>
+          {navItems.map(({ to, label, icon: Icon }) => (
+            <Link key={to} to={to}
+              onClick={() => setOpen(false)}
+              style={{
+                display:        'flex',
+                alignItems:     'center',
+                gap:            '10px',
+                padding:        '10px 12px',
+                borderRadius:   '10px',
+                fontSize:       '14px',
+                fontWeight:     isActive(to) ? 600 : 400,
+                color:          isActive(to) ? '#F0F0F5' : '#6B6B85',
+                background:     isActive(to) ? 'rgba(255,255,255,0.07)' : 'transparent',
+                textDecoration: 'none',
+                marginBottom:   '2px',
+              }}>
+              <Icon size={16} />
+              {label}
+            </Link>
+          ))}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '10px', paddingTop: '10px' }}>
+            {isDPO ? (
+              <Link to="/" onClick={() => setOpen(false)} style={{
+                display: 'flex', alignItems: 'center', gap: '8px',
+                padding: '10px 12px', borderRadius: '10px', fontSize: '14px',
+                color: '#6B6B85', textDecoration: 'none',
+              }}>
+                <Home size={16} /> Portal público
+              </Link>
             ) : (
-              // Menú móvil Público
-              <>
-                <Link
-                  to="/"
-                  className={`block px-4 py-3 rounded-lg font-medium ${
-                    isActive('/')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <Home className="w-4 h-4 inline mr-2" />
-                  Inicio
-                </Link>
-                <Link
-                  to="/buscar"
-                  className={`block px-4 py-3 rounded-lg font-medium ${
-                    isActive('/buscar')
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  <Search className="w-4 h-4 inline mr-2" />
-                  Mi Solicitud
-                </Link>
-                <div className="border-t border-gray-200 my-2"></div>
-                <Link
-                  to="/dpo/dashboard"
-                  className="block px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 text-center"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  👨‍💼 Panel DPO
-                </Link>
-              </>
+              <Link to="/dpo/dashboard" onClick={() => setOpen(false)} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                padding: '12px', borderRadius: '10px', fontSize: '14px', fontWeight: 600,
+                background: 'linear-gradient(135deg, #6366F1, #4F46E5)', color: '#fff',
+                textDecoration: 'none',
+              }}>
+                Panel DPO <ChevronRight size={14} />
+              </Link>
             )}
           </div>
         </div>
       )}
+
+      {/* Responsive helpers */}
+      <style>{`
+        @media (min-width: 768px) {
+          .hidden-mobile { display: flex !important; }
+          .show-mobile   { display: none !important; }
+        }
+        @media (max-width: 767px) {
+          .hidden-mobile { display: none !important; }
+          .show-mobile   { display: block !important; }
+        }
+      `}</style>
     </nav>
   );
 };
