@@ -1,7 +1,8 @@
 // ============================================================
-// DPO SERVICE — v3 (via Traductor)
-// Ya no llama directo a Apps Script.
-// Toda la comunicación pasa por adapters/index.js
+// src/services/dpoService.js — v4
+// CORRECCIÓN: actualizarSolicitud ahora pasa TODOS los campos
+// al adapter: asignado_a, asignado_email, fecha_termino_sla,
+// fecha_entrada_estado, campos_transicion, notas_dpo.
 // ============================================================
 
 import adapter from '../adapters';
@@ -40,16 +41,30 @@ export const obtenerEstadisticas = async () => {
 };
 
 // ── Actualizar estado de solicitud ────────────────────────
+// CORRECCIÓN v4: ya no descarta campos. Pasa todo lo que
+// recibe desde PanelDPO al adapter (y este al backend).
 export const actualizarSolicitud = async (id, updates) => {
   try {
     console.log('🔄 Actualizando solicitud — ID:', id, 'Updates:', updates);
 
     if (!id) return { status: 'error', message: 'ID de solicitud requerido' };
 
-    const result = await adapter.updateSolicitud(id, {
-      estado:    updates.estado    || '',
-      notas_dpo: updates.notas_dpo || '',
-    });
+    // Construir payload completo — no filtrar campos
+    const payload = {
+      estado:               updates.estado               || '',
+      notas_dpo:            updates.notas_dpo            || '',
+      asignado_a:           updates.asignado_a           || '',
+      asignado_email:       updates.asignado_email       || '',
+      asignado_en:          updates.asignado_en          || '',
+      fecha_entrada_estado: updates.fecha_entrada_estado || '',
+      fecha_termino_sla:    updates.fecha_termino_sla    || '',
+      // campos adicionales de transición (ej: sistemas_afectados, url_datos, etc.)
+      ...(updates.campos_transicion || {}),
+    };
+
+    console.log('📦 Payload completo hacia adapter:', payload);
+
+    const result = await adapter.updateSolicitud(id, payload);
 
     console.log('✅ Resultado:', result);
     return result;

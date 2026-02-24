@@ -1,18 +1,75 @@
 // ============================================================
-// PanelDPO.jsx — v3
-// Agrega selector de actor responsable al cambiar a un estado
-// que tenga actores configurados en el flujo
+// PanelDPO.jsx — v4.0
+// CORRECCIONES:
+//   1. Modal "Cambiar Estado" renderiza y captura campos_transicion
+//      (sistemas_afectados, url_datos, confirmación, etc.)
+//   2. handleCambiarEstado valida campos obligatorios antes de enviar
+//   3. Se pasa campos_transicion al servicio como objeto plano
+//   4. Asignación de responsable completamente funcional
 // ============================================================
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, Filter, Loader, X, CheckCircle, Clock, User } from 'lucide-react';
+import { Search, Filter, Loader, X, CheckCircle, Clock, User, AlertTriangle, Link, AlignLeft, ToggleLeft, ChevronDown } from 'lucide-react';
 import { obtenerTodasSolicitudes, actualizarSolicitud, marcarComoResuelta } from '../services/dpoService';
 import SolicitudesTable from '../components/SolicitudesTable';
 import { ESTADOS, ESTADO_LABELS } from '../utils/constants';
 import { toast } from 'react-toastify';
-import { obtenerFlujoConfig } from '../services/flujoService';
+import { obtenerFlujoConfig, buildConfigDefault } from '../services/flujoService';
 
+// ── Render de un campo de transición ─────────────────────
+const CampoTransicion = ({ campo, value, onChange }) => {
+  const base = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white';
+
+  switch (campo.tipo) {
+    case 'url':
+      return (
+        <input type="url" value={value || ''} onChange={e => onChange(campo.id, e.target.value)}
+          placeholder={campo.placeholder || 'https://...'}
+          className={base} />
+      );
+    case 'textarea':
+      return (
+        <textarea rows={3} value={value || ''} onChange={e => onChange(campo.id, e.target.value)}
+          placeholder={campo.placeholder || ''}
+          className={base + ' resize-none'} />
+      );
+    case 'select':
+      return (
+        <select value={value || ''} onChange={e => onChange(campo.id, e.target.value)} className={base}>
+          <option value="">— Selecciona —</option>
+          {(campo.opciones || []).map(op => (
+            <option key={op} value={op}>{op}</option>
+          ))}
+        </select>
+      );
+    case 'checkbox':
+      return (
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input type="checkbox" checked={!!value} onChange={e => onChange(campo.id, e.target.checked)}
+            className="w-4 h-4 mt-0.5 accent-blue-600 flex-shrink-0" />
+          <span className="text-sm text-gray-700">{campo.label}</span>
+        </label>
+      );
+    default: // text
+      return (
+        <input type="text" value={value || ''} onChange={e => onChange(campo.id, e.target.value)}
+          placeholder={campo.placeholder || ''}
+          className={base} />
+      );
+  }
+};
+
+// ── Icono por tipo de campo ───────────────────────────────
+const iconoCampo = (tipo) => {
+  if (tipo === 'url')      return <Link className="w-3.5 h-3.5" />;
+  if (tipo === 'textarea') return <AlignLeft className="w-3.5 h-3.5" />;
+  if (tipo === 'checkbox') return <ToggleLeft className="w-3.5 h-3.5" />;
+  if (tipo === 'select')   return <ChevronDown className="w-3.5 h-3.5" />;
+  return null;
+};
+
+// ─────────────────────────────────────────────────────────
 const PanelDPO = () => {
   const location = useLocation();
 
@@ -24,62 +81,92 @@ const PanelDPO = () => {
   const [modalDetalle,        setModalDetalle]        = useState(null);
   const [modalCambiarEstado,  setModalCambiarEstado]  = useState(null);
   const [nuevoEstado,         setNuevoEstado]         = useState('');
-  const [actorSeleccionado,   setActorSeleccionado]   = useState(null);   // { nombre, email } | null
-  const [actorLibre,          setActorLibre]          = useState('');     // texto libre si no hay actores
-  const [actoresDisponibles,  setActoresDisponibles]  = useState([]);     // actores del estado destino
-  const [flujoConfig,         setFlujoConfig]         = useState(null);   // flujo completo cargado
+  const [actorSeleccionado,   setActorSeleccionado]   = useState(null);
+  const [actorLibre,          setActorLibre]          = useState('');
+  const [actoresDisponibles,  setActoresDisponibles]  = useState([]);
+  // Inicializado con config por defecto para que el modal funcione inmediatamente
+  // Se reemplaza con la config guardada en Sheets cuando carga
+  const [flujoConfig,         setFlujoConfig]         = useState(() => buildConfigDefault());
 
+  // NUEVO: valores de campos de transición capturados en el modal
+  const [valoresCampos,       setValoresCampos]       = useState({});
+
+  const [procesando,          setProcesando]          = useState(false);
   const [modalResuelta,       setModalResuelta]       = useState(null);
   const [urlDescarga,         setUrlDescarga]         = useState('');
   const [formatoEntregado,    setFormatoEntregado]    = useState('PDF');
-  const [procesando,          setProcesando]          = useState(false);
 
-  // ── Leer filtro desde Dashboard ────────────────────────────
+  // ── Inicialización ─────────────────────────────────────
+  useEffect(() => {
+    cargarDatos();
+    cargarFlujoConfig();
+  }, []);
+
   useEffect(() => {
     if (location.state?.filtro) {
-      setFiltroEspecial(location.state.filtro);
-      setFiltros({ estado: '', busqueda: '' });
-      window.history.replaceState({}, document.title);
+      const f = location.state.filtro;
+      if (f.estado)       setFiltros(prev => ({ ...prev, estado: f.estado }));
+      if (f.por_vencer)   setFiltroEspecial({ por_vencer: true });
+      if (f.sin_asignar)  setFiltroEspecial({ sin_asignar: true });
     }
   }, [location.state]);
 
-  useEffect(() => { cargarSolicitudes(); }, []);
-
-  // Cargar flujoConfig una sola vez
-  useEffect(() => {
-    obtenerFlujoConfig().then(r => {
-      if (r.status === 'success') setFlujoConfig(r.data);
-    }).catch(() => {});
-  }, []);
-
-  const cargarSolicitudes = async () => {
+  const cargarDatos = async () => {
     try {
       setLoading(true);
-      const result = await obtenerTodasSolicitudes(filtros);
+      const result = await obtenerTodasSolicitudes({});
       if (result.status === 'success') setSolicitudes(result.data || []);
-      else toast.error('Error al cargar solicitudes');
-    } catch { toast.error('Error al cargar solicitudes'); }
-    finally { setLoading(false); }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAplicarFiltros = () => cargarSolicitudes();
+  const cargarFlujoConfig = async () => {
+    try {
+      console.log('🔄 Cargando flujoConfig...');
+      const result = await obtenerFlujoConfig();
+      console.log('📋 obtenerFlujoConfig resultado:', result?.status, '| data:', result?.data ? 'OK' : 'null/falsy');
+      if (result.status === 'success' && result.data) {
+        setFlujoConfig(result.data);
+        console.log('✅ flujoConfig seteado OK');
+      } else {
+        console.warn('⚠️ flujoConfig no seteado — status:', result?.status, '| data:', result?.data);
+      }
+    } catch (e) {
+      console.error('❌ Error cargando flujoConfig:', e);
+    }
+  };
 
-  // ── Solicitudes filtradas ──────────────────────────────────
-  const solicitudesFiltradas = (() => {
-    if (!filtroEspecial) return solicitudes;
+  // ── Filtrado ───────────────────────────────────────────
+  const solicitudesFiltradas = useMemo(() => {
+    let s = solicitudes;
+    if (filtros.estado)   s = s.filter(x => x.estado === filtros.estado);
+    if (filtros.busqueda) {
+      const q = filtros.busqueda.toLowerCase();
+      s = s.filter(x =>
+        (x.nombre_completo || '').toLowerCase().includes(q) ||
+        (x.rut             || '').toLowerCase().includes(q) ||
+        (x.email           || '').toLowerCase().includes(q) ||
+        (x.numero_solicitud|| '').toLowerCase().includes(q)
+      );
+    }
+    if (!filtroEspecial) return s;
     if (filtroEspecial.por_vencer) {
       const limite = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-      return solicitudes.filter(s => {
-        const fl = new Date(s.fecha_limite);
-        return s.estado !== 'RESUELTA' && s.estado !== 'CERRADA' && fl < limite;
+      return s.filter(x => {
+        if (!x.fecha_limite) return false;
+        const fl = new Date(x.fecha_limite);
+        return x.estado !== 'RESUELTA' && x.estado !== 'CERRADA' && fl < limite;
       });
     }
-    if (filtroEspecial.sin_asignar) return solicitudes.filter(s => !s.asignado_a && s.estado !== 'CERRADA' && s.estado !== 'RESUELTA');
-    if (filtroEspecial.estado) return solicitudes.filter(s => s.estado === filtroEspecial.estado);
-    return solicitudes;
-  })();
+    if (filtroEspecial.sin_asignar) return s.filter(x => !x.asignado_a && x.estado !== 'CERRADA' && x.estado !== 'RESUELTA');
+    if (filtroEspecial.estado)      return s.filter(x => x.estado === filtroEspecial.estado);
+    return s;
+  }, [solicitudes, filtros, filtroEspecial]);
 
-  // ── Helpers ────────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────
   const getFieldValue = (obj, fieldName) => {
     if (!obj) return '';
     for (const k of [fieldName, fieldName.toUpperCase(), fieldName.toLowerCase()]) {
@@ -88,15 +175,13 @@ const PanelDPO = () => {
     return '';
   };
 
-  const getSolicitudId = (solicitud) => {
-    if (!solicitud) return null;
-    for (const campo of ['id', 'ID', 'Id']) {
-      const v = solicitud[campo];
-      if (v && v.toString().trim()) return v.toString().trim();
+  const getSolicitudId = (s) => {
+    if (!s) return null;
+    for (const c of ['id', 'ID', 'Id']) {
+      const v = s[c]; if (v && v.toString().trim()) return v.toString().trim();
     }
-    for (const campo of ['numero_solicitud', 'NUMERO_SOLICITUD']) {
-      const v = solicitud[campo];
-      if (v && v.toString().trim()) return v.toString().trim();
+    for (const c of ['numero_solicitud', 'NUMERO_SOLICITUD']) {
+      const v = s[c]; if (v && v.toString().trim()) return v.toString().trim();
     }
     return null;
   };
@@ -110,60 +195,107 @@ const PanelDPO = () => {
     } catch { return 'Fecha inválida'; }
   };
 
-  // Obtener actores configurados para un estado y tipo de solicitud
-  const getActoresParaEstado = (estadoId, tipoSolicitud) => {
+  // ── Helpers de flujo (normalizados, sin race condition) ──
+
+  // ID canónico: mayúsculas, sin espacios
+  const normId = (s) => (s || '').toString().toUpperCase().trim();
+
+  // Estados del flujo con IDs y transiciones completamente normalizados
+  const getEstadosDerecho = (tipo) => {
     if (!flujoConfig) return [];
-    const tipo    = (tipoSolicitud || 'ACCESO').toUpperCase();
-    const estados = flujoConfig.derechos?.[tipo]?.estados || [];
-    const estado  = estados.find(e => e.id === estadoId);
-    return estado?.actores || [];
+    const tipoNorm = normId(tipo);
+    return (flujoConfig.derechos?.[tipoNorm]?.estados || []).map(e => ({
+      ...e,
+      id: normId(e.id),
+      transiciones_posibles: (e.transiciones_posibles || []).map(normId),
+      actores:          e.actores          || [],
+      campos_transicion: e.campos_transicion || [],
+    }));
   };
 
-  // Calcular fecha de término según SLA del estado
-  const getFechaTerminoSLA = (estadoId, tipoSolicitud) => {
-    if (!flujoConfig) return null;
-    const tipo    = (tipoSolicitud || 'ACCESO').toUpperCase();
-    const estados = flujoConfig.derechos?.[tipo]?.estados || [];
-    const estado  = estados.find(e => e.id === estadoId);
-    const slaDias = estado?.sla_dias || 0;
+  // Calcula fecha de término en días hábiles desde hoy
+  const calcFechaTerminoSLA = (slaDias) => {
     if (!slaDias) return null;
-    // Calcular días hábiles desde hoy
     let dias = slaDias;
     const fecha = new Date();
     while (dias > 0) {
       fecha.setDate(fecha.getDate() + 1);
-      const dow = fecha.getDay();
-      if (dow !== 0 && dow !== 6) dias--; // excluye sábado y domingo
+      if (fecha.getDay() !== 0 && fecha.getDay() !== 6) dias--;
     }
     return fecha;
   };
 
-  // ── Handlers ───────────────────────────────────────────────
-  const handleVerDetalle = (solicitud) => setModalDetalle(solicitud);
-  const handleCerrarDetalle = () => setModalDetalle(null);
+  // ── Handlers ───────────────────────────────────────────
+  const handleVerDetalle    = (s) => setModalDetalle(s);
+  const handleCerrarDetalle = ()  => setModalDetalle(null);
 
-  const handleAbrirCambiarEstado = (solicitud) => {
-    const estadoActualId   = getFieldValue(solicitud, 'estado') || 'PENDIENTE';
-    const tipo             = (getFieldValue(solicitud, 'tipo') || 'ACCESO').toUpperCase();
-    const estadosDerecho   = flujoConfig?.derechos?.[tipo]?.estados || [];
-    const defActual        = estadosDerecho.find(e => e.id === estadoActualId);
-    const transIds         = defActual?.transiciones_posibles || [];
-    const primerDestino    = transIds[0] || estadoActualId;
+  const handleAbrirCambiarEstado = async (solicitud) => {
+    const estadoActualId = normId(getFieldValue(solicitud, 'estado') || 'PENDIENTE');
+    const tipo           = normId(getFieldValue(solicitud, 'tipo') || 'ACCESO');
+
+    // Si flujoConfig aún no cargó, esperar a que lo haga antes de abrir el modal
+    let config = flujoConfig;
+    if (!config) {
+      console.log('⏳ flujoConfig null — cargando antes de abrir modal...');
+      try {
+        const result = await obtenerFlujoConfig();
+        if (result.status === 'success' && result.data) {
+          config = result.data;
+          setFlujoConfig(config);
+          console.log('✅ flujoConfig cargado on-demand');
+        } else {
+          console.warn('⚠️ obtenerFlujoConfig falló on-demand:', result);
+        }
+      } catch (e) {
+        console.error('❌ Error cargando flujoConfig on-demand:', e);
+      }
+    }
+
+    // Resolver transiciones usando config local (no el state que puede estar desactualizado)
+    const estadosDerecho = config
+      ? (config.derechos?.[tipo]?.estados || []).map(e => ({
+          ...e,
+          id: normId(e.id),
+          transiciones_posibles: (e.transiciones_posibles || []).map(normId),
+          actores: e.actores || [],
+          campos_transicion: e.campos_transicion || [],
+        }))
+      : [];
+
+    const defActual      = estadosDerecho.find(e => e.id === estadoActualId);
+    const transIds       = defActual?.transiciones_posibles || [];
+    const estadosDestino = estadosDerecho.filter(e => transIds.includes(e.id) && e.activo !== false);
+    const primerDestino  = estadosDestino.length > 0 ? estadosDestino[0].id : '';
+
+    console.log('🎯 Modal flujo —', tipo, estadoActualId, '→', primerDestino, '| destinos:', estadosDestino.map(e=>e.id));
+
+    const actoresInicio  = primerDestino
+      ? (estadosDerecho.find(e => e.id === primerDestino)?.actores || [])
+      : [];
 
     setModalCambiarEstado(solicitud);
     setNuevoEstado(primerDestino);
     setActorSeleccionado(null);
     setActorLibre('');
-    setActoresDisponibles(getActoresParaEstado(primerDestino, tipo));
+    setValoresCampos({});
+    setActoresDisponibles(actoresInicio);
   };
 
-  // Cuando cambia el estado destino, actualizar lista de actores
   const handleCambioEstadoDestino = (estadoId) => {
-    setNuevoEstado(estadoId);
+    const id             = normId(estadoId);
+    const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO');
+    const estadosDerecho = getEstadosDerecho(tipo);
+    const actores        = estadosDerecho.find(e => e.id === id)?.actores || [];
+
+    setNuevoEstado(id);
     setActorSeleccionado(null);
     setActorLibre('');
-    const tipo = getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO';
-    setActoresDisponibles(getActoresParaEstado(estadoId, tipo));
+    setValoresCampos({});
+    setActoresDisponibles(actores);
+  };
+
+  const handleCampoTransicion = (id, valor) => {
+    setValoresCampos(prev => ({ ...prev, [id]: valor }));
   };
 
   const handleCambiarEstado = async () => {
@@ -172,7 +304,24 @@ const PanelDPO = () => {
       return;
     }
 
-    // Determinar quién queda asignado
+    // ── Validar campos de transición obligatorios ──────
+    const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO');
+    const estadosDerecho = getEstadosDerecho(tipo);
+    const defDestino     = estadosDerecho.find(e => e.id === normId(nuevoEstado));
+    const camposDestino  = defDestino?.campos_transicion || [];
+
+    const faltantes = camposDestino.filter(c => {
+      if (!c.obligatorio) return false;
+      if (c.tipo === 'checkbox') return !valoresCampos[c.id];
+      return !valoresCampos[c.id] || valoresCampos[c.id].toString().trim() === '';
+    });
+
+    if (faltantes.length > 0) {
+      toast.error('Completa los campos requeridos: ' + faltantes.map(c => c.label).join(', '));
+      return;
+    }
+
+    // ── Determinar actor asignado ──────────────────────
     let asignadoNombre = '';
     let asignadoEmail  = '';
     if (actorSeleccionado) {
@@ -182,137 +331,144 @@ const PanelDPO = () => {
       asignadoNombre = actorLibre.trim();
     }
 
-    // Calcular fechas SLA
-    const tipo         = getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO';
-    const fechaTermino = getFechaTerminoSLA(nuevoEstado, tipo);
+    const slaDias      = defDestino?.sla_dias || 0;
+    const fechaTermino = calcFechaTerminoSLA(slaDias);
 
     try {
       setProcesando(true);
       const id = getSolicitudId(modalCambiarEstado);
       if (!id) { toast.error('No se pudo obtener el ID'); return; }
 
-      const result = await actualizarSolicitud(id, {
-        estado:             nuevoEstado,
-        asignado_a:         asignadoNombre,
-        asignado_email:     asignadoEmail,
-        asignado_en:        new Date().toISOString(),
-        fecha_entrada_estado: new Date().toISOString(),
-        fecha_termino_sla:  fechaTermino ? fechaTermino.toISOString() : '',
-      });
+      // ── Payload completo hacia dpoService ─────────────
+      console.log('🚀 handleCambiarEstado — nuevoEstado:', nuevoEstado, '| valoresCampos:', valoresCampos);
+
+      // ── Si el estado destino es RESUELTA y hay url_datos,
+      //    usar resolverSolicitud (marcarResuelta en backend) que ya
+      //    envía el email correcto con botón de descarga.
+      //    Para todos los demás estados, usar actualizarSolicitud normal.
+      const esResueltaConUrl = nuevoEstado.toUpperCase() === 'RESUELTA' && valoresCampos.url_datos;
+
+      let result;
+      if (esResueltaConUrl) {
+        console.log('📦 Ruta RESUELTA → marcarComoResuelta con url:', valoresCampos.url_datos);
+        result = await marcarComoResuelta(id, valoresCampos.url_datos, valoresCampos.formato_entrega || 'PDF');
+      } else {
+        result = await actualizarSolicitud(id, {
+          estado:               nuevoEstado,
+          notas_dpo:            '',
+          asignado_a:           asignadoNombre,
+          asignado_email:       asignadoEmail,
+          asignado_en:          new Date().toISOString(),
+          fecha_entrada_estado: new Date().toISOString(),
+          fecha_termino_sla:    fechaTermino ? fechaTermino.toISOString() : '',
+          campos_transicion:    valoresCampos,
+        });
+      }
 
       if (result.status === 'success') {
         const msg = asignadoNombre
-          ? `✅ Estado actualizado y asignado a ${asignadoNombre}`
-          : '✅ Estado actualizado correctamente';
+          ? `Estado cambiado a "${nuevoEstado}" — asignado a ${asignadoNombre}`
+          : `Estado cambiado a "${nuevoEstado}"`;
         toast.success(msg);
         setModalCambiarEstado(null);
-        await cargarSolicitudes();
+        setValoresCampos({});
+        await cargarDatos();
       } else {
-        toast.error('Error al actualizar estado: ' + (result.message || ''));
+        toast.error(result.message || 'Error al cambiar estado');
       }
-    } catch { toast.error('Error al actualizar estado'); }
-    finally { setProcesando(false); }
+    } catch (e) {
+      toast.error('Error: ' + e.message);
+    } finally {
+      setProcesando(false);
+    }
   };
 
-  const handleAbrirMarcarResuelta = (solicitud) => {
-    setModalResuelta(solicitud);
+  const handleAbrirMarcarResuelta = (s) => {
+    setModalResuelta(s);
     setUrlDescarga('');
     setFormatoEntregado('PDF');
   };
 
   const handleMarcarResuelta = async () => {
-    if (!modalResuelta || !urlDescarga.trim()) {
-      toast.error('Ingresa la URL de descarga');
-      return;
-    }
+    if (!urlDescarga.trim()) { toast.error('La URL de descarga es requerida'); return; }
     try {
       setProcesando(true);
       const id = getSolicitudId(modalResuelta);
-      if (!id) { toast.error('No se pudo obtener el ID'); return; }
       const result = await marcarComoResuelta(id, urlDescarga, formatoEntregado);
       if (result.status === 'success') {
-        toast.success('✅ Solicitud resuelta. Email enviado al usuario.');
+        toast.success('Solicitud resuelta y email enviado al titular');
         setModalResuelta(null);
-        await cargarSolicitudes();
+        await cargarDatos();
       } else {
-        toast.error('Error: ' + (result.message || ''));
+        toast.error(result.message || 'Error al resolver');
       }
-    } catch { toast.error('Error al marcar como resuelta'); }
-    finally { setProcesando(false); }
+    } catch (e) {
+      toast.error('Error: ' + e.message);
+    } finally {
+      setProcesando(false);
+    }
   };
 
-  // ── Render ─────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">Cargando solicitudes...</p>
-        </div>
+  // ── Loading ────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-slate-400">
+        <Loader className="w-8 h-8 animate-spin" />
+        <span className="text-sm font-medium">Cargando solicitudes...</span>
       </div>
-    );
-  }
+    </div>
+  );
 
+  // ── Render ─────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-slate-50 py-8 px-4">
+      <div className="max-w-7xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Panel DPO</h1>
-          <p className="text-gray-600">Gestión de solicitudes de derechos ARCOP</p>
-        </div>
-
-        {/* Banner filtro especial */}
-        {filtroEspecial && (
-          <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-            <span className="text-sm text-blue-700 font-medium">
-              {filtroEspecial.por_vencer  && '🔴 Filtrando: Solicitudes por vencer (próximos 3 días)'}
-              {filtroEspecial.sin_asignar && '🟡 Filtrando: Solicitudes sin asignar'}
-              {filtroEspecial.estado === 'PENDIENTE' && '🔵 Filtrando: Pendientes de validación'}
-            </span>
-            <button onClick={() => setFiltroEspecial(null)}
-              className="ml-auto text-sm text-blue-600 hover:text-blue-800 font-medium underline">
-              Ver todas
-            </button>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold tracking-widest uppercase text-indigo-500 mb-1">Zona DPO</p>
+            <h1 className="text-2xl font-bold text-slate-900">Solicitudes</h1>
+            <p className="text-sm text-slate-400 mt-0.5">
+              {solicitudesFiltradas.length} de {solicitudes.length} solicitudes
+            </p>
           </div>
-        )}
-
-        {/* Filtros */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Search className="w-4 h-4 inline mr-1" /> Buscar
-              </label>
-              <input type="text" value={filtros.busqueda}
-                onChange={e => setFiltros({ ...filtros, busqueda: e.target.value })}
-                onKeyPress={e => e.key === 'Enter' && handleAplicarFiltros()}
-                placeholder="Nombre, RUT o email..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Filter className="w-4 h-4 inline mr-1" /> Estado
-              </label>
-              <select value={filtros.estado}
-                onChange={e => setFiltros({ ...filtros, estado: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                <option value="">Todos los estados</option>
-                {Object.entries(ESTADO_LABELS).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <button onClick={handleAplicarFiltros}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-            Aplicar filtros
+          <button onClick={cargarDatos}
+            className="flex items-center gap-1.5 text-sm text-slate-500 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
+            Actualizar
           </button>
         </div>
 
+        {/* Filtros */}
+        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input type="text" placeholder="Buscar por nombre, RUT, email o número..."
+              value={filtros.busqueda}
+              onChange={e => setFiltros(prev => ({ ...prev, busqueda: e.target.value }))}
+              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-400" />
+            <select value={filtros.estado}
+              onChange={e => { setFiltros(prev => ({ ...prev, estado: e.target.value })); setFiltroEspecial(null); }}
+              className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
+              <option value="">Todos los estados</option>
+              {Object.entries(ESTADO_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            {(filtros.estado || filtros.busqueda || filtroEspecial) && (
+              <button onClick={() => { setFiltros({ estado: '', busqueda: '' }); setFiltroEspecial(null); }}
+                className="flex items-center gap-1 text-xs text-rose-500 border border-rose-200 px-2.5 py-1.5 rounded-lg hover:bg-rose-50">
+                <X className="w-3 h-3" /> Limpiar
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Tabla */}
-        <div className="bg-white rounded-lg shadow-sm">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           <SolicitudesTable
             solicitudes={solicitudesFiltradas}
             onVerDetalle={handleVerDetalle}
@@ -323,10 +479,12 @@ const PanelDPO = () => {
 
       </div>
 
-      {/* ── Modal Detalle ─────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════
+          MODAL DETALLE
+      ══════════════════════════════════════════════════ */}
       {modalDetalle && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-start mb-6">
               <h3 className="text-xl font-bold text-gray-900">Detalle de Solicitud</h3>
               <button onClick={handleCerrarDetalle} className="text-gray-400 hover:text-gray-600">
@@ -335,19 +493,21 @@ const PanelDPO = () => {
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                ['Nombre', 'nombre_completo'],
-                ['RUT', 'rut'],
-                ['Email', 'email'],
-                ['Teléfono', 'telefono'],
-                ['Estado', 'estado'],
-                ['Tipo', 'tipo'],
-                ['Fecha Solicitud', 'fecha_solicitud'],
-                ['Fecha Límite', 'fecha_limite'],
+                ['Nombre',         'nombre_completo'],
+                ['RUT',            'rut'],
+                ['Email',          'email'],
+                ['Teléfono',       'telefono'],
+                ['Estado',         'estado'],
+                ['Tipo',           'tipo'],
+                ['Fecha Solicitud','fecha_solicitud'],
+                ['Fecha Límite',   'fecha_limite'],
               ].map(([label, field]) => (
                 <div key={field}>
-                  <label className="block text-sm font-medium text-gray-700">{label}</label>
-                  <p className="mt-1 text-sm text-gray-900">
-                    {field.includes('fecha') ? formatearFecha(getFieldValue(modalDetalle, field)) : (getFieldValue(modalDetalle, field) || 'N/A')}
+                  <label className="block text-sm font-medium text-gray-500">{label}</label>
+                  <p className="mt-1 text-sm text-gray-900 font-medium">
+                    {field.includes('fecha')
+                      ? formatearFecha(getFieldValue(modalDetalle, field))
+                      : (getFieldValue(modalDetalle, field) || '—')}
                   </p>
                 </div>
               ))}
@@ -360,21 +520,29 @@ const PanelDPO = () => {
                 </span>
               </div>
             )}
+            {getFieldValue(modalDetalle, 'fecha_termino_sla') && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600" />
+                <span className="text-sm text-amber-700">
+                  SLA vence: <strong>{formatearFecha(getFieldValue(modalDetalle, 'fecha_termino_sla'))}</strong>
+                </span>
+              </div>
+            )}
             {getFieldValue(modalDetalle, 'notas_dpo') && (
               <div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700">Notas DPO</label>
-                <p className="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
+                <label className="block text-sm font-medium text-gray-500 mb-1">Notas DPO</label>
+                <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg border border-gray-200">
                   {getFieldValue(modalDetalle, 'notas_dpo')}
                 </p>
               </div>
             )}
             <div className="flex gap-3 mt-6 justify-end">
               <button onClick={() => { handleCerrarDetalle(); handleAbrirCambiarEstado(modalDetalle); }}
-                className="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium">
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm">
                 Cambiar Estado
               </button>
               <button onClick={handleCerrarDetalle}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-medium">
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">
                 Cerrar
               </button>
             </div>
@@ -382,28 +550,55 @@ const PanelDPO = () => {
         </div>
       )}
 
-      {/* ── Modal Cambiar Estado ──────────────────────────── */}
+      {/* ══════════════════════════════════════════════════
+          MODAL CAMBIAR ESTADO — v4 con campos_transicion
+      ══════════════════════════════════════════════════ */}
       {modalCambiarEstado && (() => {
-        const tipo             = (getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO').toUpperCase();
-        const estadoActualId   = getFieldValue(modalCambiarEstado, 'estado') || 'PENDIENTE';
-        const numero           = getFieldValue(modalCambiarEstado, 'numero_solicitud') || getFieldValue(modalCambiarEstado, 'NUMERO_SOLICITUD');
-        const nombreTitular    = getFieldValue(modalCambiarEstado, 'nombre_completo');
+        // ── TODA la resolución del flujo usa getEstadosDerecho (normalización unificada) ──
+        const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO');
+        const estadoActualId = normId(getFieldValue(modalCambiarEstado, 'estado') || 'PENDIENTE');
+        const numero         = getFieldValue(modalCambiarEstado, 'numero_solicitud');
+        const nombreTitular  = getFieldValue(modalCambiarEstado, 'nombre_completo');
 
-        // Obtener estados del flujo del tipo correcto
-        const estadosDerecho   = flujoConfig?.derechos?.[tipo]?.estados || [];
-        const defActual        = estadosDerecho.find(e => e.id === estadoActualId);
-        // Transiciones posibles desde el estado actual
-        const transicionesIds  = defActual?.transiciones_posibles || [];
-        const estadosDestino   = estadosDerecho.filter(e => transicionesIds.includes(e.id) && e.activo);
-        // Si no hay flujoConfig o no hay transiciones, mostrar selector completo como fallback
-        const usarFallback     = estadosDestino.length === 0;
+        // getEstadosDerecho ya normaliza id Y transiciones_posibles — fuente única de verdad
+        const estadosDerecho  = getEstadosDerecho(tipo);
+        const defActual       = estadosDerecho.find(e => e.id === estadoActualId);
+        const transicionesIds = defActual?.transiciones_posibles || [];  // ya normalizados
+        const estadosDestino  = estadosDerecho.filter(
+          e => transicionesIds.includes(e.id) && e.activo !== false
+        );
 
-        const fechaTermino     = getFechaTerminoSLA(nuevoEstado, tipo);
+        // ── Lógica de presentación ──────────────────────────────
+        const tieneFlujoCargado = !!flujoConfig && estadosDerecho.length > 0;
+        const destinoUnico      = tieneFlujoCargado && estadosDestino.length === 1;
+        const variosDestinos    = tieneFlujoCargado && estadosDestino.length > 1;
+        // Fallback SOLO si no hay flujo cargado para este tipo
+        const usarFallback      = !tieneFlujoCargado;
+
+        // Estado final: es_final explícito O sin transiciones configuradas
+        const esEstadoFinal = tieneFlujoCargado && (
+          defActual?.es_final === true ||
+          (!defActual && false) ||  // estado desconocido → no bloquear
+          (defActual && transicionesIds.length === 0)
+        );
+
+        const nuevoEstadoNorm  = normId(nuevoEstado);
+        const defDestinoRender = estadosDerecho.find(e => e.id === nuevoEstadoNorm);
+        const fechaTermino     = calcFechaTerminoSLA(defDestinoRender?.sla_dias || 0);
         const hayActores       = actoresDisponibles.length > 0;
 
-        // Campos requeridos del estado destino (campos_transicion del destino)
-        const defDestino       = estadosDerecho.find(e => e.id === nuevoEstado);
-        const camposDestino    = defDestino?.campos_transicion || [];
+        const defDestino    = defDestinoRender;
+        const camposDestino = defDestino?.campos_transicion || [];
+        const hayCampos     = camposDestino.length > 0;
+
+        // === DEBUG TEMPORAL — quitar después ===
+        console.log('🎨 RENDER MODAL | nuevoEstado:', nuevoEstadoNorm,
+          '| defDestino:', defDestino?.id,
+          '| campos_transicion:', camposDestino.length,
+          '| hayCampos:', hayCampos,
+          '| estadoActualId:', estadoActualId,
+          '| cond final:', hayCampos && nuevoEstadoNorm !== estadoActualId);
+        // === FIN DEBUG ===
 
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -411,9 +606,9 @@ const PanelDPO = () => {
 
               <h3 className="text-xl font-bold text-gray-900 mb-1">Cambiar Estado</h3>
               <p className="text-sm text-gray-500 mb-5">
-                Solicitud <span className="font-semibold text-gray-700">{numero}</span>
-                {nombreTitular && <> — <span className="font-semibold text-gray-700">{nombreTitular}</span></>}
-                {' '}— Tipo: <span className="font-semibold text-gray-700">{tipo}</span>
+                {numero && <><span className="font-semibold text-gray-700">{numero}</span> — </>}
+                {nombreTitular && <><span className="font-semibold text-gray-700">{nombreTitular}</span> — </>}
+                <span className="font-semibold text-gray-700">{tipo}</span>
               </p>
 
               {/* Estado actual */}
@@ -421,45 +616,140 @@ const PanelDPO = () => {
                 Estado actual: <strong className="text-gray-800">{defActual?.nombre || estadoActualId}</strong>
               </div>
 
-              {/* Selector de estado destino */}
-              <div className="mb-4">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Mover a estado</label>
-                {usarFallback ? (
-                  // Fallback si no hay flujoConfig cargado
-                  <select value={nuevoEstado} onChange={e => handleCambioEstadoDestino(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                    {['PENDIENTE','VALIDADA','EN_PROCESO','RESUELTA','CERRADA'].map(id => (
-                      <option key={id} value={id}>{id}</option>
-                    ))}
-                  </select>
-                ) : (
-                  // Opciones dinámicas desde el flujo configurado
+              {/* ── Estado final: no hay a dónde ir ── */}
+              {esEstadoFinal && tieneFlujoCargado && (
+                <div className="mb-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  Este estado es final. No hay transiciones disponibles en el flujo configurado.
+                </div>
+              )}
+
+              {/* ── Destino único: mostrar como info, sin selector ── */}
+              {destinoUnico && !esEstadoFinal && (() => {
+                const dest = estadosDestino[0];
+                return (
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-2">Mover a estado</p>
+                    <div className="flex items-center gap-3 p-4 rounded-xl border-2 border-blue-500 bg-blue-50">
+                      <CheckCircle className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-blue-800">{dest.nombre}</p>
+                        {dest.descripcion && (
+                          <p className="text-xs text-blue-600 mt-0.5">{dest.descripcion}</p>
+                        )}
+                      </div>
+                      {dest.envia_email && (
+                        <span className="text-xs bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full flex-shrink-0">
+                          Email titular
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1.5 pl-1">
+                      Siguiente paso definido por el flujo configurado para {tipo}.
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* ── Varios destinos: radio buttons ── */}
+              {variosDestinos && !esEstadoFinal && (
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mover a estado</label>
                   <div className="space-y-2">
                     {estadosDestino.map(est => {
-                      const seleccionado = nuevoEstado === est.id;
+                      const sel = (nuevoEstado || '').toUpperCase() === est.id;
                       return (
                         <label key={est.id}
                           className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                            seleccionado ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:border-gray-300'
+                            sel ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
                           }`}>
                           <input type="radio" name="estadoDestino" className="w-4 h-4 accent-blue-600"
-                            checked={seleccionado}
-                            onChange={() => handleCambioEstadoDestino(est.id)} />
+                            checked={sel} onChange={() => handleCambioEstadoDestino(est.id)} />
                           <div className="flex-1">
                             <p className="text-sm font-semibold text-gray-800">{est.nombre}</p>
                             {est.descripcion && <p className="text-xs text-gray-500 mt-0.5">{est.descripcion}</p>}
                           </div>
                           {est.envia_email && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Email titular</span>
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full flex-shrink-0">
+                              Email titular
+                            </span>
                           )}
                         </label>
                       );
                     })}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* ── Asignación de actor ── */}
+              {/* ── Fallback: flujo no cargado, mostrar advertencia + selector básico ── */}
+              {usarFallback && !esEstadoFinal && (
+                <div className="mb-4">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Mover a estado</label>
+                  <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 flex items-center gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                    Flujo no configurado para {tipo}. Selecciona el estado manualmente.
+                  </div>
+                  <select value={nuevoEstado} onChange={e => handleCambioEstadoDestino(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                    <option value="">— Selecciona estado destino —</option>
+                    {['PENDIENTE','VALIDADA','EN_PROCESO','RESUELTA','CERRADA'].map(id => (
+                      <option key={id} value={id} disabled={id === estadoActualId}>{id}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+
+              {/* ── Campos de transición del estado destino ── */}
+              {hayCampos && nuevoEstado !== estadoActualId && (
+                <div className="mb-4 border border-violet-200 rounded-xl p-4 bg-violet-50 space-y-4">
+                  <p className="text-xs font-bold text-violet-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Información requerida para esta transición
+                  </p>
+                  {camposDestino.map(campo => {
+                    // Los campos tipo "checkbox" se renderizan de manera diferente
+                    if (campo.tipo === 'checkbox') {
+                      return (
+                        <div key={campo.id}>
+                          <label className="flex items-start gap-2 cursor-pointer group">
+                            <input type="checkbox"
+                              checked={!!valoresCampos[campo.id]}
+                              onChange={e => handleCampoTransicion(campo.id, e.target.checked)}
+                              className="w-4 h-4 mt-0.5 accent-violet-600 flex-shrink-0" />
+                            <span className="text-sm text-gray-700 group-hover:text-gray-900">
+                              {campo.label}
+                              {campo.obligatorio && <span className="text-rose-500 ml-1">*</span>}
+                            </span>
+                          </label>
+                          {campo.ayuda && (
+                            <p className="text-xs text-gray-400 mt-1 ml-6">{campo.ayuda}</p>
+                          )}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={campo.id}>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                          {iconoCampo(campo.tipo)}
+                          {campo.label}
+                          {campo.obligatorio && <span className="text-rose-500">*</span>}
+                        </label>
+                        {campo.ayuda && (
+                          <p className="text-xs text-gray-400 mb-1.5">{campo.ayuda}</p>
+                        )}
+                        <CampoTransicion
+                          campo={campo}
+                          value={valoresCampos[campo.id]}
+                          onChange={handleCampoTransicion}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ── Asignación de responsable ── */}
               {nuevoEstado && nuevoEstado !== estadoActualId && (
                 <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 mb-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -480,17 +770,20 @@ const PanelDPO = () => {
                           <input type="radio" name="actor" className="w-4 h-4 accent-indigo-600"
                             checked={actorSeleccionado?.email === actor.email}
                             onChange={() => { setActorSeleccionado(actor); setActorLibre(''); }} />
-                          <div>
+                          <div className="flex-1">
                             <p className="text-sm font-semibold text-gray-800">{actor.nombre}</p>
-                            {actor.email && <p className="text-xs text-gray-500">{actor.email}</p>}
+                            <p className="text-xs text-gray-500">{actor.email}</p>
                           </div>
+                          {actor.rol && (
+                            <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">
+                              {actor.rol}
+                            </span>
+                          )}
                         </label>
                       ))}
-                      {/* Opción "Otro" */}
+                      {/* Opción texto libre */}
                       <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        !actorSeleccionado && actorLibre
-                          ? 'border-indigo-500 bg-white'
-                          : 'border-transparent bg-white/60 hover:bg-white'
+                        !actorSeleccionado && !!actorLibre ? 'border-indigo-500 bg-white' : 'border-transparent bg-white/60 hover:bg-white'
                       }`}>
                         <input type="radio" name="actor" className="w-4 h-4 accent-indigo-600"
                           checked={!actorSeleccionado && !!actorLibre}
@@ -511,74 +804,78 @@ const PanelDPO = () => {
                 </div>
               )}
 
-              {/* Info SLA */}
+              {/* SLA info */}
               {fechaTermino && nuevoEstado !== estadoActualId && (
                 <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg mb-4 text-sm">
                   <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div className="text-amber-700">
-                    <p>Plazo SLA del estado <strong>{defDestino?.nombre}</strong>: debe completarse antes del</p>
+                    <p>Plazo SLA: debe completarse antes del</p>
                     <p className="font-bold text-amber-800 mt-0.5">
                       {fechaTermino.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
-                    <p className="text-xs text-amber-600 mt-1">Se notificará al responsable asignado por email.</p>
                   </div>
                 </div>
               )}
 
               <div className="flex gap-3 justify-end">
-                <button onClick={() => setModalCambiarEstado(null)} disabled={procesando}
-                  className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">
+                <button onClick={() => { setModalCambiarEstado(null); setValoresCampos({}); }} disabled={procesando}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm font-medium">
                   Cancelar
                 </button>
                 <button onClick={handleCambiarEstado}
                   disabled={procesando || (!usarFallback && nuevoEstado === estadoActualId)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium">
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium text-sm">
                   {procesando ? 'Guardando...' : 'Confirmar cambio'}
                 </button>
               </div>
+
             </div>
           </div>
         );
       })()}
 
-      {/* ── Modal Marcar Resuelta ─────────────────────────── */}
+      {/* ══════════════════════════════════════════════════
+          MODAL MARCAR RESUELTA
+      ══════════════════════════════════════════════════ */}
       {modalResuelta && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Marcar como Resuelta</h3>
-            <div className="space-y-4 mb-4">
+            <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">URL de Descarga *</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">URL de descarga <span className="text-rose-500">*</span></label>
                 <input type="url" value={urlDescarga} onChange={e => setUrlDescarga(e.target.value)}
                   placeholder="https://drive.google.com/..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
-                <p className="text-xs text-gray-500 mt-1">URL donde el usuario puede descargar sus datos</p>
+                  className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                <p className="text-xs text-gray-400 mt-1">URL donde el titular puede descargar sus datos</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Formato Entregado</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Formato entregado</label>
                 <select value={formatoEntregado} onChange={e => setFormatoEntregado(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
-                  <option value="PDF">PDF</option>
-                  <option value="CSV">CSV</option>
-                  <option value="JSON">JSON</option>
-                  <option value="XML">XML</option>
-                  <option value="Físico">Físico / Presencial</option>
+                  className="w-full px-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                  <option>PDF</option>
+                  <option>CSV</option>
+                  <option>JSON</option>
+                  <option>XML</option>
+                  <option>Físico</option>
                 </select>
               </div>
             </div>
             <div className="flex gap-3 justify-end">
               <button onClick={() => setModalResuelta(null)} disabled={procesando}
-                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm font-medium">
                 Cancelar
               </button>
               <button onClick={handleMarcarResuelta} disabled={procesando || !urlDescarga.trim()}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50 text-sm font-medium flex items-center gap-2">
+                <CheckCircle className="w-4 h-4" />
                 {procesando ? 'Enviando...' : 'Marcar Resuelta y Enviar Email'}
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };

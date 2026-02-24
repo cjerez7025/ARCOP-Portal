@@ -1,11 +1,11 @@
 // ============================================================
-// src/pages/Seguimiento.jsx — v4
-// Registra evento de descarga → estado DESCARGA_CONFIRMADA
+// src/pages/Seguimiento.jsx — v4.1
+// FIX: muestra aviso cuando estado es RESUELTA pero url_datos vacío
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, Clock, Loader, AlertCircle, Download, PackageCheck } from 'lucide-react';
+import { CheckCircle, Clock, Loader, AlertCircle, Download, PackageCheck, Mail } from 'lucide-react';
 import { obtenerSolicitudPorNumero } from '../services/googleSheetsService';
 import adapter from '../adapters';
 
@@ -46,13 +46,11 @@ const Seguimiento = () => {
 
     setDescargando(true);
     try {
-      // Registrar en Sheets — no bloquea la descarga si falla
       await adapter.confirmarDescarga(solicitud.id || solicitud.numero_solicitud);
       setDescargaOk(true);
     } catch (err) {
       console.warn('Registro de descarga falló, pero se abre el archivo igual:', err);
     }
-    // Abrir siempre, aunque el registro haya fallado
     window.open(url, '_blank');
     setTimeout(() => { cargarSeguimiento(); setDescargando(false); }, 1500);
   };
@@ -85,7 +83,6 @@ const Seguimiento = () => {
     { key: 'CERRADA',             label: 'Cerrada'    },
   ];
 
-  // ── Pantallas de carga / error ────────────────────────
   if (loading) return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
       <div className="text-center">
@@ -108,11 +105,13 @@ const Seguimiento = () => {
     </div>
   );
 
-  const info         = ESTADOS_INFO[solicitud.estado] || ESTADOS_INFO['PENDIENTE'];
-  const Icon         = info.icon;
-  const stepActual   = PASOS.findIndex(p => p.key === solicitud.estado);
-  const urlDescarga  = solicitud.url_descarga || solicitud.url_datos;
-  const puedeDescargar = ['RESUELTA', 'DESCARGA_CONFIRMADA'].includes(solicitud.estado) && urlDescarga;
+  const info           = ESTADOS_INFO[solicitud.estado] || ESTADOS_INFO['PENDIENTE'];
+  const Icon           = info.icon;
+  const stepActual     = PASOS.findIndex(p => p.key === solicitud.estado);
+  const urlDescarga    = solicitud.url_descarga || solicitud.url_datos;
+  const esResuelta     = ['RESUELTA', 'DESCARGA_CONFIRMADA'].includes(solicitud.estado);
+  const puedeDescargar = esResuelta && !!urlDescarga;
+  const esperandoUrl   = esResuelta && !urlDescarga;  // ← NUEVO: resuelta pero sin URL
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -129,7 +128,7 @@ const Seguimiento = () => {
         {/* Estado actual */}
         <div className={`rounded-2xl border-2 p-5 ${info.bg} ${info.border}`}>
           <div className="flex items-center gap-4">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-white shadow-sm`}>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-white shadow-sm">
               <Icon className={`w-6 h-6 ${info.color}`} />
             </div>
             <div>
@@ -159,6 +158,7 @@ const Seguimiento = () => {
                        style={{ fontSize: '10px', maxWidth: '48px' }}>
                       {paso.label}
                     </p>
+                    {esActual && <p className="text-blue-600 mt-0.5" style={{ fontSize: '9px' }}>▲ actual</p>}
                   </div>
                   {i < PASOS.length - 1 && (
                     <div className={`flex-1 h-1 mt-3.5 mx-1 rounded-full ${i < stepActual ? 'bg-green-400' : 'bg-gray-200'}`} />
@@ -169,11 +169,10 @@ const Seguimiento = () => {
           </div>
         </div>
 
-        {/* Sección de descarga */}
+        {/* ── Sección descarga disponible ─────────────────── */}
         {puedeDescargar && (
           <div className={`rounded-2xl border-2 p-5 ${descargaOk ? 'bg-teal-50 border-teal-200' : 'bg-green-50 border-green-200'}`}>
             {descargaOk ? (
-              // ── Ya descargó ──────────────────────────────
               <div className="text-center space-y-3">
                 <PackageCheck className="w-12 h-12 text-teal-600 mx-auto" />
                 <div>
@@ -194,7 +193,6 @@ const Seguimiento = () => {
                 </button>
               </div>
             ) : (
-              // ── Primera descarga ─────────────────────────
               <div className="space-y-4">
                 <div>
                   <h3 className="text-lg font-bold text-green-800">📥 Tus datos están listos</h3>
@@ -222,15 +220,43 @@ const Seguimiento = () => {
           </div>
         )}
 
+        {/* ── NUEVO: Resuelta pero link aún no disponible ── */}
+        {esperandoUrl && (
+          <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-5 space-y-3">
+            <div className="flex items-start gap-3">
+              <Mail className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-base font-bold text-amber-800">Tu solicitud está completada</h3>
+                <p className="text-sm text-amber-700 mt-1">
+                  El enlace de descarga de tus datos será enviado a tu correo electrónico en breve.
+                  Si no lo recibes en los próximos minutos, revisa tu carpeta de spam.
+                </p>
+              </div>
+            </div>
+            <div className="bg-white border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+              <p className="font-semibold mb-1">¿No recibiste el email?</p>
+              <p className="text-xs text-amber-700">
+                Intenta recargar esta página en unos minutos. Si el problema persiste,
+                contacta al DPO de la organización indicando tu número de solicitud: <strong>{numero}</strong>
+              </p>
+            </div>
+            <button onClick={cargarSeguimiento}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-sm font-medium transition-colors">
+              <Loader className="w-4 h-4" />
+              Recargar estado
+            </button>
+          </div>
+        )}
+
         {/* Detalle */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Detalle</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {[
-              ['Tipo',             solicitud.tipo || 'ACCESO'],
-              ['Fecha ingreso',    formatFecha(solicitud.fecha_solicitud)],
-              ['Fecha límite',     formatFecha(solicitud.fecha_limite)],
-              ['Formato',          solicitud.formato_preferido || '—'],
+              ['Tipo',          solicitud.tipo || 'ACCESO'],
+              ['Fecha ingreso', formatFecha(solicitud.fecha_solicitud)],
+              ['Fecha límite',  formatFecha(solicitud.fecha_limite)],
+              ['Formato',       solicitud.formato_preferido || '—'],
             ].map(([label, valor]) => (
               <div key={label}>
                 <p className="text-gray-400 text-xs">{label}</p>

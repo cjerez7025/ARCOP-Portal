@@ -1,6 +1,7 @@
 // ============================================================
 // src/services/flujoService.js
-// v2 — Agrega estado DESCARGA_CONFIRMADA al flujo base
+// FIX: mergeConDefaults ahora repara transiciones_posibles []
+// en estados de ley guardados antes de que existiera ese campo.
 // ============================================================
 
 import adapter from '../adapters';
@@ -140,7 +141,7 @@ const ESTADOS_BASE = [
 // ── Estados específicos por derecho ───────────────────────
 const ESTADOS_ESPECIFICOS = {
 
-  ACCESO: [],  // El flujo base (con DESCARGA_CONFIRMADA) es suficiente
+  ACCESO: [],
 
   RECTIFICACION: [
     {
@@ -198,10 +199,10 @@ const ESTADOS_ESPECIFICOS = {
       es_inicial:  false,
       es_final:    false,
       requiere_confirmacion: true,
-      envia_email:           false,
+      envia_email:           true,
       campos_transicion: [
-        { id: 'sistemas_afectados',       tipo: 'textarea', label: 'Sistemas donde se eliminaron los datos', obligatorio: true },
-        { id: 'confirmacion_eliminacion', tipo: 'checkbox', label: 'Confirmo que los datos fueron eliminados de todos los sistemas', obligatorio: true },
+        { id: 'sistemas_afectados',    tipo: 'textarea', label: 'Sistemas donde se eliminaron los datos', obligatorio: true },
+        { id: 'confirmacion_eliminacion', tipo: 'checkbox', label: 'Confirmo que los datos fueron eliminados de todos los sistemas indicados', obligatorio: true },
       ],
       transiciones_posibles: ['RESUELTA'],
     },
@@ -209,28 +210,28 @@ const ESTADOS_ESPECIFICOS = {
 
   OPOSICION: [
     {
-      id:          'BLOQUEADO',
-      nombre:      'Bloqueado',
-      descripcion: 'Bloqueo temporal del tratamiento específico mientras se evalúa la oposición.',
+      id:          'EN_EVALUACION',
+      nombre:      'En Evaluación',
+      descripcion: 'Se está evaluando la legitimidad del tratamiento frente al derecho de oposición.',
       color:       'orange',
       orden:       25,
       protegido:   true,
       origen:      'ley',
-      articulo:    'Art. 8° ter Ley 21.719',
+      articulo:    'Art. 8° Ley 21.719',
       activo:      true,
       es_inicial:  false,
       es_final:    false,
-      requiere_confirmacion: true,
-      envia_email:           true,
+      requiere_confirmacion: false,
+      envia_email:           false,
       campos_transicion: [
-        { id: 'tratamiento_bloqueado', tipo: 'text', label: 'Tratamiento específico bloqueado', obligatorio: true },
+        { id: 'fundamento_evaluacion', tipo: 'textarea', label: 'Fundamento legal evaluado', obligatorio: false },
       ],
-      transiciones_posibles: ['EN_PROCESO'],
+      transiciones_posibles: ['TRATAMIENTO_SUSPENDIDO', 'OPOSICION_RECHAZADA'],
     },
     {
-      id:          'TRATAMIENTO_CESADO',
-      nombre:      'Tratamiento Cesado',
-      descripcion: 'Confirmación de que el tratamiento específico fue detenido.',
+      id:          'TRATAMIENTO_SUSPENDIDO',
+      nombre:      'Tratamiento Suspendido',
+      descripcion: 'El tratamiento fue suspendido en respuesta a la oposición.',
       color:       'red',
       orden:       35,
       protegido:   true,
@@ -240,10 +241,28 @@ const ESTADOS_ESPECIFICOS = {
       es_inicial:  false,
       es_final:    false,
       requiere_confirmacion: true,
-      envia_email:           false,
+      envia_email:           true,
       campos_transicion: [
-        { id: 'tratamiento_cesado_detalle', tipo: 'textarea', label: 'Detalle del tratamiento detenido y fecha efectiva', obligatorio: true },
-        { id: 'confirmacion_cese',          tipo: 'checkbox', label: 'Confirmo que el tratamiento fue detenido en todos los sistemas', obligatorio: true },
+        { id: 'sistemas_suspension', tipo: 'textarea', label: 'Sistemas donde se suspendió el tratamiento', obligatorio: true },
+      ],
+      transiciones_posibles: ['RESUELTA'],
+    },
+    {
+      id:          'OPOSICION_RECHAZADA',
+      nombre:      'Oposición Rechazada',
+      descripcion: 'Se determinó que existe una base legal que prevalece sobre la oposición.',
+      color:       'gray',
+      orden:       36,
+      protegido:   true,
+      origen:      'ley',
+      articulo:    'Art. 8° Ley 21.719',
+      activo:      true,
+      es_inicial:  false,
+      es_final:    false,
+      requiere_confirmacion: false,
+      envia_email:           true,
+      campos_transicion: [
+        { id: 'fundamento_rechazo', tipo: 'textarea', label: 'Fundamento legal del rechazo', obligatorio: true },
       ],
       transiciones_posibles: ['RESUELTA'],
     },
@@ -251,9 +270,9 @@ const ESTADOS_ESPECIFICOS = {
 
   PORTABILIDAD: [
     {
-      id:          'DATOS_PREPARADOS',
-      nombre:      'Datos Preparados',
-      descripcion: 'Archivo generado en el formato solicitado. Pendiente de entrega al titular.',
+      id:          'GENERANDO_ARCHIVO',
+      nombre:      'Generando Archivo',
+      descripcion: 'Se está preparando el archivo de portabilidad en formato estructurado.',
       color:       'indigo',
       orden:       35,
       protegido:   true,
@@ -265,8 +284,8 @@ const ESTADOS_ESPECIFICOS = {
       requiere_confirmacion: false,
       envia_email:           false,
       campos_transicion: [
-        { id: 'formato_generado',      tipo: 'select', label: 'Formato del archivo generado',    obligatorio: true, opciones: ['JSON', 'CSV', 'XML'] },
-        { id: 'url_archivo_interno',   tipo: 'url',    label: 'URL interna del archivo (solo DPO)', obligatorio: true },
+        { id: 'formato_generado',    tipo: 'select', label: 'Formato del archivo generado',       obligatorio: true, opciones: ['JSON', 'CSV', 'XML'] },
+        { id: 'url_archivo_interno', tipo: 'url',    label: 'URL interna del archivo (solo DPO)', obligatorio: true },
       ],
       transiciones_posibles: ['RESUELTA'],
     },
@@ -283,6 +302,7 @@ export const DERECHOS_META_FLUJO = {
 };
 
 // ── Funciones internas ────────────────────────────────────
+
 function buildFlujoDefault(derecho) {
   const especificos = ESTADOS_ESPECIFICOS[derecho] || [];
   const todos = [...ESTADOS_BASE, ...especificos];
@@ -312,18 +332,60 @@ function normalizarEstado(e) {
 
 function mergeConDefaults(saved) {
   const defaults = buildConfigDefault();
+
   Object.keys(defaults.derechos).forEach(key => {
     if (!saved.derechos?.[key]) {
+      // El derecho completo no existe en Sheets → usar el default
       if (!saved.derechos) saved.derechos = {};
       saved.derechos[key] = defaults.derechos[key];
     } else {
-      // Normalizar todos los estados guardados (campos nuevos que puedan faltar)
+      // El derecho existe → normalizar cada estado
       saved.derechos[key].estados = saved.derechos[key].estados.map(normalizarEstado);
 
+      // ── FIX CRÍTICO ────────────────────────────────────────────────────
+      // Si un estado de ley tiene transiciones_posibles vacío ([]) pero el
+      // default tiene transiciones definidas, restaurar desde el default.
+      // Esto ocurre con flujos guardados antes de que existiera este campo.
+      const defaultEstados = defaults.derechos[key].estados;
+
+      saved.derechos[key].estados = saved.derechos[key].estados.map(estadoGuardado => {
+        // Solo reparar estados de ley — los custom se respetan tal cual
+        if (estadoGuardado.origen !== 'ley') return estadoGuardado;
+
+        const idNorm = (estadoGuardado.id || '').toUpperCase().trim();
+        const defEquivalente = defaultEstados.find(
+          d => (d.id || '').toUpperCase().trim() === idNorm
+        );
+        if (!defEquivalente) return estadoGuardado;
+
+        let reparado = { ...estadoGuardado };
+
+        // Reparar transiciones_posibles vacías
+        if (
+          reparado.transiciones_posibles.length === 0 &&
+          defEquivalente.transiciones_posibles.length > 0
+        ) {
+          console.log(`[flujoService] Restaurando transiciones de ${idNorm} (${key}):`, defEquivalente.transiciones_posibles);
+          reparado.transiciones_posibles = [...defEquivalente.transiciones_posibles];
+        }
+
+        // Reparar campos_transicion vacíos (ej: RESUELTA necesita url_datos y formato_entrega)
+        if (
+          reparado.campos_transicion.length === 0 &&
+          defEquivalente.campos_transicion.length > 0
+        ) {
+          console.log(`[flujoService] Restaurando campos_transicion de ${idNorm} (${key}):`, defEquivalente.campos_transicion.map(c=>c.id));
+          reparado.campos_transicion = [...defEquivalente.campos_transicion];
+        }
+
+        return reparado;
+      });
+      // ── FIN FIX ────────────────────────────────────────────────────────
+
       // Agregar estados de ley que no estén en la config guardada
-      const savedIds = saved.derechos[key].estados.map(e => e.id);
+      const savedIds = saved.derechos[key].estados.map(e => (e.id || '').toUpperCase().trim());
       const nuevosLey = defaults.derechos[key].estados.filter(
-        e => e.origen === 'ley' && !savedIds.includes(e.id)
+        e => e.origen === 'ley' && !savedIds.includes((e.id || '').toUpperCase().trim())
       );
       if (nuevosLey.length > 0) {
         saved.derechos[key].estados = [...saved.derechos[key].estados, ...nuevosLey];
@@ -331,6 +393,7 @@ function mergeConDefaults(saved) {
       }
     }
   });
+
   return saved;
 }
 
@@ -384,7 +447,6 @@ export const crearEstadoCustom = (override = {}) => ({
   ...override,
 });
 
-// Crea un actor vacío para un estado
 export const crearActor = (override = {}) => ({
   id:     `actor_${Date.now()}`,
   nombre: '',
@@ -402,44 +464,46 @@ export const crearTransicion = (override = {}) => ({
 });
 
 export const crearCampoRequerido = (override = {}) => ({
-  id:          `campo_${Date.now()}`,
-  tipo:        'text',
-  label:       'Nuevo campo',
-  obligatorio: false,
-  opciones:    [],
+  id:         `campo_${Date.now()}`,
+  label:      '',
+  tipo:       'text',
+  obligatorio: true,
+  opciones:   [],
+  placeholder: '',
   ...override,
 });
 
-// Alias para compatibilidad con useFlujoConfig
-export const crearCampoTransicion = crearCampoRequerido;
+// ── Exports de compatibilidad ─────────────────────────────
+// Usados por FlowDiagramEditor.jsx, TabFlujos.jsx, useFlujoConfig.js
 
-// ── Aliases de compatibilidad con versión anterior ────────
-// FlowDiagramEditor, TabFlujos y PanelDPO usan estos nombres
+// Mapa de clases Tailwind por color de estado
+export const COLOR_CLASSES = {
+  yellow: { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300', badge: 'bg-yellow-100 text-yellow-800' },
+  blue:   { bg: 'bg-blue-100',   text: 'text-blue-800',   border: 'border-blue-300',   badge: 'bg-blue-100 text-blue-800'   },
+  purple: { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300', badge: 'bg-purple-100 text-purple-800'},
+  green:  { bg: 'bg-green-100',  text: 'text-green-800',  border: 'border-green-300',  badge: 'bg-green-100 text-green-800' },
+  gray:   { bg: 'bg-gray-100',   text: 'text-gray-800',   border: 'border-gray-300',   badge: 'bg-gray-100 text-gray-800'   },
+  red:    { bg: 'bg-red-100',    text: 'text-red-800',    border: 'border-red-300',    badge: 'bg-red-100 text-red-800'     },
+  orange: { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-300', badge: 'bg-orange-100 text-orange-800'},
+  teal:   { bg: 'bg-teal-100',   text: 'text-teal-800',   border: 'border-teal-300',   badge: 'bg-teal-100 text-teal-800'   },
+  indigo: { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-300', badge: 'bg-indigo-100 text-indigo-800'},
+  pink:   { bg: 'bg-pink-100',   text: 'text-pink-800',   border: 'border-pink-300',   badge: 'bg-pink-100 text-pink-800'   },
+};
 
-// COLOR_CLASSES: mapa de color → clases Tailwind (bg, text, border)
-export const COLOR_CLASSES = COLORES_ESTADO.reduce((acc, c) => {
-  acc[c.value] = { bg: c.bg, text: c.text, border: c.border };
-  return acc;
-}, {});
+// Helper: retorna las clases de un color dado (con fallback a gray)
+export const getColor = (color) => COLOR_CLASSES[color] || COLOR_CLASSES.gray;
 
-// COLORES_TRANSICION: paleta para las flechas/edges del diagrama
-export const COLORES_TRANSICION = [
-  { value: 'blue',   label: 'Azul',    hex: '#3b82f6' },
-  { value: 'green',  label: 'Verde',   hex: '#22c55e' },
-  { value: 'red',    label: 'Rojo',    hex: '#ef4444' },
-  { value: 'orange', label: 'Naranja', hex: '#f97316' },
-  { value: 'purple', label: 'Morado',  hex: '#a855f7' },
-  { value: 'gray',   label: 'Gris',    hex: '#6b7280' },
-  { value: 'teal',   label: 'Teal',    hex: '#14b8a6' },
-];
-
-// TIPOS_CAMPO: alias de TIPOS_CAMPO_TRANSICION
+// Alias de TIPOS_CAMPO_TRANSICION para compatibilidad con imports anteriores
 export const TIPOS_CAMPO = TIPOS_CAMPO_TRANSICION;
 
-// getColor: devuelve las clases Tailwind para un valor de color dado
-export const getColor = (colorValue) => {
-  const found = COLORES_ESTADO.find(c => c.value === colorValue);
-  return found
-    ? { bg: found.bg, text: found.text, border: found.border }
-    : { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' };
-};
+// Factory de campo de transición (alias de crearCampoRequerido con nombre anterior)
+export const crearCampoTransicion = (override = {}) => ({
+  id:          `campo_${Date.now()}`,
+  label:       '',
+  tipo:        'text',
+  obligatorio: false,
+  opciones:    [],
+  placeholder: '',
+  ayuda:       '',
+  ...override,
+});
