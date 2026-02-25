@@ -1,6 +1,6 @@
 // ============================================================
-// useFlujoConfig — Hook v3
-// Agrega moverNodo(derechoKey, estadoId, x, y) para FlowDiagramEditor
+// useFlujoConfig — Hook v4
+// Agrega editarSlackWebhook(derechoKey, url)
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -77,7 +77,8 @@ const useFlujoConfig = () => {
   const toggleEstado = (derechoKey, estadoId) => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
-      if (e && !e.protegido) e.activo = !e.activo;
+      if (!e || e.protegido) return;
+      e.activo = !e.activo;
     });
   };
 
@@ -85,26 +86,15 @@ const useFlujoConfig = () => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
       if (!e) return;
-      if (e.protegido) {
-        const permitidos = [
-          'descripcion', 'envia_email', 'requiere_confirmacion',
-          'transiciones_posibles', 'sla_dias', 'sla_alerta_dias', 'actores',
-        ];
-        Object.keys(changes).forEach(k => {
-          if (permitidos.includes(k)) e[k] = changes[k];
-        });
-      } else {
-        Object.assign(e, changes);
-      }
+      Object.assign(e, changes);
     });
   };
 
   const toggleProtegidoPorLey = (derechoKey, estadoId) => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
-      if (!e || e.origen === 'ley') return;
-      e.protegido = !e.protegido;
-      e.origen = e.protegido ? 'ley_futura' : 'custom';
+      if (!e) return;
+      e.origen = e.origen === 'ley' ? 'ley_futura' : 'custom';
     });
   };
 
@@ -120,7 +110,6 @@ const useFlujoConfig = () => {
     });
   };
 
-  // ── moverNodo — guarda posición XY del nodo en el diagrama ──
   const moverNodo = (derechoKey, estadoId, x, y) => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
@@ -196,7 +185,6 @@ const useFlujoConfig = () => {
     });
   };
 
-  // Usado por FlowDiagramEditor para agregar/editar/eliminar transiciones del grafo
   const agregarTransicion = (derechoKey, estadoId, transicion) => {
     update(c => {
       const e = getEstado(c, derechoKey, estadoId);
@@ -263,6 +251,15 @@ const useFlujoConfig = () => {
     });
   };
 
+  // ── Slack Webhook por derecho ← NUEVO ────────────────────
+
+  const editarSlackWebhook = (derechoKey, url) => {
+    update(c => {
+      if (!c.derechos[derechoKey]) return;
+      c.derechos[derechoKey].slack_webhook = url.trim();
+    });
+  };
+
   // ── Selector ──────────────────────────────────────────────
 
   const getEstadosOrdenados = (derechoKey) => {
@@ -276,9 +273,9 @@ const useFlujoConfig = () => {
     // Estados
     toggleEstado, editarEstado, toggleProtegidoPorLey,
     moverEstado, agregarEstado, eliminarEstado, restaurarDerecho,
-    // Posición en diagrama ← NUEVO
+    // Posición en diagrama
     moverNodo,
-    // Transiciones del grafo (FlowDiagramEditor)
+    // Transiciones del grafo
     agregarTransicion, editarTransicion, eliminarTransicion,
     // Campos transición
     agregarCampoTransicion, editarCampoTransicion, eliminarCampoTransicion,
@@ -288,6 +285,8 @@ const useFlujoConfig = () => {
     editarSLA,
     // Actores
     agregarActor, editarActor, eliminarActor,
+    // Slack ← NUEVO
+    editarSlackWebhook,
     // Selector
     getEstadosOrdenados,
   };

@@ -1,11 +1,14 @@
 // ============================================================
-// SOLICITUDES TABLE — v2 (estados dinámicos)
-// Recibe estadosDef desde el flujoConfig para mostrar badges
-// con el nombre y color correcto, incluyendo estados custom.
+// SOLICITUDES TABLE — v3
+// Cambios respecto v2:
+//   - Cabeceras NOMBRE, ESTADO, TIPO, FECHA son clickeables
+//   - Indicador visual ↑↓ en columna activa (ChevronUp/Down)
+//   - Columnas inactivas muestran selector neutro (ChevronsUpDown)
+//   - Sort interno con useState — no modifica el array del padre
 // ============================================================
 
-import React from 'react';
-import { Eye, Edit, CheckCircle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Eye, Edit, CheckCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
 const COLOR_CLASSES = {
   yellow: 'bg-yellow-100 text-yellow-800',
@@ -20,7 +23,6 @@ const COLOR_CLASSES = {
   pink:   'bg-pink-100   text-pink-800',
 };
 
-// Fallback si no llega flujoConfig todavía
 const FALLBACK_COLORS = {
   PENDIENTE:  'bg-yellow-100 text-yellow-800',
   VALIDADA:   'bg-blue-100   text-blue-800',
@@ -30,7 +32,13 @@ const FALLBACK_COLORS = {
   BLOQUEADO:  'bg-orange-100 text-orange-800',
 };
 
+// Columnas que NO son ordenables
+const NO_SORT = ['#', 'RUT', 'Email', 'Acciones'];
+
 const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambiarEstado, onMarcarResuelta }) => {
+
+  const [sortCol, setSortCol] = useState('fecha_solicitud');
+  const [sortDir, setSortDir] = useState('desc');
 
   const getField = (obj, field) => {
     if (!obj) return '';
@@ -46,19 +54,59 @@ const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambia
     } catch { return 'Sin fecha'; }
   };
 
-  // Resuelve el badge de un estado desde estadosDef o fallback
   const getEstadoBadge = (estadoId) => {
     const def = estadosDef.find(e => e.id === estadoId);
     if (def) {
       const cls = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
       return { cls, label: def.nombre };
     }
-    // Fallback para estados que aún no cargó la config
     return {
       cls:   FALLBACK_COLORS[estadoId] || COLOR_CLASSES.gray,
       label: estadoId,
     };
   };
+
+  // ── Columnas con su campo de datos ────────────────────────
+  const COLS = [
+    { label: '#',        field: null },
+    { label: 'Nombre',   field: 'nombre_completo' },
+    { label: 'RUT',      field: null },
+    { label: 'Email',    field: null },
+    { label: 'Estado',   field: 'estado' },
+    { label: 'Tipo',     field: 'tipo' },
+    { label: 'Fecha',    field: 'fecha_solicitud' },
+    { label: 'Acciones', field: null },
+  ];
+
+  const handleSort = (field) => {
+    if (!field) return;
+    if (sortCol === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortCol(field);
+      setSortDir('asc');
+    }
+  };
+
+  // ── Sort interno ──────────────────────────────────────────
+  const sorted = useMemo(() => {
+    if (!sortCol) return solicitudes;
+    return [...solicitudes].sort((a, b) => {
+      let va = getField(a, sortCol) || '';
+      let vb = getField(b, sortCol) || '';
+      // Fechas como timestamps
+      if (sortCol === 'fecha_solicitud') {
+        va = va ? new Date(va).getTime() : 0;
+        vb = vb ? new Date(vb).getTime() : 0;
+      } else {
+        va = va.toString().toLowerCase();
+        vb = vb.toString().toLowerCase();
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }, [solicitudes, sortCol, sortDir]);
 
   if (!solicitudes || solicitudes.length === 0) {
     return (
@@ -73,24 +121,46 @@ const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambia
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            {['#', 'Nombre', 'RUT', 'Email', 'Estado', 'Tipo', 'Fecha', 'Acciones'].map(h => (
-              <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {h}
-              </th>
-            ))}
+            {COLS.map(({ label, field }) => {
+              const sortable = !!field;
+              const isActive = sortCol === field;
+
+              return (
+                <th
+                  key={label}
+                  onClick={() => handleSort(field)}
+                  className={`px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider select-none
+                    ${sortable
+                      ? 'cursor-pointer hover:bg-gray-100 transition-colors'
+                      : 'cursor-default'}
+                    ${isActive ? 'text-indigo-600' : 'text-gray-500'}
+                  `}
+                >
+                  <span className="inline-flex items-center gap-1">
+                    {label}
+                    {sortable && (
+                      isActive
+                        ? sortDir === 'asc'
+                          ? <ChevronUp   className="w-3.5 h-3.5 text-indigo-500" />
+                          : <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
+                        : <ChevronsUpDown className="w-3.5 h-3.5 text-gray-300" />
+                    )}
+                  </span>
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {solicitudes.map((sol, idx) => {
-            const nombre  = getField(sol, 'nombre_completo') || 'Sin nombre';
-            const rut     = getField(sol, 'rut')             || 'Sin RUT';
-            const email   = getField(sol, 'email')           || 'Sin email';
-            const estadoId = getField(sol, 'estado')         || 'PENDIENTE';
-            const tipo    = getField(sol, 'tipo')            || '—';
-            const fecha   = formatFecha(sol);
+          {sorted.map((sol, idx) => {
+            const nombre   = getField(sol, 'nombre_completo') || 'Sin nombre';
+            const rut      = getField(sol, 'rut')             || 'Sin RUT';
+            const email    = getField(sol, 'email')           || 'Sin email';
+            const estadoId = getField(sol, 'estado')          || 'PENDIENTE';
+            const tipo     = getField(sol, 'tipo')            || '—';
+            const fecha    = formatFecha(sol);
             const { cls, label } = getEstadoBadge(estadoId);
-
-            const esFinal = ['RESUELTA', 'CERRADA'].includes(estadoId);
+            const esFinal  = ['RESUELTA', 'CERRADA'].includes(estadoId);
 
             return (
               <tr key={idx} className="hover:bg-gray-50 transition-colors">

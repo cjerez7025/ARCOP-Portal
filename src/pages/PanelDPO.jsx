@@ -141,7 +141,7 @@ const PanelDPO = () => {
 
   // ── Filtrado ───────────────────────────────────────────
   const solicitudesFiltradas = useMemo(() => {
-    let s = solicitudes;
+    let s = [...solicitudes];
     if (filtros.estado)   s = s.filter(x => x.estado === filtros.estado);
     if (filtros.busqueda) {
       const q = filtros.busqueda.toLowerCase();
@@ -152,17 +152,24 @@ const PanelDPO = () => {
         (x.numero_solicitud|| '').toLowerCase().includes(q)
       );
     }
-    if (!filtroEspecial) return s;
-    if (filtroEspecial.por_vencer) {
+    if (filtroEspecial?.por_vencer) {
       const limite = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-      return s.filter(x => {
+      s = s.filter(x => {
         if (!x.fecha_limite) return false;
         const fl = new Date(x.fecha_limite);
         return x.estado !== 'RESUELTA' && x.estado !== 'CERRADA' && fl < limite;
       });
+    } else if (filtroEspecial?.sin_asignar) {
+      s = s.filter(x => !x.asignado_a && x.estado !== 'CERRADA' && x.estado !== 'RESUELTA');
+    } else if (filtroEspecial?.estado) {
+      s = s.filter(x => x.estado === filtroEspecial.estado);
     }
-    if (filtroEspecial.sin_asignar) return s.filter(x => !x.asignado_a && x.estado !== 'CERRADA' && x.estado !== 'RESUELTA');
-    if (filtroEspecial.estado)      return s.filter(x => x.estado === filtroEspecial.estado);
+    // Ordenar por fecha_solicitud descendente (más recientes primero)
+    s.sort((a, b) => {
+      const fa = a.fecha_solicitud ? new Date(a.fecha_solicitud).getTime() : 0;
+      const fb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
+      return fb - fa;
+    });
     return s;
   }, [solicitudes, filtros, filtroEspecial]);
 
@@ -591,14 +598,7 @@ const PanelDPO = () => {
         const camposDestino = defDestino?.campos_transicion || [];
         const hayCampos     = camposDestino.length > 0;
 
-        // === DEBUG TEMPORAL — quitar después ===
-        console.log('🎨 RENDER MODAL | nuevoEstado:', nuevoEstadoNorm,
-          '| defDestino:', defDestino?.id,
-          '| campos_transicion:', camposDestino.length,
-          '| hayCampos:', hayCampos,
-          '| estadoActualId:', estadoActualId,
-          '| cond final:', hayCampos && nuevoEstadoNorm !== estadoActualId);
-        // === FIN DEBUG ===
+
 
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -749,8 +749,12 @@ const PanelDPO = () => {
                 </div>
               )}
 
-              {/* ── Asignación de responsable ── */}
-              {nuevoEstado && nuevoEstado !== estadoActualId && (
+              {/* ── Asignación de responsable ──
+                   Muestra el bloque si:
+                   - hay actores predefinidos en el estado destino (hayActores), O
+                   - el estado destino tiene SLA (sla_dias > 0), lo que indica que requiere responsable
+              */}
+              {nuevoEstado && nuevoEstado !== estadoActualId && (hayActores || (defDestinoRender?.sla_dias > 0)) && (
                 <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 mb-4">
                   <div className="flex items-center gap-2 mb-3">
                     <User className="w-4 h-4 text-indigo-600" />
