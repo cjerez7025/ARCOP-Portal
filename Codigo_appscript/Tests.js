@@ -236,3 +236,15 @@ function testActualizacion() {
   
   Logger.log('\n✅ === TEST ACTUALIZACIÓN COMPLETADO ===');
 }
+function testSlack() {
+  var url = PropertiesService.getScriptProperties()
+              .getProperty('SLACK_WEBHOOK_URL');
+  
+  UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      text: '🧪 Test Portal ARCOP — conexión exitosa!'
+    })
+  });
+}
