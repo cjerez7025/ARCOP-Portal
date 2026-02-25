@@ -1,5 +1,10 @@
 // ============================================================
-// SOLICITUDSERVICE.GS — v3.1 + Slack
+// SOLICITUDSERVICE.GS — v3.2
+// Cambios respecto v3.1:
+//   - crear(): eliminada llamada a SlackService.notificarNuevaSolicitud
+//   - validarIdentidad(): eliminada llamada a SlackService.notificarCambioEstado
+//   Las notificaciones Slack ahora ocurren SOLO al asignar responsable
+//   (ver DPOHandlers.actualizarSolicitud)
 // ============================================================
 
 const SolicitudService = {
@@ -18,10 +23,7 @@ const SolicitudService = {
       EmailService.enviarConfirmacion(solicitud);
       Logger.log('Solicitud creada: ' + solicitud.numero_solicitud);
 
-      // ── Notificación Slack ─────────────────────────────────
-      try {
-        SlackService.notificarNuevaSolicitud(solicitud);
-      } catch (slackErr) { Logger.log('[Slack] Error: ' + slackErr); }
+      // Slack: notificación eliminada — se notifica al asignar responsable
 
       return {
         status: 'success',
@@ -50,12 +52,12 @@ const SolicitudService = {
       const data    = sheet.getDataRange().getValues();
       const headers = data[0];
 
-      const tokenIdx    = Utils.buscarIndiceColumna(headers, 'token_validacion');
-      const estadoIdx   = Utils.buscarIndiceColumna(headers, 'estado');
+      const tokenIdx     = Utils.buscarIndiceColumna(headers, 'token_validacion');
+      const estadoIdx    = Utils.buscarIndiceColumna(headers, 'estado');
       const identidadIdx = Utils.buscarIndiceColumna(headers, 'identidad_validada');
-      const emailIdx    = Utils.buscarIndiceColumna(headers, 'email');
-      const numeroIdx   = Utils.buscarIndiceColumna(headers, 'numero_solicitud');
-      const nombreIdx   = Utils.buscarIndiceColumna(headers, 'nombre_completo');
+      const emailIdx     = Utils.buscarIndiceColumna(headers, 'email');
+      const numeroIdx    = Utils.buscarIndiceColumna(headers, 'numero_solicitud');
+      const nombreIdx    = Utils.buscarIndiceColumna(headers, 'nombre_completo');
 
       if (tokenIdx === -1 || estadoIdx === -1) {
         return { status: 'error', message: 'Columnas requeridas no encontradas' };
@@ -70,8 +72,9 @@ const SolicitudService = {
             return { status: 'error', message: 'Solicitud ya fue validada (estado: ' + estadoActual + ')' };
           }
 
-          sheet.getRange(i + 1, estadoIdx + 1).setValue(Config.ESTADOS.VALIDADA);
-          if (identidadIdx !== -1) sheet.getRange(i + 1, identidadIdx + 1).setValue('TRUE');
+          sheet.getRange(i + 1, estadoIdx    + 1).setValue(Config.ESTADOS.VALIDADA);
+          if (identidadIdx !== -1)
+            sheet.getRange(i + 1, identidadIdx + 1).setValue('TRUE');
 
           var emailSol  = emailIdx  !== -1 ? data[i][emailIdx]  : '';
           var numeroSol = numeroIdx !== -1 ? data[i][numeroIdx] : '';
@@ -85,21 +88,16 @@ const SolicitudService = {
             } catch (emailError) { Logger.log('Error email validación: ' + emailError); }
           }
 
-          // ── Notificación Slack ──────────────────────────────
-          try {
-            SlackService.notificarCambioEstado({
-              numero:         numeroSol,
-              tipo:           'ACCESO',
-              nombreTitular:  nombreSol,
-              estadoAnterior: Config.ESTADOS.PENDIENTE,
-              estadoNuevo:    Config.ESTADOS.VALIDADA,
-            });
-          } catch (slackErr) { Logger.log('[Slack] Error: ' + slackErr); }
+          // Slack: notificación eliminada — se notifica al asignar responsable
 
           return {
             status: 'success',
             message: 'Identidad validada exitosamente',
-            data: { numero_solicitud: numeroSol, email: emailSol, nuevo_estado: Config.ESTADOS.VALIDADA }
+            data: {
+              numero_solicitud: numeroSol,
+              email:            emailSol,
+              nuevo_estado:     Config.ESTADOS.VALIDADA,
+            }
           };
         }
       }
@@ -112,6 +110,9 @@ const SolicitudService = {
     }
   },
 
+  // ──────────────────────────────────────────
+  // OBTENER POR TOKEN
+  // ──────────────────────────────────────────
   obtenerPorToken: function(token) {
     try {
       var resultado = GoogleSheetsService.buscarPorToken(token);
@@ -122,6 +123,9 @@ const SolicitudService = {
     }
   },
 
+  // ──────────────────────────────────────────
+  // OBTENER POR EMAIL
+  // ──────────────────────────────────────────
   obtenerPorEmail: function(email) {
     try {
       var solicitudes = GoogleSheetsService.buscarPorEmail(email);
@@ -131,6 +135,9 @@ const SolicitudService = {
     }
   },
 
+  // ──────────────────────────────────────────
+  // OBTENER POR NÚMERO
+  // ──────────────────────────────────────────
   obtenerPorNumero: function(numero) {
     try {
       var solicitud = GoogleSheetsService.buscarPorNumero(numero);
@@ -139,6 +146,6 @@ const SolicitudService = {
     } catch (error) {
       return { status: 'error', message: error.toString() };
     }
-  }
+  },
 
 };

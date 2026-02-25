@@ -1,67 +1,91 @@
 // ============================================================
-// SLACKSERVICE.GS — v1.0
-// Notificaciones Portal ARCOP → canal Slack
+// SLACKSERVICE.GS — v2.0
+// Notificaciones Portal ARCOP → canales Slack por derecho
 //
-// SETUP (una sola vez):
-//   1. En Slack: Apps → Incoming Webhooks → Add to Slack
-//   2. Selecciona canal #portal-arcop (o el que quieras)
-//   3. Copia la Webhook URL
-//   4. En Apps Script → Configuración del proyecto → Propiedades de script
-//      Agrega: SLACK_WEBHOOK_URL = https://hooks.slack.com/services/...
+// CAMBIOS v2:
+//   - Cada derecho puede tener su propio webhook Slack,
+//     configurado desde TabFlujos (campo slack_webhook en
+//     config.derechos[TIPO].slack_webhook, guardado en Sheets)
+//   - _getWebhookUrl(tipo): busca webhook del derecho primero,
+//     luego fallback a SLACK_WEBHOOK_URL general en Properties
+//   - _enviar(payload, webhookUrl): recibe URL explícita
+//   - probarWebhook(url, derecho): handler para doPost
+//     action='probarSlackWebhook', llamado desde el portal
 //
-// EVENTOS notificados automáticamente:
-//   - Nueva solicitud recibida
-//   - Identidad validada
-//   - Estado cambiado (cualquiera)
-//   - SLA próximo a vencer (llamado por trigger diario)
-//   - Descarga confirmada por titular
+// SETUP:
+//   1. En Slack: crear un webhook por canal/derecho
+//   2. En Portal → Configuración → Flujos → seleccionar
+//      derecho → sección "Canal Slack" → pegar URL → Guardar
+//   3. Opcional: SLACK_WEBHOOK_URL en Script Properties
+//      como fallback para derechos sin canal propio
 // ============================================================
 
 const SlackService = {
 
-  // ── Obtener webhook URL desde propiedades del script ────
-  _getWebhookUrl: function() {
+  // ── Webhook: busca por derecho, fallback general ────────
+  _getWebhookUrl: function(tipo) {
+    // 1. Webhook específico del derecho desde flujoConfig en Sheets
     try {
-      var url = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
-      if (!url) {
-        Logger.log('[Slack] SLACK_WEBHOOK_URL no configurada — notificación omitida');
-        return null;
+      if (tipo) {
+        var configResult = ConfiguracionService.obtener();
+        var flujoRaw = configResult.data && configResult.data.flujo_config;
+        if (flujoRaw) {
+          var flujo = JSON.parse(flujoRaw);
+          var tipoKey = (tipo + '').toUpperCase();
+          var webhookDerecho = flujo.derechos &&
+                               flujo.derechos[tipoKey] &&
+                               flujo.derechos[tipoKey].slack_webhook;
+          if (webhookDerecho && (webhookDerecho + '').trim()) {
+            Logger.log('[Slack] Usando webhook de derecho: ' + tipoKey);
+            return (webhookDerecho + '').trim();
+          }
+        }
       }
-      return url;
     } catch (e) {
-      Logger.log('[Slack] Error leyendo webhook URL: ' + e);
-      return null;
+      Logger.log('[Slack] Error leyendo flujoConfig para webhook: ' + e);
     }
+
+    // 2. Fallback: SLACK_WEBHOOK_URL general en Script Properties
+    try {
+      var urlGeneral = PropertiesService.getScriptProperties()
+                         .getProperty('SLACK_WEBHOOK_URL');
+      if (urlGeneral && (urlGeneral + '').trim()) {
+        Logger.log('[Slack] Usando webhook general (fallback)');
+        return (urlGeneral + '').trim();
+      }
+    } catch (e) {
+      Logger.log('[Slack] Error leyendo SLACK_WEBHOOK_URL: ' + e);
+    }
+
+    Logger.log('[Slack] Sin webhook configurado para derecho: ' +
+               (tipo || 'desconocido') + ' — notificación omitida');
+    return null;
   },
 
-  // ── Enviar mensaje genérico ─────────────────────────────
-  _enviar: function(payload) {
-    var url = this._getWebhookUrl();
-    if (!url) return false;
-
+  // ── Enviar payload a URL específica ────────────────────
+  _enviar: function(payload, webhookUrl) {
+    if (!webhookUrl) return false;
     try {
-      var response = UrlFetchApp.fetch(url, {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify(payload),
+      var response = UrlFetchApp.fetch(webhookUrl, {
+        method:             'post',
+        contentType:        'application/json',
+        payload:            JSON.stringify(payload),
         muteHttpExceptions: true,
       });
-
       var code = response.getResponseCode();
       if (code === 200) {
         Logger.log('[Slack] Mensaje enviado OK');
         return true;
-      } else {
-        Logger.log('[Slack] Error HTTP ' + code + ': ' + response.getContentText());
-        return false;
       }
+      Logger.log('[Slack] Error HTTP ' + code + ': ' + response.getContentText());
+      return false;
     } catch (e) {
       Logger.log('[Slack] Error al enviar: ' + e);
       return false;
     }
   },
 
-  // ── Helper: obtener URL del portal ─────────────────────
+  // ── Helper: URL del portal ──────────────────────────────
   _getPortalUrl: function() {
     try {
       var config = ConfiguracionService.obtener();
@@ -71,7 +95,7 @@ const SlackService = {
     }
   },
 
-  // ── Helper: emoji por tipo de derecho ──────────────────
+  // ── Helpers de presentación ─────────────────────────────
   _emojiDerecho: function(tipo) {
     var mapa = {
       'ACCESO':        '🔍',
@@ -83,7 +107,6 @@ const SlackService = {
     return mapa[(tipo || '').toUpperCase()] || '📋';
   },
 
-  // ── Helper: emoji por estado ────────────────────────────
   _emojiEstado: function(estado) {
     var mapa = {
       'PENDIENTE':           '🕐',
@@ -96,7 +119,6 @@ const SlackService = {
     return mapa[(estado || '').toUpperCase()] || '📋';
   },
 
-  // ── Helper: texto legible del estado ───────────────────
   _textoEstado: function(estado) {
     var mapa = {
       'PENDIENTE':           'Pendiente',
@@ -109,21 +131,35 @@ const SlackService = {
     return mapa[(estado || '').toUpperCase()] || estado;
   },
 
+  _formatFecha: function(valor) {
+    if (!valor) return '—';
+    try {
+      var d = new Date(valor);
+      if (isNaN(d.getTime())) return String(valor);
+      return d.toLocaleDateString('es-CL', {
+        day: '2-digit', month: 'short', year: 'numeric',
+      });
+    } catch (e) { return String(valor); }
+  },
+
   // ──────────────────────────────────────────────────────
   // 1. NUEVA SOLICITUD RECIBIDA
-  // Llamar desde SolicitudService.crear() después de guardar
+  //    Llamar desde SolicitudService.crear()
   // ──────────────────────────────────────────────────────
   notificarNuevaSolicitud: function(solicitud) {
+    var tipo      = (solicitud.tipo || 'ACCESO').toUpperCase();
     var portalUrl = this._getPortalUrl();
-    var emoji     = this._emojiDerecho(solicitud.tipo);
+    var emoji     = this._emojiDerecho(tipo);
+    var webhook   = this._getWebhookUrl(tipo);
+    if (!webhook) return false;
 
-    var payload = {
+    return this._enviar({
       blocks: [
         {
           type: 'header',
           text: {
             type: 'plain_text',
-            text: emoji + '  Nueva solicitud ARCOP recibida',
+            text: emoji + '  Nueva solicitud ' + tipo + ' recibida',
             emoji: true,
           }
         },
@@ -131,7 +167,7 @@ const SlackService = {
           type: 'section',
           fields: [
             { type: 'mrkdwn', text: '*Número:*\n`' + (solicitud.numero_solicitud || '—') + '`' },
-            { type: 'mrkdwn', text: '*Derecho:*\n' + (solicitud.tipo || 'ACCESO') },
+            { type: 'mrkdwn', text: '*Derecho:*\n' + tipo },
             { type: 'mrkdwn', text: '*Titular:*\n' + (solicitud.nombre_completo || '—') },
             { type: 'mrkdwn', text: '*RUT:*\n' + (solicitud.rut || '—') },
             { type: 'mrkdwn', text: '*Fecha límite:*\n' + this._formatFecha(solicitud.fecha_limite) },
@@ -140,40 +176,41 @@ const SlackService = {
         },
         {
           type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '📋 Ver en Portal', emoji: true },
-              url: portalUrl + '/#/dpo',
-              style: 'primary',
-            }
-          ]
+          elements: [{
+            type: 'button',
+            text: { type: 'plain_text', text: '📋 Ver en Portal', emoji: true },
+            url: portalUrl + '/#/dpo',
+            style: 'primary',
+          }]
         },
         { type: 'divider' }
       ]
-    };
-
-    return this._enviar(payload);
+    }, webhook);
   },
 
   // ──────────────────────────────────────────────────────
   // 2. CAMBIO DE ESTADO
-  // Llamar desde DPOHandlers.actualizarSolicitud()
+  //    Llamar desde DPOHandlers.actualizarSolicitud()
+  //    y SolicitudService.validarIdentidad()
   // ──────────────────────────────────────────────────────
   notificarCambioEstado: function(params) {
-    // params: { numero, tipo, nombreTitular, estadoAnterior, estadoNuevo, asignadoA, fechaTerminoSLA }
-    var portalUrl      = this._getPortalUrl();
-    var emojiNuevo     = this._emojiEstado(params.estadoNuevo);
-    var textoAnterior  = this._textoEstado(params.estadoAnterior);
-    var textoNuevo     = this._textoEstado(params.estadoNuevo);
+    // params: { numero, tipo, nombreTitular, estadoAnterior,
+    //           estadoNuevo, asignadoA, fechaTerminoSLA }
+    var tipo      = (params.tipo || 'ACCESO').toUpperCase();
+    var portalUrl = this._getPortalUrl();
+    var webhook   = this._getWebhookUrl(tipo);
+    if (!webhook) return false;
+
+    var emojiNuevo    = this._emojiEstado(params.estadoNuevo);
+    var textoAnterior = this._textoEstado(params.estadoAnterior);
+    var textoNuevo    = this._textoEstado(params.estadoNuevo);
 
     var fields = [
       { type: 'mrkdwn', text: '*Número:*\n`' + (params.numero || '—') + '`' },
-      { type: 'mrkdwn', text: '*Derecho:*\n' + (params.tipo || 'ACCESO') },
+      { type: 'mrkdwn', text: '*Derecho:*\n' + tipo },
       { type: 'mrkdwn', text: '*Titular:*\n' + (params.nombreTitular || '—') },
       { type: 'mrkdwn', text: '*Transición:*\n' + textoAnterior + ' → *' + textoNuevo + '*' },
     ];
-
     if (params.asignadoA) {
       fields.push({ type: 'mrkdwn', text: '*Asignado a:*\n' + params.asignadoA });
     }
@@ -181,49 +218,47 @@ const SlackService = {
       fields.push({ type: 'mrkdwn', text: '*SLA hasta:*\n' + this._formatFecha(params.fechaTerminoSLA) });
     }
 
-    var payload = {
+    return this._enviar({
       blocks: [
         {
           type: 'header',
           text: {
             type: 'plain_text',
-            text: emojiNuevo + '  Estado actualizado: ' + textoNuevo,
+            text: emojiNuevo + '  ' + tipo + ' — ' + textoNuevo,
             emoji: true,
           }
         },
         { type: 'section', fields: fields },
         {
           type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              text: { type: 'plain_text', text: '📋 Ver solicitud', emoji: true },
-              url: portalUrl + '/#/dpo',
-            }
-          ]
+          elements: [{
+            type: 'button',
+            text: { type: 'plain_text', text: '📋 Ver solicitud', emoji: true },
+            url: portalUrl + '/#/dpo',
+          }]
         },
         { type: 'divider' }
       ]
-    };
-
-    return this._enviar(payload);
+    }, webhook);
   },
 
   // ──────────────────────────────────────────────────────
-  // 3. SOLICITUD RESUELTA (datos enviados al titular)
-  // Llamar desde DPOHandlers.marcarResuelta()
+  // 3. SOLICITUD RESUELTA
+  //    Llamar desde DPOHandlers.marcarResuelta()
   // ──────────────────────────────────────────────────────
   notificarResuelta: function(params) {
     // params: { numero, tipo, nombreTitular, formato }
-    var portalUrl = this._getPortalUrl();
+    var tipo    = (params.tipo || 'ACCESO').toUpperCase();
+    var webhook = this._getWebhookUrl(tipo);
+    if (!webhook) return false;
 
-    var payload = {
+    return this._enviar({
       blocks: [
         {
           type: 'header',
           text: {
             type: 'plain_text',
-            text: '📤  Solicitud resuelta — datos enviados al titular',
+            text: '📤  ' + tipo + ' — Datos enviados al titular',
             emoji: true,
           }
         },
@@ -232,56 +267,58 @@ const SlackService = {
           fields: [
             { type: 'mrkdwn', text: '*Número:*\n`' + (params.numero || '—') + '`' },
             { type: 'mrkdwn', text: '*Titular:*\n' + (params.nombreTitular || '—') },
-            { type: 'mrkdwn', text: '*Derecho:*\n' + (params.tipo || 'ACCESO') },
-            { type: 'mrkdwn', text: '*Formato entregado:*\n' + (params.formato || 'PDF') },
+            { type: 'mrkdwn', text: '*Derecho:*\n' + tipo },
+            { type: 'mrkdwn', text: '*Formato:*\n' + (params.formato || 'PDF') },
           ]
         },
         {
           type: 'context',
-          elements: [
-            { type: 'mrkdwn', text: '⏳ Esperando confirmación de descarga del titular' }
-          ]
+          elements: [{
+            type: 'mrkdwn',
+            text: '⏳ Esperando confirmación de descarga del titular',
+          }]
         },
         { type: 'divider' }
       ]
-    };
-
-    return this._enviar(payload);
+    }, webhook);
   },
 
   // ──────────────────────────────────────────────────────
-  // 4. DESCARGA CONFIRMADA POR EL TITULAR
-  // Llamar desde DPOHandlers.confirmarDescarga()
+  // 4. DESCARGA CONFIRMADA
+  //    Llamar desde DPOHandlers.confirmarDescarga()
   // ──────────────────────────────────────────────────────
   notificarDescargaConfirmada: function(params) {
     // params: { numero, tipo, nombreTitular, timestamp }
-    var payload = {
+    var tipo    = (params.tipo || 'ACCESO').toUpperCase();
+    var webhook = this._getWebhookUrl(tipo);
+    if (!webhook) return false;
+
+    return this._enviar({
       blocks: [
         {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: '📥 *Descarga confirmada* — el titular accedió a sus datos\n`' +
-                  (params.numero || '—') + '` · ' + (params.nombreTitular || '—') +
-                  ' · ' + this._formatFecha(params.timestamp),
+            text: '📥 *' + tipo + '* — Descarga confirmada por el titular\n`' +
+                  (params.numero || '—') + '` · ' +
+                  (params.nombreTitular || '—') + ' · ' +
+                  this._formatFecha(params.timestamp),
           }
         },
         { type: 'divider' }
       ]
-    };
-
-    return this._enviar(payload);
+    }, webhook);
   },
 
   // ──────────────────────────────────────────────────────
-  // 5. ALERTA SLA PRÓXIMO A VENCER
-  // Llamar desde trigger diario (ver instrucciones abajo)
+  // 5. ALERTA SLA (trigger diario — notifica en cada canal)
+  //    Llamar desde checkSLADiario() (trigger instalado)
   // ──────────────────────────────────────────────────────
   notificarAlertasSLA: function() {
     try {
       var solicitudes = GoogleSheetsService.obtenerTodas();
       var hoy         = new Date();
-      var limite      = new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 días
+      var limite      = new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000);
       var portalUrl   = this._getPortalUrl();
 
       var urgentes = solicitudes.filter(function(s) {
@@ -297,45 +334,54 @@ const SlackService = {
         return false;
       }
 
-      // Construir lista de solicitudes urgentes
-      var lista = urgentes.map(function(s) {
-        var fl        = new Date(s.fecha_limite);
-        var diasRest  = Math.ceil((fl - hoy) / (1000 * 60 * 60 * 24));
-        var urgencia  = diasRest <= 1 ? '🔴' : '🟡';
-        return urgencia + ' `' + s.numero_solicitud + '` — ' +
-               (s.nombre_completo || '?') + ' — *' + diasRest + ' día(s)*';
-      }).join('\n');
+      // Agrupar por tipo de derecho → enviar a cada canal
+      var porTipo = {};
+      urgentes.forEach(function(s) {
+        var t = ((s.tipo || 'ACCESO') + '').toUpperCase();
+        if (!porTipo[t]) porTipo[t] = [];
+        porTipo[t].push(s);
+      });
 
-      var payload = {
-        blocks: [
-          {
-            type: 'header',
-            text: {
-              type: 'plain_text',
-              text: '⚠️  Alerta SLA — ' + urgentes.length + ' solicitud(es) por vencer',
-              emoji: true,
-            }
-          },
-          {
-            type: 'section',
-            text: { type: 'mrkdwn', text: lista }
-          },
-          {
-            type: 'actions',
-            elements: [
-              {
+      var self = this;
+      Object.keys(porTipo).forEach(function(tipo) {
+        var webhook = self._getWebhookUrl(tipo);
+        if (!webhook) return;
+
+        var lista = porTipo[tipo].map(function(s) {
+          var fl       = new Date(s.fecha_limite);
+          var diasRest = Math.ceil((fl - hoy) / (1000 * 60 * 60 * 24));
+          var urgencia = diasRest <= 1 ? '🔴' : '🟡';
+          return urgencia + ' `' + s.numero_solicitud + '` — ' +
+                 (s.nombre_completo || '?') + ' — *' + diasRest + ' día(s)*';
+        }).join('\n');
+
+        self._enviar({
+          blocks: [
+            {
+              type: 'header',
+              text: {
+                type: 'plain_text',
+                text: '⚠️  Alerta SLA ' + tipo + ' — ' +
+                      porTipo[tipo].length + ' solicitud(es) por vencer',
+                emoji: true,
+              }
+            },
+            { type: 'section', text: { type: 'mrkdwn', text: lista } },
+            {
+              type: 'actions',
+              elements: [{
                 type: 'button',
-                text: { type: 'plain_text', text: '⚡ Ver solicitudes urgentes', emoji: true },
+                text: { type: 'plain_text', text: '⚡ Ver urgentes', emoji: true },
                 url: portalUrl + '/#/dpo',
                 style: 'danger',
-              }
-            ]
-          },
-          { type: 'divider' }
-        ]
-      };
+              }]
+            },
+            { type: 'divider' }
+          ]
+        }, webhook);
+      });
 
-      return this._enviar(payload);
+      return true;
 
     } catch (e) {
       Logger.log('[Slack] Error en notificarAlertasSLA: ' + e);
@@ -343,34 +389,42 @@ const SlackService = {
     }
   },
 
-  // ── Helper: formatear fecha legible ────────────────────
-  _formatFecha: function(valor) {
-    if (!valor) return '—';
+  // ──────────────────────────────────────────────────────
+  // 6. PROBAR WEBHOOK (llamado desde doPost del portal)
+  //    action: 'probarSlackWebhook'
+  //    data:   { webhook_url, derecho }
+  // ──────────────────────────────────────────────────────
+  probarWebhook: function(webhookUrl, derecho) {
+    if (!webhookUrl) return { status: 'error', message: 'URL requerida' };
     try {
-      var d = new Date(valor);
-      if (isNaN(d.getTime())) return String(valor);
-      return d.toLocaleDateString('es-CL', {
-        day:   '2-digit',
-        month: 'short',
-        year:  'numeric',
+      var response = UrlFetchApp.fetch(webhookUrl, {
+        method:             'post',
+        contentType:        'application/json',
+        payload:            JSON.stringify({
+          text: '🧪 *Test Portal ARCOP* — Webhook del derecho *' +
+                (derecho || '?') + '* configurado correctamente ✅',
+        }),
+        muteHttpExceptions: true,
       });
+      var code = response.getResponseCode();
+      if (code === 200) return { status: 'success', message: 'Mensaje de prueba enviado OK' };
+      return {
+        status: 'error',
+        message: 'HTTP ' + code + ': ' + response.getContentText(),
+      };
     } catch (e) {
-      return String(valor);
+      return { status: 'error', message: e.toString() };
     }
   },
 
 };
 
 // ============================================================
-// TRIGGER DIARIO PARA ALERTAS SLA
-// Ejecutar UNA VEZ para registrar el trigger automático:
+// TRIGGER DIARIO ALERTAS SLA — ejecutar UNA VEZ:
 //
 // function instalarTriggerSLA() {
 //   ScriptApp.newTrigger('checkSLADiario')
-//     .timeBased()
-//     .everyDays(1)
-//     .atHour(8)           // 8:00 AM hora del servidor
-//     .create();
+//     .timeBased().everyDays(1).atHour(8).create();
 //   Logger.log('Trigger SLA instalado');
 // }
 //

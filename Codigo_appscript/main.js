@@ -1,13 +1,13 @@
-// ============================================
-// MAIN.GS - PUNTO DE ENTRADA
-// Portal ARCOP v2.5
-// Agrega: confirmarDescarga en doPost
-// ============================================
+// ============================================================
+// MAIN.GS — v2.6
+// Portal ARCOP
+// Agrega: probarSlackWebhook en doPost
+// ============================================================
 
 function doPost(e) {
   try {
     const action = e.parameter.action;
-    const data = e.postData ? JSON.parse(e.postData.contents) : {};
+    const data   = e.postData ? JSON.parse(e.postData.contents) : {};
 
     Logger.log('POST recibido - Action: ' + action);
 
@@ -27,11 +27,9 @@ function doPost(e) {
       return jsonResponse(DPOHandlers.marcarResuelta(data));
     }
 
-    // ── NUEVO ─────────────────────────────────────────────
     if (action === 'confirmarDescarga') {
       return jsonResponse(DPOHandlers.confirmarDescarga(data));
     }
-    // ──────────────────────────────────────────────────────
 
     if (action === 'guardarConfiguracion') {
       return jsonResponse(ConfiguracionService.guardar(data));
@@ -40,6 +38,12 @@ function doPost(e) {
     if (action === 'restaurarConfiguracion') {
       return jsonResponse(ConfiguracionService.restaurarDefault());
     }
+
+    // ── Slack: probar webhook desde el portal ────────────────
+    if (action === 'probarSlackWebhook') {
+      return jsonResponse(SlackService.probarWebhook(data.webhook_url, data.derecho));
+    }
+    // ──────────────────────────────────────────────────────────
 
     return jsonResponse({ status: 'error', message: 'Acción POST no válida: ' + action });
 
