@@ -1,42 +1,56 @@
 // ============================================================
-// src/config/dataProvider.js — v2 (reemplaza el actual)
-// CAMBIAR AQUÍ PARA MIGRAR DE BACKEND
+// src/config/dataProvider.js — v3
+// Feature flag para alternar entre backends SIN redesplegar
 //
-// 'sheets'   → Google Apps Script (activo hoy)
-// 'firebase' → Firebase Firestore Santiago (cuando migres en Q2)
+// OPCIÓN A — Variable de entorno (recomendada para CI/CD):
+//   REACT_APP_DATA_PROVIDER=firebase  npm start
+//
+// OPCIÓN B — localStorage (para pruebas en vivo):
+//   localStorage.setItem('ARCOP_PROVIDER', 'firebase')
+//   + recarga la página
+//
+// OPCIÓN C — Valor por defecto hardcodeado aquí abajo
 // ============================================================
 
-export const DATA_PROVIDER = 'sheets';
+// ── Prioridad de resolución ───────────────────────────────
+// 1. localStorage (overrides todo — útil para QA en prod)
+// 2. Variable de entorno (CI/CD, staging)
+// 3. Default hardcodeado abajo
 
-// ── INSTRUCCIONES DE MIGRACIÓN A FIREBASE ─────────────────
-//
-// Cuando estés listo para migrar:
-//
-// 1. Crea proyecto en Firebase Console
-//    → Firestore Database → región: southamerica-west1 (Santiago)
-//    → Authentication → habilitar Email/Password
-//
-// 2. Agrega las variables en tu .env.local:
-//    REACT_APP_FIREBASE_API_KEY=...
-//    REACT_APP_FIREBASE_AUTH_DOMAIN=tu-proyecto.firebaseapp.com
-//    REACT_APP_FIREBASE_PROJECT_ID=tu-proyecto
-//    REACT_APP_FIREBASE_STORAGE_BUCKET=tu-proyecto.appspot.com
-//    REACT_APP_FIREBASE_MESSAGING_SENDER_ID=...
-//    REACT_APP_FIREBASE_APP_ID=...
-//
-// 3. Inicializa en src/index.js o App.jsx:
-//    import { initFirebase } from './adapters/firebaseAdapter';
-//    await initFirebase({
-//      apiKey:     process.env.REACT_APP_FIREBASE_API_KEY,
-//      authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-//      projectId:  process.env.REACT_APP_FIREBASE_PROJECT_ID,
-//      storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-//      messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-//      appId:      process.env.REACT_APP_FIREBASE_APP_ID,
-//    });
-//
-// 4. Cambia la línea de arriba a:
-//    export const DATA_PROVIDER = 'firebase';
-//
-// 5. Listo. Sin cambios en componentes React.
-// ──────────────────────────────────────────────────────────
+const fromStorage = typeof window !== 'undefined'
+  ? window.localStorage?.getItem('ARCOP_PROVIDER')
+  : null;
+
+const fromEnv = process.env.REACT_APP_DATA_PROVIDER;
+
+// ← Cambiar aquí el default cuando migres completamente a Firebase
+const DEFAULT_PROVIDER = 'sheets';
+
+export const DATA_PROVIDER = fromStorage || fromEnv || DEFAULT_PROVIDER;
+
+// ── Helper para cambiar provider desde DevTools / UI ─────
+// Uso: window.ARCOP.setProvider('firebase') → recarga sola
+if (typeof window !== 'undefined') {
+  window.ARCOP = window.ARCOP || {};
+  window.ARCOP.setProvider = (provider) => {
+    const valid = ['sheets', 'firebase'];
+    if (!valid.includes(provider)) {
+      console.error(`[ARCOP] Provider inválido: "${provider}". Usa: ${valid.join(' | ')}`);
+      return;
+    }
+    window.localStorage.setItem('ARCOP_PROVIDER', provider);
+    console.log(`[ARCOP] ✅ Provider cambiado a "${provider}" → recargando...`);
+    window.location.reload();
+  };
+  window.ARCOP.getProvider = () => DATA_PROVIDER;
+  window.ARCOP.clearProvider = () => {
+    window.localStorage.removeItem('ARCOP_PROVIDER');
+    console.log('[ARCOP] Provider reseteado al default → recargando...');
+    window.location.reload();
+  };
+}
+
+console.log(`🔌 [DataBus] Provider activo: ${DATA_PROVIDER}${fromStorage ? ' (localStorage override)' : fromEnv ? ' (env var)' : ' (default)'}`);
+
+// ── Tipos válidos (para validación en adapters/index.js) ──
+export const VALID_PROVIDERS = ['sheets', 'firebase'];
