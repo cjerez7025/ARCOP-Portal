@@ -53,4 +53,4 @@ if (typeof window !== 'undefined') {
 console.log(`🔌 [DataBus] Provider activo: ${DATA_PROVIDER}${fromStorage ? ' (localStorage override)' : fromEnv ? ' (env var)' : ' (default)'}`);
 
 // ── Tipos válidos (para validación en adapters/index.js) ──
-export const VALID_PROVIDERS = ['sheets', 'firebase'];
+export const VALID_PROVIDERS = ['sheets', 'firebase', 'http'];

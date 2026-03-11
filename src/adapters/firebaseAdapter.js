@@ -1,19 +1,12 @@
 // ============================================================
-// src/adapters/firebaseAdapter.js — v1.1
-// Implementación COMPLETA del contrato IDataAdapter
-// usando Firebase Firestore (región southamerica-west1)
-//
-// ESTRUCTURA DE COLECCIONES FIRESTORE:
-//   /config/sistema              → configuración del tenant
-//   /config/formularios          → campos dinámicos por derecho
-//   /config/flujos               → estados y transiciones por derecho
-//   /solicitudes/{id}            → solicitudes ARCOP
-//   /solicitudes/{id}/historial  → log inmutable de estados
-//   /auditoria/{id}              → log inmutable de auditoría
-//   /tokens/{token}              → lookup token → solicitudId
+// src/adapters/firebaseAdapter.js — v1.2
+// Alineado con flujoService.js:
+//   - Estado inicial: 'PENDIENTE' (no 'RECIBIDA')
+//   - validarIdentidad: PENDIENTE → VALIDADA (no EN_PROCESO)
+//   - campo tipo_derecho (no 'tipo') en tokens
+//   - Firestore Security Rules: estado == 'PENDIENTE'
 // ============================================================
 
-// ── Todos los imports al inicio (requerido por ESLint) ────
 import {
   doc, getDoc, setDoc, addDoc, updateDoc,
   collection, getDocs, query, where, orderBy, limit,
@@ -24,7 +17,6 @@ import { db } from '../config/firebase';
 import { CAMPOS_DEFAULT_POR_DERECHO, CAMPOS_IDENTIDAD } from '../services/formularioService';
 
 // ── Config default local ──────────────────────────────────
-// Mirror de CONFIG_DEFAULT en configuracionService (no exportado)
 const CONFIG_DEFAULT = {
   empresa_nombre:           'Mi Empresa',
   empresa_rut:              '12.345.678-9',
@@ -75,9 +67,9 @@ const _toPlain = (docData) => {
 
 /** Genera número de solicitud correlativo: ARC-YYYY-NNNNN */
 const _generarNumeroSolicitud = async () => {
-  const year = new Date().getFullYear();
+  const year       = new Date().getFullYear();
   const counterRef = doc(db, 'config', `counter_${year}`);
-  const newN = await runTransaction(db, async (tx) => {
+  const newN       = await runTransaction(db, async (tx) => {
     const snap = await tx.get(counterRef);
     const next = (snap.exists() ? snap.data().ultimo : 0) + 1;
     tx.set(counterRef, { ultimo: next, year }, { merge: true });
@@ -131,8 +123,8 @@ const firebaseAdapter = {
     try {
       await setDoc(doc(db, 'config', 'sistema'), {
         ...CONFIG_DEFAULT,
-        updatedAt:   serverTimestamp(),
-        restoredAt:  serverTimestamp(),
+        updatedAt:  serverTimestamp(),
+        restoredAt: serverTimestamp(),
       });
       return _ok(CONFIG_DEFAULT);
     } catch (e) {
@@ -153,8 +145,8 @@ const firebaseAdapter = {
           derechos: Object.fromEntries(
             derechos.map(d => [d, {
               camposIdentidad: CAMPOS_IDENTIDAD,
-              campos: CAMPOS_DEFAULT_POR_DERECHO[d] || [],
-              activo: true,
+              campos:          CAMPOS_DEFAULT_POR_DERECHO[d] || [],
+              activo:          true,
             }])
           ),
         };
@@ -210,19 +202,26 @@ const firebaseAdapter = {
 
   createSolicitud: async (solicitudData) => {
     try {
-      const numero   = await _generarNumeroSolicitud();
-      const tokenId  = solicitudData.token_validacion || _generateToken();
+      const numero  = await _generarNumeroSolicitud();
+      const tokenId = solicitudData.token_validacion || _generateToken();
 
+      // ── Estado inicial alineado con flujoService.js ──
+      // PENDIENTE es el estado inicial definido en ESTADOS_BASE
+      // La transición PENDIENTE → VALIDADA ocurre al confirmar identidad
       const solicitud = {
         ...solicitudData,
         numero_solicitud:   numero,
         token_validacion:   tokenId,
-        estado:             solicitudData.estado || 'RECIBIDA',
+        tipo_derecho:       solicitudData.tipo_derecho || solicitudData.tipo || null,
+        estado:             'PENDIENTE',
         fecha_solicitud:    serverTimestamp(),
         updatedAt:          serverTimestamp(),
         identidad_validada: false,
         descargas:          0,
       };
+
+      // Eliminar campo 'tipo' legacy si viene del formulario antiguo
+      delete solicitud.tipo;
 
       const ref = await addDoc(collection(db, 'solicitudes'), solicitud);
 
@@ -230,15 +229,15 @@ const firebaseAdapter = {
       await setDoc(doc(db, 'tokens', tokenId), {
         solicitudId: ref.id,
         numero,
-        tipo:      solicitudData.tipo_derecho,
-        createdAt: serverTimestamp(),
-        usado:     false,
+        tipo_derecho: solicitud.tipo_derecho,
+        createdAt:    serverTimestamp(),
+        usado:        false,
       });
 
       // Primer evento de historial
       await addDoc(collection(db, 'solicitudes', ref.id, 'historial'), {
         estado_anterior: null,
-        estado_nuevo:    'RECIBIDA',
+        estado_nuevo:    'PENDIENTE',
         comentario:      'Solicitud creada por titular',
         actor:           'SISTEMA',
         timestamp:       serverTimestamp(),
@@ -268,10 +267,9 @@ const firebaseAdapter = {
       }
 
       constraints.push(orderBy('fecha_solicitud', 'desc'));
-
       if (filtros.limite) constraints.push(limit(filtros.limite));
 
-      const snap = await getDocs(query(collection(db, 'solicitudes'), ...constraints));
+      const snap        = await getDocs(query(collection(db, 'solicitudes'), ...constraints));
       const solicitudes = snap.docs.map(d => ({ id: d.id, ..._toPlain(d.data()) }));
       return _ok(solicitudes);
     } catch (e) {
@@ -303,7 +301,7 @@ const firebaseAdapter = {
       const tokenSnap = await getDoc(doc(db, 'tokens', token));
       if (!tokenSnap.exists()) return _ok(null);
       const { solicitudId } = tokenSnap.data();
-      const solSnap = await getDoc(doc(db, 'solicitudes', solicitudId));
+      const solSnap         = await getDoc(doc(db, 'solicitudes', solicitudId));
       if (!solSnap.exists()) return _ok(null);
       return _ok({ id: solSnap.id, ..._toPlain(solSnap.data()) });
     } catch (e) {
@@ -342,22 +340,22 @@ const firebaseAdapter = {
       const prev = (await getDoc(ref)).data();
 
       await updateDoc(ref, {
-        estado:           'DATOS_DISPONIBLES',
+        estado:           'RESUELTA',
         url_datos:        urlDatos,
-        formato_entrega:  formatoEntrega || 'JSON',
+        formato_entrega:  formatoEntrega || 'PDF',
         fecha_resolucion: serverTimestamp(),
         updatedAt:        serverTimestamp(),
       });
 
       await addDoc(collection(db, 'solicitudes', id, 'historial'), {
         estado_anterior: prev?.estado || null,
-        estado_nuevo:    'DATOS_DISPONIBLES',
-        comentario:      `Datos preparados en formato ${formatoEntrega || 'JSON'}`,
+        estado_nuevo:    'RESUELTA',
+        comentario:      `Datos preparados en formato ${formatoEntrega || 'PDF'}`,
         actor:           'DPO',
         timestamp:       serverTimestamp(),
       });
 
-      return _ok({ id, estado: 'DATOS_DISPONIBLES', url_datos: urlDatos });
+      return _ok({ id, estado: 'RESUELTA', url_datos: urlDatos });
     } catch (e) {
       return _err('Error al resolver solicitud', e);
     }
@@ -396,19 +394,21 @@ const firebaseAdapter = {
       if (!tokenSnap.exists()) return _ok({ validado: false, solicitudId: null });
 
       const { solicitudId } = tokenSnap.data();
-      const batch = writeBatch(db);
+      const batch           = writeBatch(db);
+
       batch.update(tokenRef, { usado: true, usadoAt: serverTimestamp() });
       batch.update(doc(db, 'solicitudes', solicitudId), {
         identidad_validada: true,
         fecha_validacion:   serverTimestamp(),
-        estado:             'EN_PROCESO',
+        // PENDIENTE → VALIDADA (alineado con flujoService.js ESTADOS_BASE)
+        estado:             'VALIDADA',
         updatedAt:          serverTimestamp(),
       });
       await batch.commit();
 
       await addDoc(collection(db, 'solicitudes', solicitudId, 'historial'), {
-        estado_anterior: 'RECIBIDA',
-        estado_nuevo:    'EN_PROCESO',
+        estado_anterior: 'PENDIENTE',
+        estado_nuevo:    'VALIDADA',
         comentario:      'Identidad validada por titular vía link de correo',
         actor:           'TITULAR',
         timestamp:       serverTimestamp(),
@@ -428,7 +428,8 @@ const firebaseAdapter = {
     try {
       const colRef = collection(db, 'solicitudes');
 
-      const ESTADOS  = ['RECIBIDA', 'EN_PROCESO', 'REQUIERE_INFO', 'DATOS_DISPONIBLES', 'DESCARGA_CONFIRMADA', 'CERRADA', 'RECHAZADA'];
+      // Estados alineados con flujoService.js ESTADOS_BASE
+      const ESTADOS  = ['PENDIENTE', 'VALIDADA', 'EN_PROCESO', 'RESUELTA', 'DESCARGA_CONFIRMADA', 'CERRADA', 'RECHAZADA'];
       const DERECHOS = ['ACCESO', 'RECTIFICACION', 'CANCELACION', 'OPOSICION', 'PORTABILIDAD'];
 
       const [totalSnap, ...estadoSnaps] = await Promise.all([
@@ -483,13 +484,13 @@ const firebaseAdapter = {
   getAuditoria: async (filtros = {}) => {
     try {
       const constraints = [orderBy('timestamp', 'desc')];
-      if (filtros.desde)   constraints.unshift(where('timestamp', '>=', Timestamp.fromDate(new Date(filtros.desde))));
-      if (filtros.hasta)   constraints.unshift(where('timestamp', '<=', Timestamp.fromDate(new Date(filtros.hasta))));
-      if (filtros.accion)  constraints.unshift(where('accion',   '==', filtros.accion));
-      if (filtros.userId)  constraints.unshift(where('userId',   '==', filtros.userId));
-      if (filtros.limite)  constraints.push(limit(filtros.limite));
+      if (filtros.desde)  constraints.unshift(where('timestamp', '>=', Timestamp.fromDate(new Date(filtros.desde))));
+      if (filtros.hasta)  constraints.unshift(where('timestamp', '<=', Timestamp.fromDate(new Date(filtros.hasta))));
+      if (filtros.accion) constraints.unshift(where('accion',    '==', filtros.accion));
+      if (filtros.userId) constraints.unshift(where('userId',    '==', filtros.userId));
+      if (filtros.limite) constraints.push(limit(filtros.limite));
 
-      const snap   = await getDocs(query(collection(db, 'auditoria'), ...constraints));
+      const snap    = await getDocs(query(collection(db, 'auditoria'), ...constraints));
       const eventos = snap.docs.map(d => ({ id: d.id, ..._toPlain(d.data()) }));
       return _ok(eventos);
     } catch (e) {
