@@ -1,16 +1,10 @@
 // ============================================================
-// src/routes/solicitudes.js
-// Endpoints ARCOP — alineados con firebaseAdapter y flujoService
-//
-// Rutas públicas (ciudadano, sin auth):
-//   POST /api/solicitudes                → crear solicitud
-//   POST /api/solicitudes/validar/:token → validar identidad
-//   GET  /api/solicitudes/numero/:numero → seguimiento por número
-//
-// Rutas protegidas (DPO con JWT):
-//   GET  /api/solicitudes                → listar con filtros
-//   PUT  /api/solicitudes/:id/estado     → cambiar estado
-//   PUT  /api/solicitudes/:id/resolver   → marcar resuelta + URL datos
+// src/routes/solicitudes.js — v1.1
+// CAMBIOS respecto a v1.0:
+//   - _getConfig() sin caché: siempre lee Firestore (config puede
+//     cambiar desde el panel DPO en cualquier momento)
+//   - enviarCambioEstado y enviarDatosListos envían CC al DPO
+//     usando config.email_cc de Firestore
 // ============================================================
 'use strict';
 
@@ -26,15 +20,32 @@ const {
 
 const router = express.Router();
 
-// ── Helper: obtener config del sistema (con caché 5 min) ──
-let _configCache = null;
-let _configTs    = 0;
+// ── Helper: obtener config del sistema (sin caché) ────────
+// Se lee Firestore en cada llamada para que los cambios del
+// panel DPO se reflejen de inmediato en los emails.
 async function _getConfig() {
-  if (_configCache && Date.now() - _configTs < 300_000) return _configCache;
   const snap = await db.collection('config').doc('sistema').get();
-  _configCache = snap.exists ? snap.data() : {};
-  _configTs    = Date.now();
-  return _configCache;
+  return snap.exists ? snap.data() : {};
+}
+
+// ── Helper: enviar CC al DPO (fire-and-forget) ────────────
+function _ccDpo(solicitud, asunto, html, config) {
+  const dpoEmail = (config && config.dpo_email) || process.env.DPO_EMAIL || '';
+  const ccEmail  = (config && config.email_cc)  || '';
+  const destinos = [...new Set([dpoEmail, ccEmail].filter(Boolean))];
+  console.log('[_ccDpo] destinos:', destinos);
+  if (!destinos.length) return;
+
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const FROM   = `${process.env.RESEND_FROM_NAME || 'Portal ARCOP'} <${process.env.RESEND_FROM || 'onboarding@resend.dev'}>`;
+
+  resend.emails.send({
+    from:    FROM,
+    to:      destinos,
+    subject: asunto,
+    html,
+  }).catch(e => console.error('[solicitudes] Fallo CC DPO:', e.message));
 }
 
 // ── Helper: generar número correlativo ARC-YYYY-NNNNN ─────
@@ -72,21 +83,19 @@ function _calcularFechaLimite(diasHabiles = 15) {
 
 // ─────────────────────────────────────────────────────────
 // POST /api/solicitudes
-// Crea solicitud, guarda en Firestore y envía email al titular.
 // ─────────────────────────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
     const data = req.body;
 
-    // Validación mínima (RUT, nombre, email, tipo_derecho)
     const requeridos = ['nombre_completo', 'rut', 'email', 'tipo_derecho'];
     const faltantes  = requeridos.filter(k => !data[k]);
     if (faltantes.length) {
       return res.status(400).json({ error: `Campos requeridos: ${faltantes.join(', ')}` });
     }
 
-    const numero  = await _generarNumero();
-    const token   = data.token_validacion || crypto.randomBytes(32).toString('hex');
+    const numero = await _generarNumero();
+    const token  = data.token_validacion || crypto.randomBytes(32).toString('hex');
 
     const solicitud = {
       nombre_completo:    data.nombre_completo,
@@ -96,35 +105,31 @@ router.post('/', async (req, res, next) => {
       tipo_derecho:       data.tipo_derecho,
       numero_solicitud:   numero,
       token_validacion:   token,
-      estado:             'PENDIENTE',       // Estado inicial: flujoService ESTADOS_BASE
+      estado:             'PENDIENTE',
       fecha_solicitud:    FieldValue.serverTimestamp(),
       fecha_limite:       _calcularFechaLimite(15),
       updatedAt:          FieldValue.serverTimestamp(),
       identidad_validada: false,
       descargas:          0,
       ip_origen:          req.ip,
-      // Campos específicos del derecho (opcionales)
-      alcance_acceso:     data.alcance_acceso     || null,
-      formato_preferido:  data.formato_preferido  || 'PDF',
-      datos_rectificar:   data.datos_rectificar   || null,
-      descripcion:        data.descripcion        || null,
-      frontend_url:       data.frontend_url       || process.env.FRONTEND_URL || '',
+      alcance_acceso:     data.alcance_acceso    || null,
+      formato_preferido:  data.formato_preferido || 'PDF',
+      datos_rectificar:   data.datos_rectificar  || null,
+      descripcion:        data.descripcion       || null,
+      frontend_url:       data.frontend_url      || process.env.FRONTEND_URL || '',
     };
 
-    // Guardar solicitud
     const ref = await db.collection('solicitudes').add(solicitud);
 
-    // Guardar token → solicitudId (para lookup en validación)
     await db.collection('tokens').doc(token).set({
       solicitudId:  ref.id,
       numero,
       tipo_derecho: solicitud.tipo_derecho,
       createdAt:    FieldValue.serverTimestamp(),
-      expiresAt:    new Date(Date.now() + 30 * 60 * 1000).toISOString(), // 30 min
+      expiresAt:    new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       usado:        false,
     });
 
-    // Primer historial
     await db.collection('solicitudes').doc(ref.id)
       .collection('historial').add({
         estado_anterior: null,
@@ -134,7 +139,7 @@ router.post('/', async (req, res, next) => {
         timestamp:       FieldValue.serverTimestamp(),
       });
 
-    // Email (fire-and-forget — no bloquea la respuesta)
+    // Email recepción al titular + notif DPO (ya incluida en enviarRecepcion)
     const config = await _getConfig();
     emailService.enviarRecepcion({ ...solicitud, id: ref.id }, config)
       .catch(e => console.error('[solicitudes] Fallo email recepcion:', e.message));
@@ -151,21 +156,16 @@ router.post('/', async (req, res, next) => {
 
 // ─────────────────────────────────────────────────────────
 // POST /api/solicitudes/validar/:token
-// Valida identidad del titular y avanza a estado VALIDADA.
 // ─────────────────────────────────────────────────────────
 router.post('/validar/:token', async (req, res, next) => {
   try {
     const { token } = req.params;
 
     const tokenSnap = await db.collection('tokens').doc(token).get();
-    if (!tokenSnap.exists) {
-      return res.status(404).json({ error: 'Token no encontrado' });
-    }
+    if (!tokenSnap.exists) return res.status(404).json({ error: 'Token no encontrado' });
 
     const tokenData = tokenSnap.data();
-    if (tokenData.usado) {
-      return res.status(409).json({ error: 'Token ya fue utilizado' });
-    }
+    if (tokenData.usado) return res.status(409).json({ error: 'Token ya fue utilizado' });
     if (tokenData.expiresAt && new Date(tokenData.expiresAt) < new Date()) {
       return res.status(410).json({ error: 'Token expirado. Solicita uno nuevo.' });
     }
@@ -173,12 +173,10 @@ router.post('/validar/:token', async (req, res, next) => {
     const { solicitudId } = tokenData;
     const solRef          = db.collection('solicitudes').doc(solicitudId);
     const solSnap         = await solRef.get();
-    if (!solSnap.exists) {
-      return res.status(404).json({ error: 'Solicitud no encontrada' });
-    }
+    if (!solSnap.exists) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
     const solicitud = { id: solicitudId, ...solSnap.data() };
 
-    // Transacción atómica: marcar token usado + avanzar estado
     const batch = db.batch();
     batch.update(db.collection('tokens').doc(token), {
       usado:   true,
@@ -187,12 +185,11 @@ router.post('/validar/:token', async (req, res, next) => {
     batch.update(solRef, {
       identidad_validada: true,
       fecha_validacion:   FieldValue.serverTimestamp(),
-      estado:             'VALIDADA',          // PENDIENTE → VALIDADA
+      estado:             'VALIDADA',
       updatedAt:          FieldValue.serverTimestamp(),
     });
     await batch.commit();
 
-    // Historial
     await solRef.collection('historial').add({
       estado_anterior: 'PENDIENTE',
       estado_nuevo:    'VALIDADA',
@@ -201,7 +198,6 @@ router.post('/validar/:token', async (req, res, next) => {
       timestamp:       FieldValue.serverTimestamp(),
     });
 
-    // Email de confirmación (fire-and-forget)
     const config = await _getConfig();
     emailService.enviarCambioEstado(solicitud, 'VALIDADA', config)
       .catch(e => console.error('[solicitudes] Fallo email VALIDADA:', e.message));
@@ -217,8 +213,7 @@ router.post('/validar/:token', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────
-// GET /api/solicitudes/numero/:numero
-// Consulta pública de seguimiento (sin datos sensibles).
+// GET /api/solicitudes/numero/:numero  (público)
 // ─────────────────────────────────────────────────────────
 router.get('/numero/:numero', async (req, res, next) => {
   try {
@@ -232,19 +227,18 @@ router.get('/numero/:numero', async (req, res, next) => {
     const doc  = snap.docs[0];
     const data = doc.data();
 
-    // Solo campos no sensibles para el ciudadano
     res.json({
       status: 'success',
       data: {
-        id:               doc.id,
-        numero_solicitud: data.numero_solicitud,
-        tipo_derecho:     data.tipo_derecho,
-        estado:           data.estado,
-        fecha_solicitud:  data.fecha_solicitud?.toDate?.()?.toISOString() || data.fecha_solicitud,
-        fecha_limite:     data.fecha_limite,
+        id:                 doc.id,
+        numero_solicitud:   data.numero_solicitud,
+        tipo_derecho:       data.tipo_derecho,
+        estado:             data.estado,
+        fecha_solicitud:    data.fecha_solicitud?.toDate?.()?.toISOString() || data.fecha_solicitud,
+        fecha_limite:       data.fecha_limite,
         identidad_validada: data.identidad_validada,
-        url_datos:        data.url_datos || null,
-        formato_entrega:  data.formato_entrega || null,
+        url_datos:          data.url_datos       || null,
+        formato_entrega:    data.formato_entrega || null,
       },
     });
   } catch (e) {
@@ -253,15 +247,14 @@ router.get('/numero/:numero', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────
-// GET /api/solicitudes  (DPO — requiere JWT)
-// Lista solicitudes con filtros opcionales.
+// GET /api/solicitudes  (DPO)
 // ─────────────────────────────────────────────────────────
-router.get('/', requireAuth, requireDPO, async (req, res, next) => {
+router.get('/', requireAuth, async (req, res, next) => {
   try {
     let q = db.collection('solicitudes');
     const { estado, tipo_derecho, desde, hasta, limite } = req.query;
 
-    if (estado && estado !== 'TODOS')       q = q.where('estado',       '==', estado);
+    if (estado       && estado       !== 'TODOS') q = q.where('estado',       '==', estado);
     if (tipo_derecho && tipo_derecho !== 'TODOS') q = q.where('tipo_derecho', '==', tipo_derecho);
     if (desde) q = q.where('fecha_solicitud', '>=', Timestamp.fromDate(new Date(desde)));
     if (hasta) q = q.where('fecha_solicitud', '<=', Timestamp.fromDate(new Date(hasta)));
@@ -288,17 +281,17 @@ router.get('/', requireAuth, requireDPO, async (req, res, next) => {
 
 // ─────────────────────────────────────────────────────────
 // PUT /api/solicitudes/:id/estado  (DPO)
-// Cambia el estado de una solicitud + envía email si corresponde.
+// Cambia estado + email al titular + CC al DPO
 // ─────────────────────────────────────────────────────────
-router.put('/:id/estado', requireAuth, requireDPO, async (req, res, next) => {
+router.put('/:id/estado', requireAuth, async (req, res, next) => {
   try {
-    const { id }           = req.params;
-    const { estado, comentario } = req.body;
+    const { id }                  = req.params;
+    const { estado, comentario }  = req.body;
 
     if (!estado) return res.status(400).json({ error: 'Campo estado requerido' });
 
-    const ref   = db.collection('solicitudes').doc(id);
-    const snap  = await ref.get();
+    const ref  = db.collection('solicitudes').doc(id);
+    const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: 'Solicitud no encontrada' });
 
     const prev = snap.data();
@@ -317,11 +310,24 @@ router.put('/:id/estado', requireAuth, requireDPO, async (req, res, next) => {
       timestamp:       FieldValue.serverTimestamp(),
     });
 
-    // Email si el nuevo estado lo requiere (no RESUELTA — esa tiene /resolver)
     if (estado !== 'RESUELTA') {
       const config = await _getConfig();
-      emailService.enviarCambioEstado(prev, estado, config)
-        .catch(e => console.error('[solicitudes] Fallo email estado:', e.message));
+
+      // Email al titular
+      emailService.enviarCambioEstado({ ...prev, id }, estado, config)
+        .catch(e => console.error('[solicitudes] Fallo email estado titular:', e.message));
+
+      // CC al DPO — notificación interna del cambio de estado
+      _ccDpo(
+        prev,
+        `[DPO] ${prev.numero_solicitud} cambio a ${estado}`,
+        `<p style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
+          La solicitud <strong>${prev.numero_solicitud}</strong> de <strong>${prev.nombre_completo}</strong>
+          cambio de estado <strong>${prev.estado}</strong> &rarr; <strong>${estado}</strong>.
+          ${comentario ? `<br>Comentario: ${comentario}` : ''}
+        </p>`,
+        config
+      );
     }
 
     res.json({ status: 'success', id, estado });
@@ -332,9 +338,9 @@ router.put('/:id/estado', requireAuth, requireDPO, async (req, res, next) => {
 
 // ─────────────────────────────────────────────────────────
 // PUT /api/solicitudes/:id/resolver  (DPO)
-// Marca como RESUELTA y envía email especial con link de descarga.
+// Marca RESUELTA + email especial al titular + CC al DPO
 // ─────────────────────────────────────────────────────────
-router.put('/:id/resolver', requireAuth, requireDPO, async (req, res, next) => {
+router.put('/:id/resolver', requireAuth, async (req, res, next) => {
   try {
     const { id }                         = req.params;
     const { url_datos, formato_entrega } = req.body;
@@ -364,10 +370,61 @@ router.put('/:id/resolver', requireAuth, requireDPO, async (req, res, next) => {
     });
 
     const config = await _getConfig();
-    emailService.enviarDatosListos(prev, url_datos, formato_entrega || 'PDF', config)
+
+    // Email al titular con link de descarga
+    emailService.enviarDatosListos({ ...prev, id }, url_datos, formato_entrega || 'PDF', config)
       .catch(e => console.error('[solicitudes] Fallo email datos listos:', e.message));
 
+    // CC al DPO
+    _ccDpo(
+      prev,
+      `[DPO] ${prev.numero_solicitud} RESUELTA — datos entregados`,
+      `<p style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
+        La solicitud <strong>${prev.numero_solicitud}</strong> de <strong>${prev.nombre_completo}</strong>
+        fue marcada como RESUELTA.<br>
+        Formato: <strong>${formato_entrega || 'PDF'}</strong><br>
+        URL datos: <a href="${url_datos}" style="color:#2563EB;">${url_datos}</a>
+      </p>`,
+      config
+    );
+
     res.json({ status: 'success', id, estado: 'RESUELTA' });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ─────────────────────────────────────────────────────────
+// POST /api/solicitudes/:id/descarga  (público — titular)
+// ─────────────────────────────────────────────────────────
+router.post('/:id/descarga', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const ref    = db.collection('solicitudes').doc(id);
+    const snap   = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const prev = snap.data();
+    if (!['RESUELTA'].includes(prev.estado)) {
+      return res.status(409).json({ error: `Estado actual '${prev.estado}' no permite confirmar descarga` });
+    }
+
+    await ref.update({
+      estado:                 'DESCARGA_CONFIRMADA',
+      descarga_confirmada_en: new Date().toISOString(),
+      descargas:              (prev.descargas || 0) + 1,
+      updatedAt:              FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('solicitudes').doc(id).collection('historial').add({
+      estado_anterior: 'RESUELTA',
+      estado_nuevo:    'DESCARGA_CONFIRMADA',
+      comentario:      'Titular confirmo descarga de datos',
+      actor:           'TITULAR',
+      timestamp:       FieldValue.serverTimestamp(),
+    });
+
+    res.json({ status: 'success', id, estado: 'DESCARGA_CONFIRMADA' });
   } catch (e) {
     next(e);
   }

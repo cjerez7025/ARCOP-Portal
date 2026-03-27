@@ -10,9 +10,10 @@ const helmet    = require('helmet');
 const cors      = require('cors');
 const rateLimit = require('express-rate-limit');
 
-const solicitudesRouter = require('./routes/solicitudes');
-const configRouter      = require('./routes/config');
-const healthRouter      = require('./routes/health');
+const solicitudesRouter  = require('./routes/solicitudes');
+const configRouter       = require('./routes/config');
+const healthRouter       = require('./routes/health');
+const estadisticasRouter = require('./routes/estadisticas');
 
 const app  = express();
 const PORT = process.env.PORT || 8080;
@@ -45,9 +46,10 @@ app.use(rateLimit({
 }));
 
 // ── Rutas ─────────────────────────────────────────────────
-app.use('/api/health',      healthRouter);
-app.use('/api/solicitudes', solicitudesRouter);
-app.use('/api/config',      configRouter);
+app.use('/api/health',        healthRouter);
+app.use('/api/solicitudes',   solicitudesRouter);
+app.use('/api/estadisticas',  estadisticasRouter);
+app.use('/api/config',        configRouter);
 
 // ── Error handler global ──────────────────────────────────
 app.use((err, req, res, _next) => {

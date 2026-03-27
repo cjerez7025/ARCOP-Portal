@@ -1,11 +1,12 @@
 // ============================================================
-// PanelDPO.jsx — v4.0
-// CORRECCIONES:
-//   1. Modal "Cambiar Estado" renderiza y captura campos_transicion
-//      (sistemas_afectados, url_datos, confirmación, etc.)
-//   2. handleCambiarEstado valida campos obligatorios antes de enviar
-//   3. Se pasa campos_transicion al servicio como objeto plano
-//   4. Asignación de responsable completamente funcional
+// PanelDPO.jsx — v4.1
+// CORRECCIONES sobre v4.0:
+//   1. getFieldValue: fallback tipo_derecho → tipo (datos legacy Firestore)
+//   2. Modal detalle: campo 'tipo' → 'tipo_derecho'
+//   3. handleAbrirCambiarEstado: lee tipo_derecho con fallback
+//   4. handleCambioEstadoDestino: idem
+//   5. handleCambiarEstado: idem
+//   6. Modal cambiar estado (render): idem
 // ============================================================
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -174,8 +175,14 @@ const PanelDPO = () => {
   }, [solicitudes, filtros, filtroEspecial]);
 
   // ── Helpers ────────────────────────────────────────────
+
+  // ▸ CORRECCIÓN v4.1: fallback tipo_derecho → tipo para datos legacy Firestore
   const getFieldValue = (obj, fieldName) => {
     if (!obj) return '';
+    if (fieldName === 'tipo_derecho') {
+      const v = obj['tipo_derecho'] ?? obj['tipo'];
+      return (v !== undefined && v !== null && v !== '') ? v : '';
+    }
     for (const k of [fieldName, fieldName.toUpperCase(), fieldName.toLowerCase()]) {
       if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '') return obj[k];
     }
@@ -215,7 +222,7 @@ const PanelDPO = () => {
       ...e,
       id: normId(e.id),
       transiciones_posibles: (e.transiciones_posibles || []).map(normId),
-      actores:          e.actores          || [],
+      actores:           e.actores           || [],
       campos_transicion: e.campos_transicion || [],
     }));
   };
@@ -238,7 +245,8 @@ const PanelDPO = () => {
 
   const handleAbrirCambiarEstado = async (solicitud) => {
     const estadoActualId = normId(getFieldValue(solicitud, 'estado') || 'PENDIENTE');
-    const tipo           = normId(getFieldValue(solicitud, 'tipo') || 'ACCESO');
+    // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback a tipo legacy
+    const tipo           = normId(getFieldValue(solicitud, 'tipo_derecho') || 'ACCESO');
 
     // Si flujoConfig aún no cargó, esperar a que lo haga antes de abrir el modal
     let config = flujoConfig;
@@ -274,9 +282,9 @@ const PanelDPO = () => {
     const estadosDestino = estadosDerecho.filter(e => transIds.includes(e.id) && e.activo !== false);
     const primerDestino  = estadosDestino.length > 0 ? estadosDestino[0].id : '';
 
-    console.log('🎯 Modal flujo —', tipo, estadoActualId, '→', primerDestino, '| destinos:', estadosDestino.map(e=>e.id));
+    console.log('🎯 Modal flujo —', tipo, estadoActualId, '→', primerDestino, '| destinos:', estadosDestino.map(e => e.id));
 
-    const actoresInicio  = primerDestino
+    const actoresInicio = primerDestino
       ? (estadosDerecho.find(e => e.id === primerDestino)?.actores || [])
       : [];
 
@@ -290,7 +298,8 @@ const PanelDPO = () => {
 
   const handleCambioEstadoDestino = (estadoId) => {
     const id             = normId(estadoId);
-    const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO');
+    // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback
+    const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo_derecho') || 'ACCESO');
     const estadosDerecho = getEstadosDerecho(tipo);
     const actores        = estadosDerecho.find(e => e.id === id)?.actores || [];
 
@@ -312,7 +321,8 @@ const PanelDPO = () => {
     }
 
     // ── Validar campos de transición obligatorios ──────
-    const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO');
+    // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback
+    const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo_derecho') || 'ACCESO');
     const estadosDerecho = getEstadosDerecho(tipo);
     const defDestino     = estadosDerecho.find(e => e.id === normId(nuevoEstado));
     const camposDestino  = defDestino?.campos_transicion || [];
@@ -505,7 +515,7 @@ const PanelDPO = () => {
                 ['Email',          'email'],
                 ['Teléfono',       'telefono'],
                 ['Estado',         'estado'],
-                ['Tipo',           'tipo'],
+                ['Tipo',           'tipo_derecho'],   // ▸ CORRECCIÓN v4.1
                 ['Fecha Solicitud','fecha_solicitud'],
                 ['Fecha Límite',   'fecha_limite'],
               ].map(([label, field]) => (
@@ -558,11 +568,11 @@ const PanelDPO = () => {
       )}
 
       {/* ══════════════════════════════════════════════════
-          MODAL CAMBIAR ESTADO — v4 con campos_transicion
+          MODAL CAMBIAR ESTADO — v4.1 con tipo_derecho
       ══════════════════════════════════════════════════ */}
       {modalCambiarEstado && (() => {
-        // ── TODA la resolución del flujo usa getEstadosDerecho (normalización unificada) ──
-        const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo') || 'ACCESO');
+        // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback a tipo legacy
+        const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo_derecho') || 'ACCESO');
         const estadoActualId = normId(getFieldValue(modalCambiarEstado, 'estado') || 'PENDIENTE');
         const numero         = getFieldValue(modalCambiarEstado, 'numero_solicitud');
         const nombreTitular  = getFieldValue(modalCambiarEstado, 'nombre_completo');
@@ -597,8 +607,6 @@ const PanelDPO = () => {
         const defDestino    = defDestinoRender;
         const camposDestino = defDestino?.campos_transicion || [];
         const hayCampos     = camposDestino.length > 0;
-
-
 
         return (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -698,7 +706,6 @@ const PanelDPO = () => {
                   </select>
                 </div>
               )}
-
 
               {/* ── Campos de transición del estado destino ── */}
               {hayCampos && nuevoEstado !== estadoActualId && (

@@ -1,82 +1,81 @@
 // ============================================================
-// SOLICITUDES TABLE — v3
-// Cambios respecto v2:
-//   - Cabeceras NOMBRE, ESTADO, TIPO, FECHA son clickeables
-//   - Indicador visual ↑↓ en columna activa (ChevronUp/Down)
-//   - Columnas inactivas muestran selector neutro (ChevronsUpDown)
-//   - Sort interno con useState — no modifica el array del padre
+// src/components/SolicitudesTable.jsx
+// CAMBIOS:
+//   - tipo: usa tipo_derecho || tipo (fallback para datos legacy)
+//   - getField busca tipo_derecho primero, luego tipo
 // ============================================================
 
 import React, { useState, useMemo } from 'react';
-import { Eye, Edit, CheckCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Eye, Edit2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 
-const COLOR_CLASSES = {
-  yellow: 'bg-yellow-100 text-yellow-800',
-  blue:   'bg-blue-100   text-blue-800',
-  purple: 'bg-purple-100 text-purple-800',
-  green:  'bg-green-100  text-green-800',
-  gray:   'bg-gray-100   text-gray-700',
-  red:    'bg-red-100    text-red-800',
-  orange: 'bg-orange-100 text-orange-800',
-  teal:   'bg-teal-100   text-teal-800',
-  indigo: 'bg-indigo-100 text-indigo-800',
-  pink:   'bg-pink-100   text-pink-800',
+// ── Helpers ───────────────────────────────────────────────
+
+// Lee un campo con fallback a campo legacy (tipo_derecho || tipo)
+const getField = (sol, field) => {
+  if (!sol) return null;
+
+  // Caso especial: tipo_derecho con fallback a campo 'tipo' legacy
+  if (field === 'tipo_derecho' || field === 'tipo') {
+    const v = sol['tipo_derecho'] ?? sol['tipo'];
+    return (v !== undefined && v !== null && v !== '') ? v : null;
+  }
+
+  for (const k of [field, field.toUpperCase(), field.toLowerCase()]) {
+    if (sol[k] !== undefined && sol[k] !== null && sol[k] !== '') return sol[k];
+  }
+  return null;
 };
 
-const FALLBACK_COLORS = {
-  PENDIENTE:  'bg-yellow-100 text-yellow-800',
-  VALIDADA:   'bg-blue-100   text-blue-800',
-  EN_PROCESO: 'bg-purple-100 text-purple-800',
-  RESUELTA:   'bg-green-100  text-green-800',
-  CERRADA:    'bg-gray-100   text-gray-700',
-  BLOQUEADO:  'bg-orange-100 text-orange-800',
+const formatFecha = (sol) => {
+  const raw = sol.fecha_solicitud || sol.creado_en || sol.updatedAt;
+  if (!raw) return 'Sin fecha';
+  try {
+    return new Date(raw).toLocaleDateString('es-CL', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+  } catch { return 'Sin fecha'; }
 };
 
-// Columnas que NO son ordenables
-const NO_SORT = ['#', 'RUT', 'Email', 'Acciones'];
+const ESTADO_BADGES = {
+  PENDIENTE:            { cls: 'bg-amber-100 text-amber-800',   label: 'Pendiente' },
+  VALIDADA:             { cls: 'bg-blue-100 text-blue-800',     label: 'Validada' },
+  EN_PROCESO:           { cls: 'bg-orange-100 text-orange-800', label: 'En proceso' },
+  RESUELTA:             { cls: 'bg-emerald-100 text-emerald-800', label: 'Resuelta' },
+  DESCARGA_CONFIRMADA:  { cls: 'bg-green-100 text-green-800',   label: 'Descarga confirmada' },
+  CERRADA:              { cls: 'bg-slate-100 text-slate-600',   label: 'Cerrada' },
+};
 
-const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambiarEstado, onMarcarResuelta }) => {
+const getEstadoBadge = (estadoId) => {
+  return ESTADO_BADGES[estadoId] || { cls: 'bg-gray-100 text-gray-600', label: estadoId || 'Desconocido' };
+};
 
+// Etiquetas amigables para tipo_derecho
+const TIPO_LABELS = {
+  ACCESO:        'Acceso',
+  RECTIFICACION: 'Rectificación',
+  CANCELACION:   'Cancelación',
+  OPOSICION:     'Oposición',
+  PORTABILIDAD:  'Portabilidad',
+};
+
+const getTipoLabel = (tipo) => TIPO_LABELS[tipo] || tipo || '—';
+
+// ── Columnas ──────────────────────────────────────────────
+const COLUMNS = [
+  { label: '#',       field: null },
+  { label: 'Nombre',  field: 'nombre_completo' },
+  { label: 'RUT',     field: 'rut' },
+  { label: 'Email',   field: 'email' },
+  { label: 'Estado',  field: 'estado' },
+  { label: 'Tipo',    field: 'tipo_derecho' },   // ← campo canónico
+  { label: 'Fecha',   field: 'fecha_solicitud' },
+  { label: 'Acciones', field: null },
+];
+
+// ── Componente ────────────────────────────────────────────
+const SolicitudesTable = ({ solicitudes = [], onVerDetalle, onCambiarEstado, onMarcarResuelta }) => {
   const [sortCol, setSortCol] = useState('fecha_solicitud');
   const [sortDir, setSortDir] = useState('desc');
-
-  const getField = (obj, field) => {
-    if (!obj) return '';
-    return obj[field] ?? obj[field.toUpperCase()] ?? obj[field.toLowerCase()] ?? '';
-  };
-
-  const formatFecha = (sol) => {
-    const val = getField(sol, 'fecha_solicitud');
-    if (!val) return 'Sin fecha';
-    try {
-      const d = val instanceof Date ? val : new Date(val);
-      return isNaN(d.getTime()) ? 'Sin fecha' : d.toLocaleDateString('es-CL');
-    } catch { return 'Sin fecha'; }
-  };
-
-  const getEstadoBadge = (estadoId) => {
-    const def = estadosDef.find(e => e.id === estadoId);
-    if (def) {
-      const cls = COLOR_CLASSES[def.color] || COLOR_CLASSES.gray;
-      return { cls, label: def.nombre };
-    }
-    return {
-      cls:   FALLBACK_COLORS[estadoId] || COLOR_CLASSES.gray,
-      label: estadoId,
-    };
-  };
-
-  // ── Columnas con su campo de datos ────────────────────────
-  const COLS = [
-    { label: '#',        field: null },
-    { label: 'Nombre',   field: 'nombre_completo' },
-    { label: 'RUT',      field: null },
-    { label: 'Email',    field: null },
-    { label: 'Estado',   field: 'estado' },
-    { label: 'Tipo',     field: 'tipo' },
-    { label: 'Fecha',    field: 'fecha_solicitud' },
-    { label: 'Acciones', field: null },
-  ];
 
   const handleSort = (field) => {
     if (!field) return;
@@ -88,30 +87,26 @@ const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambia
     }
   };
 
-  // ── Sort interno ──────────────────────────────────────────
   const sorted = useMemo(() => {
     if (!sortCol) return solicitudes;
     return [...solicitudes].sort((a, b) => {
-      let va = getField(a, sortCol) || '';
-      let vb = getField(b, sortCol) || '';
-      // Fechas como timestamps
-      if (sortCol === 'fecha_solicitud') {
+      let va = getField(a, sortCol) ?? '';
+      let vb = getField(b, sortCol) ?? '';
+      // fechas
+      if (sortCol.includes('fecha')) {
         va = va ? new Date(va).getTime() : 0;
         vb = vb ? new Date(vb).getTime() : 0;
-      } else {
-        va = va.toString().toLowerCase();
-        vb = vb.toString().toLowerCase();
       }
       if (va < vb) return sortDir === 'asc' ? -1 : 1;
-      if (va > vb) return sortDir === 'asc' ?  1 : -1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
   }, [solicitudes, sortCol, sortDir]);
 
-  if (!solicitudes || solicitudes.length === 0) {
+  if (!solicitudes.length) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">No hay solicitudes para mostrar</p>
+      <div className="text-center py-16 text-slate-400 text-sm">
+        No hay solicitudes para mostrar.
       </div>
     );
   }
@@ -121,18 +116,15 @@ const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambia
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            {COLS.map(({ label, field }) => {
+            {COLUMNS.map(({ label, field }) => {
               const sortable = !!field;
               const isActive = sortCol === field;
-
               return (
                 <th
                   key={label}
                   onClick={() => handleSort(field)}
                   className={`px-5 py-3 text-left text-xs font-semibold uppercase tracking-wider select-none
-                    ${sortable
-                      ? 'cursor-pointer hover:bg-gray-100 transition-colors'
-                      : 'cursor-default'}
+                    ${sortable ? 'cursor-pointer hover:bg-gray-100 transition-colors' : 'cursor-default'}
                     ${isActive ? 'text-indigo-600' : 'text-gray-500'}
                   `}
                 >
@@ -157,13 +149,15 @@ const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambia
             const rut      = getField(sol, 'rut')             || 'Sin RUT';
             const email    = getField(sol, 'email')           || 'Sin email';
             const estadoId = getField(sol, 'estado')          || 'PENDIENTE';
-            const tipo     = getField(sol, 'tipo')            || '—';
+            // ← CORRECCIÓN: lee tipo_derecho con fallback a tipo legacy
+            const tipoRaw  = getField(sol, 'tipo_derecho')    || null;
+            const tipo     = getTipoLabel(tipoRaw);
             const fecha    = formatFecha(sol);
             const { cls, label } = getEstadoBadge(estadoId);
-            const esFinal  = ['RESUELTA', 'CERRADA'].includes(estadoId);
+            const esFinal  = ['RESUELTA', 'CERRADA', 'DESCARGA_CONFIRMADA'].includes(estadoId);
 
             return (
-              <tr key={idx} className="hover:bg-gray-50 transition-colors">
+              <tr key={sol.id || idx} className="hover:bg-gray-50 transition-colors">
                 <td className="px-5 py-4 text-sm text-gray-400">{idx + 1}</td>
                 <td className="px-5 py-4">
                   <div className="text-sm font-semibold text-gray-900">{nombre}</div>
@@ -175,24 +169,23 @@ const SolicitudesTable = ({ solicitudes, estadosDef = [], onVerDetalle, onCambia
                     {label}
                   </span>
                 </td>
-                <td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">{tipo}</td>
+                <td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">
+                  {tipoRaw
+                    ? <span className="px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700">{tipo}</span>
+                    : <span className="text-gray-300">—</span>
+                  }
+                </td>
                 <td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">{fecha}</td>
                 <td className="px-5 py-4 whitespace-nowrap">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => onVerDetalle(sol)} title="Ver detalle"
-                      className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors">
+                    <button onClick={() => onVerDetalle?.(sol)} title="Ver detalle"
+                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                       <Eye className="w-4 h-4" />
                     </button>
-                    {onCambiarEstado && !esFinal && (
-                      <button onClick={() => onCambiarEstado(sol)} title="Cambiar estado"
-                        className="p-1.5 text-yellow-600 hover:text-yellow-800 hover:bg-yellow-50 rounded-lg transition-colors">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                    )}
-                    {onMarcarResuelta && !esFinal && (
-                      <button onClick={() => onMarcarResuelta(sol)} title="Marcar resuelta"
-                        className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors">
-                        <CheckCircle className="w-4 h-4" />
+                    {!esFinal && (
+                      <button onClick={() => onCambiarEstado?.(sol)} title="Cambiar estado"
+                        className="p-1.5 text-slate-500 hover:bg-slate-50 rounded-lg transition-colors">
+                        <Edit2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>

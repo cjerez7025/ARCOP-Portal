@@ -1,13 +1,9 @@
 // ============================================================
-// src/adapters/httpAdapter.js — v1.0
-// Adapter que habla con el backend Node.js en Cloud Run.
-// Mismo contrato que firebaseAdapter y sheetsAdapter.
-//
-// ENV requerida (Create React App):
-//   REACT_APP_API_URL=https://arcop-backend-xxxx-uc.a.run.app
-//
-// El DPO envía su JWT de Firebase Auth en cada request.
-// El ciudadano llama endpoints públicos sin token.
+// src/adapters/httpAdapter.js — v1.1
+// CAMBIO respecto a v1.0:
+//   - getConfig() apunta a /api/config/full (devuelve todos los
+//     campos para el panel DPO) en lugar de /api/config (público,
+//     solo devuelve 5 campos básicos para el formulario ciudadano)
 // ============================================================
 
 import { getAuth } from 'firebase/auth';
@@ -60,7 +56,11 @@ const httpAdapter = {
   nombre: 'http',
 
   // ── Config ─────────────────────────────────────────────
-  getConfig:            async ()       => _fetch('/api/config'),
+
+  // ▸ CORRECCIÓN v1.1: /api/config/full devuelve TODOS los campos
+  //   (requiresAuth=true). /api/config solo devuelve 5 campos públicos
+  //   y es usado internamente por el formulario ciudadano.
+  getConfig:            async ()       => _fetch('/api/config/full', {}, true),
   saveConfig:           async (data)   => _fetch('/api/config', { method: 'POST', body: JSON.stringify(data) }, true),
   restoreConfig:        async ()       => _fetch('/api/config/restore', { method: 'POST' }, true),
   getFormularioConfig:  async ()       => _fetch('/api/config/formularios'),
