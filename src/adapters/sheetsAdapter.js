@@ -1,6 +1,12 @@
 // ============================================================
 // src/adapters/sheetsAdapter.js
-// Agrega confirmarDescarga() al contrato
+// createSolicitud completa TODOS los campos que espera
+// GoogleSheetsService.guardarSolicitud() en Apps Script:
+//   id, numero_solicitud, fecha_solicitud, tipo, estado,
+//   nombre_completo, rut, email, telefono, alcance_acceso,
+//   categorias, formato_preferido, token_validacion,
+//   token_expiracion, fecha_limite, dias_restantes,
+//   ip_origen, user_agent, creado_en
 // ============================================================
 
 const API_URL = process.env.REACT_APP_APPS_SCRIPT_URL;
@@ -31,12 +37,43 @@ const get = async (action, params = {}) => {
   return response.json();
 };
 
+// ── Helpers locales (espejo de Utils.gs) ──────────────────
+const _generarNumero = () => {
+  const d   = new Date();
+  const año = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const rnd = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `SOL-${año}${mes}-${rnd}`;
+};
+
+const _generarId = () =>
+  `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+/** Fecha límite: 15 días hábiles desde hoy */
+const _fechaLimite = () => {
+  const f = new Date();
+  let d = 0;
+  while (d < 15) {
+    f.setDate(f.getDate() + 1);
+    if (f.getDay() !== 0 && f.getDay() !== 6) d++;
+  }
+  return f.toISOString();
+};
+
+/** Token expira en 5 días (DIAS_VALIDACION del Apps Script) */
+const _tokenExpiracion = () => {
+  const f = new Date();
+  f.setDate(f.getDate() + 5);
+  return f.toISOString();
+};
+
+// ── Adapter ───────────────────────────────────────────────
 const sheetsAdapter = {
 
   // ── Configuración ─────────────────────────────────────
-  getConfig:    async ()     => get('getConfiguracion'),
-  saveConfig:   async (data) => post('guardarConfiguracion', data),
-  restoreConfig: async ()    => post('restaurarConfiguracion', {}),
+  getConfig:     async ()     => get('getConfiguracion'),
+  saveConfig:    async (data) => post('guardarConfiguracion', data),
+  restoreConfig: async ()     => post('restaurarConfiguracion', {}),
 
   // ── Formularios dinámicos ─────────────────────────────
   getFormularioConfig: async () => {
@@ -77,23 +114,67 @@ const sheetsAdapter = {
   },
 
   // ── Solicitudes ───────────────────────────────────────
-  createSolicitud:       async (solicitud)          => post('createSolicitud', { solicitud }),
-  getSolicitudes:        async (filtros = {})        => get('getTodasSolicitudes', filtros),
-  getSolicitudPorNumero: async (numero)              => get('getSolicitudPorNumero', { numero }),
-  getSolicitudPorToken:  async (token)               => get('getSolicitud', { token }),
-  updateSolicitud:       async (id, changes)         => post('actualizarSolicitud', { id, ...changes }),
-  resolverSolicitud:     async (id, urlDatos, fmt)   => post('marcarResuelta', { id, url_datos: urlDatos, formato_entrega: fmt }),
-  validarIdentidad:      async (token)               => post('validarIdentidad', { token }),
+  createSolicitud: async (solicitud) => {
+    const ahora  = new Date().toISOString();
+    const numero = solicitud.numero_solicitud || _generarNumero();
+    const id     = solicitud.id               || _generarId();
 
-  // ── NUEVO: Confirmar descarga ─────────────────────────
-  // Llamado desde Seguimiento.jsx cuando el titular hace clic en "Descargar"
-  // Registra timestamp, contador y cambia estado a DESCARGA_CONFIRMADA
-  confirmarDescarga: async (id) => {
-    return post('confirmarDescarga', { id, descarga_confirmada_en: new Date().toISOString() });
+    // Objeto completo con TODOS los campos que espera guardarSolicitud()
+    const normalizada = {
+      // Identidad
+      id,
+      numero_solicitud:  numero,
+      fecha_solicitud:   solicitud.fecha_solicitud  || ahora,
+      creado_en:         solicitud.creado_en         || ahora,
+
+      // Tipo y estado — Apps Script valida 'tipo' (campo legacy)
+      tipo:              solicitud.tipo_derecho || solicitud.tipo || '',
+      tipo_derecho:      solicitud.tipo_derecho || solicitud.tipo || '',
+      estado:            'PENDIENTE',
+
+      // Titular
+      nombre_completo:   solicitud.nombre_completo  || '',
+      rut:               solicitud.rut               || '',
+      email:             solicitud.email             || '',
+      telefono:          solicitud.telefono          || '',
+
+      // Campos específicos del derecho
+      alcance_acceso:    solicitud.alcance_acceso    || 'TODOS',
+      categorias:        solicitud.categorias        || '[]',
+      formato_preferido: solicitud.formato_preferido || 'PDF',
+      datos_rectificar:  solicitud.datos_rectificar  || '',
+      descripcion:       solicitud.descripcion       || '',
+
+      // Token y fechas de control
+      token_validacion:  solicitud.token_validacion  || '',
+      token_expiracion:  solicitud.token_expiracion  || _tokenExpiracion(),
+      fecha_limite:      solicitud.fecha_limite       || _fechaLimite(),
+      dias_restantes:    15,
+
+      // Metadata
+      ip_origen:         solicitud.ip_origen         || '',
+      user_agent:        solicitud.user_agent         || '',
+      frontend_url:      solicitud.frontend_url       || '',
+    };
+
+    const result = await post('createSolicitud', { solicitud: normalizada });
+
+    // Si Apps Script no devuelve numero_solicitud, lo inyectamos nosotros
+    if (result.status === 'success' && !result.data?.numero_solicitud) {
+      result.data = { ...(result.data || {}), numero_solicitud: numero };
+    }
+
+    return result;
   },
 
-  // ── Estadísticas ──────────────────────────────────────
-  getEstadisticas: async () => get('getEstadisticas'),
+  getSolicitudes:        async (filtros = {})       => get('getTodasSolicitudes', filtros),
+  getSolicitudPorNumero: async (numero)             => get('getSolicitudPorNumero', { numero }),
+  getSolicitudPorToken:  async (token)              => get('getSolicitud', { token }),
+  updateSolicitud:       async (id, changes)        => post('actualizarSolicitud', { id, ...changes }),
+  resolverSolicitud:     async (id, urlDatos, fmt)  => post('marcarResuelta', { id, url_datos: urlDatos, formato_entrega: fmt }),
+  validarIdentidad:      async (token)              => post('validarIdentidad', { token }),
+  confirmarDescarga:     async (id)                 => post('confirmarDescarga', { id, descarga_confirmada_en: new Date().toISOString() }),
+  getEstadisticas:       async ()                   => get('getEstadisticas'),
 };
 
 export default sheetsAdapter;

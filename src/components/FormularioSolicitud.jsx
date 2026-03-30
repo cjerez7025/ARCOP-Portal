@@ -189,12 +189,13 @@ const FormularioSolicitud = () => {
     setLoading(true);
     try {
       const solicitud = {
-        tipo_derecho: tipoSeleccionado.key, token_validacion: generarToken(),
+        token_validacion: generarToken(),
         fecha_limite: calcularFechaLimite(),
         frontend_url: process.env.REACT_APP_FRONTEND_URL || window.location.origin,
         ip_origen: window.location.hostname, user_agent: navigator.userAgent,
         creado_en: new Date().toISOString(), ...data,
         email: data.email?.toLowerCase(), categorias: JSON.stringify(data.categorias || []),
+        tipo_derecho: tipoSeleccionado.key,
       };
       const result = await adapter.createSolicitud(solicitud);
       if (result.status === 'error') throw new Error(result.message);
