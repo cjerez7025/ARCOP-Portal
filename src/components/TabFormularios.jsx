@@ -230,14 +230,17 @@ const ModalNuevoCampo = ({ onConfirmar, onCancelar }) => {
 };
 
 // ── Componente principal TabFormularios ───────────────────
-const TabFormularios = ({ hook }) => {
+const TabFormularios = ({ hook, derechoActivoExterno }) => {
   const {
     config, loading, dirty, guardando,
     toggleDerecho, toggleCampo, toggleObligatorio,
     editarCampo, moverCampo, agregarCampo, eliminarCampo, restaurarDerecho,
   } = hook;
 
-  const [derechoActivo, setDerechoActivo] = useState('ACCESO');
+  const [derechoActivoInterno, setDerechoActivoInterno] = useState('ACCESO');
+  // Si viene prop externa (desde TabDerechos), usarla; sino usar estado interno
+  const derechoActivo    = derechoActivoExterno || derechoActivoInterno;
+  const setDerechoActivo = derechoActivoExterno ? () => {} : setDerechoActivoInterno;
   const [modalNuevo, setModalNuevo]       = useState(false);
 
   if (loading || !config) {
@@ -274,10 +277,11 @@ const TabFormularios = ({ hook }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-        {/* Sidebar: lista de derechos */}
-        <div className="lg:col-span-1 space-y-2">
+       {/* Sidebar: lista de derechos — oculto cuando viene prop externa */}
+        {!derechoActivoExterno && (
+          <div className="lg:col-span-1 space-y-2">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Derechos ARCOP</p>
-          {derechos.map(key => {
+            {derechos.map(key => {
             const m  = DERECHOS_META[key];
             const c  = COLOR_MAP[m.color];
             const dc = config.derechos?.[key];
@@ -304,7 +308,7 @@ const TabFormularios = ({ hook }) => {
               </button>
             );
           })}
-        </div>
+        </div>)}
 
         {/* Panel principal: campos del derecho */}
         <div className="lg:col-span-3">

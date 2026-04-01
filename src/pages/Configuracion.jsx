@@ -16,6 +16,7 @@ import TabFormularios      from '../components/TabFormularios';
 import TabFlujos           from '../components/TabFlujos';
 import useFormularioConfig from '../hooks/useFormularioConfig';
 import useFlujoConfig      from '../hooks/useFlujoConfig';
+import TabDerechos from '../components/TabDerechos';
 
 // ── Helpers UI ────────────────────────────────────────────
 const Campo = ({ label, ayuda, obligatorio, children, fullWidth }) => (
@@ -575,14 +576,15 @@ const Configuracion = () => {
   );
 
   const tabs = [
-    { id: 'empresa',     nombre: 'Empresa',    icono: Building2 },
-    { id: 'dpo',         nombre: 'DPO',         icono: User      },
-    { id: 'branding',    nombre: 'Branding',    icono: Palette   },
-    { id: 'plazos',      nombre: 'Plazos',      icono: Clock     },
-    { id: 'avanzado',    nombre: 'Avanzado',    icono: Settings  },
-    { id: 'formularios', nombre: 'Formularios', icono: FileText  },
-    { id: 'flujos',      nombre: 'Flujos',      icono: GitBranch },
-  ];
+  { id: 'empresa',     nombre: 'Empresa',    icono: Building2 },
+  { id: 'dpo',         nombre: 'DPO',         icono: User      },
+  { id: 'branding',    nombre: 'Branding',    icono: Palette   },
+  { id: 'plazos',      nombre: 'Plazos',      icono: Clock     },
+  { id: 'derechos',    nombre: 'Derechos',    icono: Shield    },
+  { id: 'formularios', nombre: 'Formularios', icono: FileText  },
+  { id: 'flujos',      nombre: 'Flujos',      icono: GitBranch },
+  { id: 'avanzado',    nombre: 'Avanzado',    icono: Settings  },
+];
 
   const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
   const tabActivaEsSimple = tabsSimples.includes(tabActiva);
@@ -632,6 +634,7 @@ const Configuracion = () => {
             {tabActiva === 'branding'    && <TabBranding  config={config} onChange={handleChange} />}
             {tabActiva === 'plazos'      && <TabPlazos    config={config} onChange={handleChange} />}
             {tabActiva === 'avanzado'    && <TabAvanzado  config={config} onRestaurar={handleRestaurar} onExportar={handleExportar} />}
+            {tabActiva === 'derechos'    && <TabDerechos  formularioHook={formularioHook} flujoHook={flujoHook} />}
             {tabActiva === 'formularios' && <TabFormularios hook={formularioHook} />}
             {tabActiva === 'flujos'      && <TabFlujos    hook={flujoHook} />}
           </div>

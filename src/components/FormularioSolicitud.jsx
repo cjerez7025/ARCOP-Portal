@@ -1,9 +1,17 @@
 // ============================================================
-// FORMULARIO SOLICITUD v3.6
-// CAMBIOS v3.6:
-//   - IconOposicion: mano de "stop/halt" en vez de escudo con X
-//   - Copy cards en segunda persona ("tus datos", "nuestros registros" → "los registros")
-//   - Descripciones revisadas para lenguaje de servicio al titular
+// FORMULARIO SOLICITUD v3.8
+// CAMBIOS v3.8 (MMPA-102):
+//   - Layout inteligente y dinámico basado en tipo de campo
+//   - Helper getGridColumn() — determina el span de cada campo
+//     según su tipo, id y cantidad de opciones (dinámico)
+//   - nombre_completo → siempre full width (campo más largo)
+//   - text, email, tel, rut, number, date → col-span-1 (mitad)
+//   - textarea → full width
+//   - radio, checkbox → full width (grupos de opciones)
+//   - select con ≤3 opciones → mitad / select con >3 → full width
+//   - Campos custom sin tipo reconocido → full width (safe fallback)
+//   - maxWidth: 640px → 720px (selector) / 560px → 720px (formulario)
+//   - Sin cambios en lógica, hooks, servicios ni endpoints
 // ============================================================
 
 import React, { useState } from 'react';
@@ -27,14 +35,12 @@ const IconAcceso = ({ size = 22, color = 'currentColor' }) => (
     <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
   </svg>
 );
-
 const IconRectificacion = ({ size = 22, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
   </svg>
 );
-
 const IconCancelacion = ({ size = 22, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6"/>
@@ -42,8 +48,6 @@ const IconCancelacion = ({ size = 22, color = 'currentColor' }) => (
     <path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
   </svg>
 );
-
-// Mano extendida = "alto, me opongo" — reemplaza escudo con X
 const IconOposicion = ({ size = 22, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
@@ -52,7 +56,6 @@ const IconOposicion = ({ size = 22, color = 'currentColor' }) => (
     <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
   </svg>
 );
-
 const IconPortabilidad = ({ size = 22, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -60,7 +63,6 @@ const IconPortabilidad = ({ size = 22, color = 'currentColor' }) => (
   </svg>
 );
 
-// ── Config visual por derecho ─────────────────────────────
 const DERECHOS_CONFIG = {
   ACCESO:        { Icon: IconAcceso,        color: '#3B82F6', colorDim: 'rgba(59,130,246,0.12)',  glow: 'rgba(59,130,246,0.25)',  gradient: 'linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(59,130,246,0.03) 100%)',  artNum: '5°' },
   RECTIFICACION: { Icon: IconRectificacion, color: '#F59E0B', colorDim: 'rgba(245,158,11,0.12)',  glow: 'rgba(245,158,11,0.25)',  gradient: 'linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(245,158,11,0.03) 100%)',  artNum: '6°' },
@@ -69,8 +71,6 @@ const DERECHOS_CONFIG = {
   PORTABILIDAD:  { Icon: IconPortabilidad,  color: '#10B981', colorDim: 'rgba(16,185,129,0.12)',  glow: 'rgba(16,185,129,0.25)',  gradient: 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(16,185,129,0.03) 100%)',  artNum: '9°' },
 };
 
-// ── Descripciones en segunda persona ─────────────────────
-// Estas sobreescriben las que vengan de DERECHOS_META si son en tercera persona
 const DESCRIPCIONES = {
   ACCESO:        'Conoce qué datos personales tenemos sobre ti',
   RECTIFICACION: 'Corrige tus datos personales incorrectos o incompletos',
@@ -79,13 +79,49 @@ const DESCRIPCIONES = {
   PORTABILIDAD:  'Recibe tus datos en formato estructurado y transferible',
 };
 
+// ── v3.8: Helper dinámico de layout ───────────────────────
+// Determina si un campo ocupa ancho completo o mitad del grid.
+// Funciona con campos de identidad fijos Y campos custom configurados
+// dinámicamente por el TENANT_ADMIN para cada derecho.
+const getGridColumn = (campo) => {
+  // IDs específicos que siempre van full width
+  if (campo.id === 'nombre_completo') return '1 / -1';
+
+  // Por tipo de campo
+  switch (campo.tipo) {
+    // Campos compactos → mitad de columna
+    case 'text':
+    case 'email':
+    case 'tel':
+    case 'rut':
+    case 'number':
+    case 'date':
+    case 'time':
+      return 'auto';
+
+    // Campos expandidos → full width
+    case 'textarea':
+    case 'radio':
+    case 'checkbox':
+      return '1 / -1';
+
+    // Select: depende de cuántas opciones tiene
+    // ≤3 opciones → mitad (cabe el label); >3 → full width
+    case 'select':
+      return (campo.opciones?.length ?? 0) > 3 ? '1 / -1' : 'auto';
+
+    // Fallback seguro para cualquier tipo custom no reconocido
+    default:
+      return '1 / -1';
+  }
+};
+
 const DerechoCard = ({ keyDerecho, meta, onSeleccionar, index }) => {
   const [hovered, setHovered] = useState(false);
   const cfg = DERECHOS_CONFIG[keyDerecho];
   if (!cfg) return null;
   const { Icon, color, colorDim, glow, gradient, artNum } = cfg;
   const descripcion = DESCRIPCIONES[keyDerecho] || meta.descripcion;
-
   return (
     <button
       onClick={() => onSeleccionar(keyDerecho, meta)}
@@ -94,43 +130,26 @@ const DerechoCard = ({ keyDerecho, meta, onSeleccionar, index }) => {
       className={`animate-fade-up stagger-${index + 1}`}
       style={{
         display: 'block', width: '100%', textAlign: 'left',
-        background:   hovered ? gradient : 'rgba(22,22,31,0.8)',
-        border:       `1px solid ${hovered ? color + '40' : 'rgba(255,255,255,0.08)'}`,
+        background: hovered ? gradient : 'rgba(22,22,31,0.8)',
+        border: `1px solid ${hovered ? color + '40' : 'rgba(255,255,255,0.08)'}`,
         borderRadius: '16px', padding: '24px', cursor: 'pointer',
-        transition:   'all 0.2s cubic-bezier(.22,.68,0,1.1)',
-        transform:    hovered ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow:    hovered ? `0 8px 32px ${glow}, 0 0 0 1px ${color}20` : '0 1px 3px rgba(0,0,0,0.4)',
+        transition: 'all 0.2s cubic-bezier(.22,.68,0,1.1)',
+        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
+        boxShadow: hovered ? `0 8px 32px ${glow}, 0 0 0 1px ${color}20` : '0 1px 3px rgba(0,0,0,0.4)',
         position: 'relative', overflow: 'hidden',
       }}
     >
-      <span style={{
-        position: 'absolute', right: '-8px', bottom: '-20px',
-        fontSize: '120px', fontFamily: 'var(--font-display)', fontWeight: 400,
-        color: hovered ? color + '14' : 'rgba(255,255,255,0.04)',
-        lineHeight: 1, pointerEvents: 'none', userSelect: 'none', transition: 'color 0.3s',
-      }}>{artNum}</span>
-
+      <span style={{ position: 'absolute', right: '-8px', bottom: '-20px', fontSize: '120px', fontFamily: 'var(--font-display)', fontWeight: 400, color: hovered ? color + '14' : 'rgba(255,255,255,0.04)', lineHeight: 1, pointerEvents: 'none', userSelect: 'none', transition: 'color 0.3s' }}>{artNum}</span>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', position: 'relative' }}>
-        <div style={{
-          flexShrink: 0, width: '44px', height: '44px', borderRadius: '12px',
-          background: hovered ? color + '22' : colorDim,
-          border: `1px solid ${hovered ? color + '50' : color + '25'}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s',
-        }}>
+        <div style={{ flexShrink: 0, width: '44px', height: '44px', borderRadius: '12px', background: hovered ? color + '22' : colorDim, border: `1px solid ${hovered ? color + '50' : color + '25'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
           <Icon size={20} color={hovered ? color : color + 'BB'} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, fontFamily: 'var(--font-body)', color: hovered ? '#F0F0F5' : '#C8C8D8', transition: 'color 0.2s' }}>
-              Derecho de {meta.nombre}
-            </h3>
-            <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hovered ? color : color + '80', transition: 'color 0.2s', whiteSpace: 'nowrap', marginLeft: '8px' }}>
-              Art. {artNum}
-            </span>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, fontFamily: 'var(--font-body)', color: hovered ? '#F0F0F5' : '#C8C8D8', transition: 'color 0.2s' }}>Derecho de {meta.nombre}</h3>
+            <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hovered ? color : color + '80', transition: 'color 0.2s', whiteSpace: 'nowrap', marginLeft: '8px' }}>Art. {artNum}</span>
           </div>
-          <p style={{ margin: 0, fontSize: '13px', color: hovered ? '#9090A8' : '#5A5A72', lineHeight: 1.5, transition: 'color 0.2s' }}>
-            {descripcion}
-          </p>
+          <p style={{ margin: 0, fontSize: '13px', color: hovered ? '#9090A8' : '#5A5A72', lineHeight: 1.5, transition: 'color 0.2s' }}>{descripcion}</p>
         </div>
         <div style={{ flexShrink: 0, opacity: hovered ? 1 : 0, transform: hovered ? 'translateX(0)' : 'translateX(-4px)', transition: 'all 0.2s', color }}>
           <ArrowRight size={16} />
@@ -140,7 +159,6 @@ const DerechoCard = ({ keyDerecho, meta, onSeleccionar, index }) => {
   );
 };
 
-// ── Grilla sin huérfanos ──────────────────────────────────
 const CardsGrid = ({ entries, onSeleccionar }) => {
   const total = entries.length;
   const isPar = total % 2 === 0;
@@ -148,17 +166,12 @@ const CardsGrid = ({ entries, onSeleccionar }) => {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
       {entries.map(([key], i) => {
         const { DERECHOS_META } = require('../services/formularioService');
-        const meta   = DERECHOS_META[key];
+        const meta = DERECHOS_META[key];
         if (!meta) return null;
-        const isLast  = i === total - 1;
+        const isLast = i === total - 1;
         const isOrfan = isLast && !isPar;
         return (
-          <div key={key} style={{
-            gridColumn: isOrfan ? '1 / -1' : 'auto',
-            maxWidth:   isOrfan ? 'calc(50% - 6px)' : undefined,
-            margin:     isOrfan ? '0 auto' : undefined,
-            width:      isOrfan ? '100%' : undefined,
-          }}>
+          <div key={key} style={{ gridColumn: isOrfan ? '1 / -1' : 'auto', maxWidth: isOrfan ? 'calc(50% - 6px)' : undefined, margin: isOrfan ? '0 auto' : undefined, width: isOrfan ? '100%' : undefined }}>
             <DerechoCard keyDerecho={key} meta={meta} onSeleccionar={onSeleccionar} index={i} />
           </div>
         );
@@ -167,7 +180,26 @@ const CardsGrid = ({ entries, onSeleccionar }) => {
   );
 };
 
-// ── Componente principal ───────────────────────────────────
+// ── v3.8: CamposGrid — grid inteligente con getGridColumn ──
+// Reemplaza los dos bloques flex-column de v3.7.
+// Funciona igual para identidad y especificos.
+const CamposGrid = ({ campos, register, watch, setValue, errors, esIdentidad = false }) => (
+  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+    {campos.map(campo => (
+      <div key={campo.id} style={{ gridColumn: getGridColumn(campo) }}>
+        <CampoRenderer
+          dark={true}
+          campo={campo}
+          register={register}
+          watch={watch}
+          setValue={esIdentidad && campo.tipo === 'rut' ? setValue : (campo.tipo === 'rut' ? setValue : undefined)}
+          errors={errors}
+        />
+      </div>
+    ))}
+  </div>
+);
+
 const FormularioSolicitud = () => {
   const { config, loading: loadingConfig, getCamposParaFormulario } = useFormularioConfig();
   const [loading,          setLoading]          = useState(false);
@@ -189,8 +221,7 @@ const FormularioSolicitud = () => {
     setLoading(true);
     try {
       const solicitud = {
-        token_validacion: generarToken(),
-        fecha_limite: calcularFechaLimite(),
+        token_validacion: generarToken(), fecha_limite: calcularFechaLimite(),
         frontend_url: process.env.REACT_APP_FRONTEND_URL || window.location.origin,
         ip_origen: window.location.hostname, user_agent: navigator.userAgent,
         creado_en: new Date().toISOString(), ...data,
@@ -206,7 +237,6 @@ const FormularioSolicitud = () => {
     finally { setLoading(false); }
   };
 
-  // ── Éxito ───────────────────────────────────────────────
   if (success && solicitudCreada) {
     const meta = tipoSeleccionado?.meta;
     const cfg  = DERECHOS_CONFIG[tipoSeleccionado?.key];
@@ -247,36 +277,31 @@ const FormularioSolicitud = () => {
     );
   }
 
-  // ── Loading ─────────────────────────────────────────────
   if (loadingConfig) return (
     <div className="arcop-portal-publico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <Loader size={28} color="var(--text-muted)" className="animate-spin" />
     </div>
   );
 
-  // ── Selección de derecho ────────────────────────────────
   if (!tipoSeleccionado) {
     const derechos = config?.derechos || {};
     const entries  = Object.entries(derechos).filter(([, dc]) => dc.activo !== false);
     return (
       <div className="arcop-portal-publico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem' }}>
         <div style={{ position: 'fixed', top: '20%', left: '50%', transform: 'translateX(-50%)', width: '600px', height: '300px', background: 'radial-gradient(ellipse, rgba(99,102,241,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
-        <div style={{ width: '100%', maxWidth: '640px', position: 'relative', zIndex: 1 }}>
+        <div style={{ width: '100%', maxWidth: '720px', position: 'relative', zIndex: 1 }}>
           <div className="animate-fade-up" style={{ textAlign: 'center', marginBottom: '48px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '20px', padding: '4px 14px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#818CF8', marginBottom: '20px' }}>
               <Lock size={10} /> Portal ARCOP · Ley 21.719
             </div>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 400, color: '#F0F0F5', lineHeight: 1.1, marginBottom: '12px', letterSpacing: '-0.02em' }}>
-              Ejerce tus<br />
-              <em style={{ color: '#818CF8', fontStyle: 'italic' }}>Derechos</em> ARCOP
+              Ejerce tus<br /><em style={{ color: '#818CF8', fontStyle: 'italic' }}>Derechos</em> ARCOP
             </h1>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>
               Selecciona el derecho que deseas ejercer conforme a la Ley 21.719 de Protección de Datos Personales.
             </p>
           </div>
-
           <CardsGrid entries={entries} onSeleccionar={handleSeleccionar} />
-
           <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '32px', fontSize: '12px', color: 'var(--text-muted)' }}>
             <Lock size={11} /> Datos protegidos conforme a la Ley 21.719 — Chile
           </div>
@@ -285,7 +310,6 @@ const FormularioSolicitud = () => {
     );
   }
 
-  // ── Formulario dinámico ─────────────────────────────────
   const { meta }                   = tipoSeleccionado;
   const cfg                        = DERECHOS_CONFIG[tipoSeleccionado.key] || {};
   const { Icon, color }            = cfg;
@@ -293,45 +317,52 @@ const FormularioSolicitud = () => {
 
   return (
     <div className="arcop-portal-publico" style={{ padding: '2rem 1rem 4rem' }}>
-      <div style={{ maxWidth: '560px', margin: '0 auto' }}>
+      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
         <button onClick={() => setTipoSeleccionado(null)} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px', padding: 0 }}>
           <ChevronLeft size={15} /> Cambiar tipo de solicitud
         </button>
         <div className="animate-fade-up" style={{ marginBottom: '28px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: color + '15', border: `1px solid ${color}30`, borderRadius: '20px', padding: '4px 12px 4px 8px', marginBottom: '14px' }}>
             {Icon && <Icon size={14} color={color} />}
-            <span style={{ fontSize: '11px', fontWeight: 700, color, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Derecho de {meta.nombre} · {meta.articulo}
-            </span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Derecho de {meta.nombre} · {meta.articulo}</span>
           </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 400, color: '#F0F0F5', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-            Solicitud de {meta.nombre}
-          </h1>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 400, color: '#F0F0F5', margin: '0 0 6px', letterSpacing: '-0.01em' }}>Solicitud de {meta.nombre}</h1>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>{meta.descripcion}</p>
         </div>
 
         <div className="animate-fade-up" style={{ background: 'var(--bg-surface)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
           <div style={{ height: '2px', background: `linear-gradient(90deg, ${color}, transparent)` }} />
           <form onSubmit={handleSubmit(onSubmit)} style={{ padding: '28px' }}>
+
+            {/* ── Datos personales — grid dinámico ── */}
             <div style={{ marginBottom: '28px' }}>
               <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '16px' }}>Tus datos personales</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {identidad.map(campo => (
-                  <CampoRenderer dark={true} key={campo.id} campo={campo} register={register} watch={watch}
-                    setValue={campo.tipo === 'rut' ? setValue : undefined} errors={errors} />
-                ))}
-              </div>
+              <CamposGrid
+                campos={identidad}
+                register={register}
+                watch={watch}
+                setValue={setValue}
+                errors={errors}
+                esIdentidad={true}
+              />
             </div>
+
+            {/* ── Detalles del derecho — grid dinámico ── */}
             {especificos.length > 0 && (
               <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '24px', marginBottom: '28px' }}>
                 <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '16px' }}>Detalles de tu solicitud</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {especificos.map(campo => (
-                    <CampoRenderer dark={true} key={campo.id} campo={campo} register={register} watch={watch} setValue={setValue} errors={errors} />
-                  ))}
-                </div>
+                <CamposGrid
+                  campos={especificos}
+                  register={register}
+                  watch={watch}
+                  setValue={setValue}
+                  errors={errors}
+                  esIdentidad={false}
+                />
               </div>
             )}
+
+            {/* ── Términos ── */}
             <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '24px', marginBottom: '24px' }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: errors.acepta_terminos ? 'rgba(239,68,68,0.08)' : 'rgba(30,30,48,0.8)', border: `1px solid ${errors.acepta_terminos ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.07)'}`, borderRadius: '12px', padding: '16px', cursor: 'pointer' }}>
                 <input {...register('acepta_terminos', { required: 'Debes aceptar para continuar' })}
@@ -348,12 +379,15 @@ const FormularioSolicitud = () => {
                 </div>
               )}
             </div>
+
+            {/* ── Submit ── */}
             <button type="submit" disabled={loading}
               style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 24px', background: loading ? 'rgba(255,255,255,0.05)' : color, border: 'none', borderRadius: '12px', color: '#fff', fontSize: '14px', fontWeight: 600, fontFamily: 'var(--font-body)', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, transition: 'all 0.2s', boxShadow: loading ? 'none' : `0 4px 20px ${color}40` }}>
               {loading ? <><Loader size={15} className="animate-spin" /> Enviando...</> : <><Send size={15} /> Enviar Solicitud</>}
             </button>
           </form>
         </div>
+
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '20px', fontSize: '11px', color: 'var(--text-muted)' }}>
           <Lock size={11} /> Datos protegidos conforme a la Ley 21.719 — Chile
         </div>

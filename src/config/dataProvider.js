@@ -9,7 +9,7 @@ const fromStorage = typeof window !== 'undefined'
 
 const fromEnv = process.env.REACT_APP_DATA_PROVIDER;
 
-const DEFAULT_PROVIDER = 'sheets';
+const DEFAULT_PROVIDER = 'http';
 
 export const DATA_PROVIDER = fromStorage || fromEnv || DEFAULT_PROVIDER;
 

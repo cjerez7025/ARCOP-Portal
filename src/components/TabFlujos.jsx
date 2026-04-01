@@ -594,7 +594,7 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
 };
 
 // ── Componente principal ──────────────────────────────────
-const TabFlujos = ({ hook }) => {
+const TabFlujos = ({ hook, derechoActivoExterno }) => {
   const {
     config, loading,
     toggleEstado, editarEstado, toggleProtegidoPorLey,
@@ -604,10 +604,12 @@ const TabFlujos = ({ hook }) => {
     editarSLA,
     agregarActor, editarActor, eliminarActor,
     getEstadosOrdenados,
-    editarSlackWebhook,   // ← v4
+    editarSlackWebhook,
   } = hook;
 
-  const [derechoActivo, setDerechoActivo] = useState('ACCESO');
+  const [derechoActivoInterno, setDerechoActivoInterno] = useState('ACCESO');
+  const derechoActivo    = derechoActivoExterno || derechoActivoInterno;
+  const setDerechoActivo = derechoActivoExterno ? () => {} : setDerechoActivoInterno;
   const [vista,         setVista]         = useState('lista'); // 'lista' | 'diagrama'
   const [modalNuevo,    setModalNuevo]    = useState(false);
 
@@ -647,10 +649,11 @@ const TabFlujos = ({ hook }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-        {/* Sidebar */}
-        <div className="lg:col-span-1 space-y-1.5">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Derechos ARCOP</p>
-          {derechos.map(key => {
+       {/* Sidebar — oculto cuando viene prop externa */}
+      {!derechoActivoExterno && (
+      <div className="lg:col-span-1 space-y-1.5">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Derechos ARCOP</p>
+            {derechos.map(key => {
             const m    = DERECHOS_META_FLUJO[key];
             const dc2  = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
             const est  = config.derechos?.[key]?.estados || [];
@@ -680,7 +683,7 @@ const TabFlujos = ({ hook }) => {
               </button>
             );
           })}
-        </div>
+        </div>)}
 
         {/* Panel principal */}
         <div className="lg:col-span-3 space-y-4">
