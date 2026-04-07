@@ -575,15 +575,13 @@ const Configuracion = () => {
     </div>
   );
 
-  const tabs = [
-  { id: 'empresa',     nombre: 'Empresa',    icono: Building2 },
-  { id: 'dpo',         nombre: 'DPO',         icono: User      },
-  { id: 'branding',    nombre: 'Branding',    icono: Palette   },
-  { id: 'plazos',      nombre: 'Plazos',      icono: Clock     },
-  { id: 'derechos',    nombre: 'Derechos',    icono: Shield    },
-  { id: 'formularios', nombre: 'Formularios', icono: FileText  },
-  { id: 'flujos',      nombre: 'Flujos',      icono: GitBranch },
-  { id: 'avanzado',    nombre: 'Avanzado',    icono: Settings  },
+const tabs = [
+  { id: 'empresa',  nombre: 'Empresa',  icono: Building2 },
+  { id: 'dpo',      nombre: 'DPO',      icono: User      },
+  { id: 'branding', nombre: 'Branding', icono: Palette   },
+  { id: 'plazos',   nombre: 'Plazos',   icono: Clock     },
+  { id: 'derechos', nombre: 'Derechos', icono: Shield    },
+  { id: 'avanzado', nombre: 'Avanzado', icono: Settings  },
 ];
 
   const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
@@ -617,10 +615,7 @@ const Configuracion = () => {
                         : 'border-transparent text-gray-600 hover:bg-gray-100'}`}>
                     <Icono className="w-4 h-4" />
                     {tab.nombre}
-                    {tab.id === 'formularios' && formularioHook.dirty &&
-                      <span className="w-2 h-2 bg-yellow-400 rounded-full ml-1" />}
-                    {tab.id === 'flujos' && flujoHook.dirty &&
-                      <span className="w-2 h-2 bg-yellow-400 rounded-full ml-1" />}
+
                   </button>
                 );
               })}
@@ -635,18 +630,12 @@ const Configuracion = () => {
             {tabActiva === 'plazos'      && <TabPlazos    config={config} onChange={handleChange} />}
             {tabActiva === 'avanzado'    && <TabAvanzado  config={config} onRestaurar={handleRestaurar} onExportar={handleExportar} />}
             {tabActiva === 'derechos'    && <TabDerechos  formularioHook={formularioHook} flujoHook={flujoHook} />}
-            {tabActiva === 'formularios' && <TabFormularios hook={formularioHook} />}
-            {tabActiva === 'flujos'      && <TabFlujos    hook={flujoHook} />}
           </div>
 
           {/* Footer */}
           <div className="border-t border-gray-200 px-8 py-5 bg-gray-50 flex justify-between items-center">
             <div className="text-sm text-yellow-600">
               {cambiosPendientes && tabActivaEsSimple &&
-                <span className="flex items-center gap-1"><AlertCircle className="w-4 h-4" />Cambios sin guardar</span>}
-              {formularioHook.dirty && tabActiva === 'formularios' &&
-                <span className="flex items-center gap-1"><AlertCircle className="w-4 h-4" />Cambios sin guardar</span>}
-              {flujoHook.dirty && tabActiva === 'flujos' &&
                 <span className="flex items-center gap-1"><AlertCircle className="w-4 h-4" />Cambios sin guardar</span>}
             </div>
 
@@ -658,20 +647,7 @@ const Configuracion = () => {
                              : <><Save className="w-4 h-4" />Guardar cambios</>}
                 </button>
               )}
-              {tabActiva === 'formularios' && (
-                <button onClick={formularioHook.guardar} disabled={formularioHook.guardando || !formularioHook.dirty}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
-                  {formularioHook.guardando ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</>
-                                            : <><Save className="w-4 h-4" />Guardar Formularios</>}
-                </button>
-              )}
-              {tabActiva === 'flujos' && (
-                <button onClick={flujoHook.guardar} disabled={flujoHook.guardando || !flujoHook.dirty}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
-                  {flujoHook.guardando ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</>
-                                       : <><Save className="w-4 h-4" />Guardar Flujos</>}
-                </button>
-              )}
+              
             </div>
           </div>
         </div>

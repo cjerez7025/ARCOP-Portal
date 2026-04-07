@@ -1,15 +1,11 @@
 // ============================================================
-// src/hooks/useDerechosConfig.js  v1.1
-// MMPA-104 — Fix ruta Firestore: colección raíz "derechos/{id}"
-// Firestore requiere segmentos pares → "derechos/ACCESO" (2 seg)
+// src/hooks/useDerechosConfig.js — v2.0
+// MMPA-104 — Hook para gestión de derechos ARCOP
+// v2.0: usa httpAdapter en vez de Firestore SDK directamente
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
-import { db } from '../config/firebase';
-import {
-  collection, doc, setDoc, updateDoc,
-  onSnapshot, serverTimestamp, query, orderBy,
-} from 'firebase/firestore';
+import adapter from '../adapters';
 import { toast } from 'react-toastify';
 
 export const ICONOS_DISPONIBLES = [
@@ -26,9 +22,9 @@ export const ICONOS_DISPONIBLES = [
 ];
 
 const COLORES_DEFAULT = [
-  '#3B82F6','#F59E0B','#EF4444',
-  '#8B5CF6','#10B981','#EC4899',
-  '#F97316','#06B6D4',
+  '#3B82F6', '#F59E0B', '#EF4444',
+  '#8B5CF6', '#10B981', '#EC4899',
+  '#F97316', '#06B6D4',
 ];
 
 export const buildDerechoVacio = (orden = 99) => ({
@@ -49,32 +45,25 @@ const useDerechosConfig = () => {
   const [loading,   setLoading]   = useState(true);
   const [guardando, setGuardando] = useState(false);
 
-  // ── Listener en tiempo real sobre colección raíz "derechos" ──
-  // Ruta: derechos/{ACCESO}, derechos/{RECTIFICACION}, etc.
-  // Segmentos: 2 (par) ✓
-  useEffect(() => {
-    const q = query(
-      collection(db, 'derechos'),
-      orderBy('orden', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snap) => {
-        const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        setDerechos(data);
-        setLoading(false);
-      },
-      (err) => {
-        console.error('[useDerechosConfig] Error listener:', err.message);
-        // Si la colección no existe aún, simplemente mostrar vacío
-        setDerechos([]);
-        setLoading(false);
+  // ── Cargar todos los derechos (DPO) ──────────────────────
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await adapter.getTodosDerechos();
+      if (result.status === 'success') {
+        setDerechos(result.data || []);
+      } else {
+        toast.error('Error al cargar derechos');
       }
-    );
-
-    return () => unsubscribe();
+    } catch (e) {
+      console.error('[useDerechosConfig]', e.message);
+      toast.error('Error al cargar derechos');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { cargar(); }, [cargar]);
 
   // ── Crear nuevo derecho ────────────────────────────────────
   const crearDerecho = async (id, datos) => {
@@ -83,33 +72,19 @@ const useDerechosConfig = () => {
       return false;
     }
 
-    const idNormalizado = id.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '');
-
-    if (derechos.find(d => d.id === idNormalizado)) {
-      toast.error('Ya existe un derecho con ID ' + idNormalizado);
-      return false;
-    }
-
-    if ((datos.sla_dias || 15) > 15) {
-      toast.error('El SLA no puede superar 15 días hábiles (Art. 11 Ley 21.719)');
-      return false;
-    }
-
     setGuardando(true);
     try {
-      // Ruta: derechos/ACCESO → 2 segmentos ✓
-      await setDoc(doc(db, 'derechos', idNormalizado), {
-        ...datos,
-        id:             idNormalizado,
-        activo:         false,
-        creado_en:      serverTimestamp(),
-        actualizado_en: serverTimestamp(),
-      });
-      toast.success('Derecho ' + datos.nombre + ' creado');
-      return idNormalizado;
+      const result = await adapter.crearDerecho(id, datos);
+      if (result.status === 'success') {
+        toast.success('Derecho ' + datos.nombre + ' creado');
+        await cargar();
+        return result.data?.id || id.toUpperCase();
+      } else {
+        toast.error(result.message || 'Error al crear derecho');
+        return false;
+      }
     } catch (e) {
-      console.error('[useDerechosConfig] Error creando:', e);
-      toast.error('Error al crear derecho: ' + e.message);
+      toast.error('Error al crear derecho');
       return false;
     } finally {
       setGuardando(false);
@@ -118,22 +93,19 @@ const useDerechosConfig = () => {
 
   // ── Editar derecho existente ───────────────────────────────
   const editarDerecho = async (id, cambios) => {
-    if (cambios.sla_dias && cambios.sla_dias > 15) {
-      toast.error('El SLA no puede superar 15 días hábiles (Art. 11 Ley 21.719)');
-      return false;
-    }
-
     setGuardando(true);
     try {
-      await updateDoc(doc(db, 'derechos', id), {
-        ...cambios,
-        actualizado_en: serverTimestamp(),
-      });
-      toast.success('Derecho actualizado');
-      return true;
+      const result = await adapter.editarDerecho(id, cambios);
+      if (result.status === 'success') {
+        toast.success('Derecho actualizado');
+        await cargar();
+        return true;
+      } else {
+        toast.error(result.message || 'Error al guardar');
+        return false;
+      }
     } catch (e) {
-      console.error('[useDerechosConfig] Error editando:', e);
-      toast.error('Error al guardar: ' + e.message);
+      toast.error('Error al guardar cambios');
       return false;
     } finally {
       setGuardando(false);
@@ -142,25 +114,19 @@ const useDerechosConfig = () => {
 
   // ── Toggle activo/inactivo ─────────────────────────────────
   const toggleActivo = async (id) => {
-    const derecho = derechos.find(d => d.id === id);
-    if (!derecho) return;
-    return editarDerecho(id, { activo: !derecho.activo });
-  };
-
-  // ── Reordenar (swap de orden entre dos derechos) ──────────
-  const reordenar = async (idA, idB) => {
-    const a = derechos.find(d => d.id === idA);
-    const b = derechos.find(d => d.id === idB);
-    if (!a || !b) return;
-
     setGuardando(true);
     try {
-      await Promise.all([
-        updateDoc(doc(db, 'derechos', idA), { orden: b.orden, actualizado_en: serverTimestamp() }),
-        updateDoc(doc(db, 'derechos', idB), { orden: a.orden, actualizado_en: serverTimestamp() }),
-      ]);
+      const result = await adapter.toggleDerecho(id);
+      if (result.status === 'success') {
+        await cargar();
+        return true;
+      } else {
+        toast.error(result.message || 'Error al cambiar estado');
+        return false;
+      }
     } catch (e) {
-      toast.error('Error al reordenar');
+      toast.error('Error al cambiar estado');
+      return false;
     } finally {
       setGuardando(false);
     }
@@ -170,10 +136,10 @@ const useDerechosConfig = () => {
     derechos,
     loading,
     guardando,
+    cargar,
     crearDerecho,
     editarDerecho,
     toggleActivo,
-    reordenar,
     ICONOS_DISPONIBLES,
     buildDerechoVacio,
   };

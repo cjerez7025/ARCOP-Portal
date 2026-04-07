@@ -18,6 +18,8 @@ const estadisticasRouter = require('./routes/estadisticas');
 const app  = express();
 const PORT = process.env.PORT || 8080;
 
+const derechosRoutes = require('./routes/derechos');
+
 // ── Seguridad ─────────────────────────────────────────────
 app.use(helmet());
 
@@ -50,6 +52,7 @@ app.use('/api/health',        healthRouter);
 app.use('/api/solicitudes',   solicitudesRouter);
 app.use('/api/estadisticas',  estadisticasRouter);
 app.use('/api/config',        configRouter);
+app.use('/api/derechos', derechosRoutes);
 
 // ── Error handler global ──────────────────────────────────
 app.use((err, req, res, _next) => {

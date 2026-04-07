@@ -1,28 +1,25 @@
 // ============================================================
-// src/adapters/httpAdapter.js — v1.1
-// CAMBIO respecto a v1.0:
-//   - getConfig() apunta a /api/config/full (devuelve todos los
-//     campos para el panel DPO) en lugar de /api/config (público,
-//     solo devuelve 5 campos básicos para el formulario ciudadano)
+// src/adapters/httpAdapter.js — v2.0
+// Adapter que habla con el backend Node.js en Cloud Run.
+// v2.0: agrega métodos de derechos (MMPA-104)
+//
+// ENV requerida:
+//   REACT_APP_API_URL=https://arcop-backend-xxxx-uc.a.run.app
 // ============================================================
 
 import { getAuth } from 'firebase/auth';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
-// ── Helpers ───────────────────────────────────────────────
-
 const _ok  = (data) => ({ status: 'success', data });
 const _err = (msg)  => ({ status: 'error',   data: null, message: msg });
 
-/** Obtiene el JWT del usuario DPO autenticado en Firebase Auth */
 async function _getToken() {
   const user = getAuth().currentUser;
   if (!user) return null;
   return user.getIdToken();
 }
 
-/** fetch con manejo de errores uniforme */
 async function _fetch(path, options = {}, requiresAuth = false) {
   try {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -47,26 +44,39 @@ async function _fetch(path, options = {}, requiresAuth = false) {
   }
 }
 
-// ─────────────────────────────────────────────────────────
-// ADAPTER
-// ─────────────────────────────────────────────────────────
-
 const httpAdapter = {
 
   nombre: 'http',
 
   // ── Config ─────────────────────────────────────────────
-
-  // ▸ CORRECCIÓN v1.1: /api/config/full devuelve TODOS los campos
-  //   (requiresAuth=true). /api/config solo devuelve 5 campos públicos
-  //   y es usado internamente por el formulario ciudadano.
-  getConfig:            async ()       => _fetch('/api/config/full', {}, true),
+  getConfig:            async ()       => _fetch('/api/config'),
   saveConfig:           async (data)   => _fetch('/api/config', { method: 'POST', body: JSON.stringify(data) }, true),
   restoreConfig:        async ()       => _fetch('/api/config/restore', { method: 'POST' }, true),
   getFormularioConfig:  async ()       => _fetch('/api/config/formularios'),
   saveFormularioConfig: async (config) => _fetch('/api/config/formularios', { method: 'POST', body: JSON.stringify(config) }, true),
   getFlujoConfig:       async ()       => _fetch('/api/config/flujos'),
   saveFlujoConfig:      async (config) => _fetch('/api/config/flujos', { method: 'POST', body: JSON.stringify(config) }, true),
+
+  // ── Derechos ────────────────────────────────────────────
+  // Público: derechos activos para portal público
+  getDerechos: async () =>
+    _fetch('/api/derechos'),
+
+  // Protegido: todos los derechos para panel DPO/Config
+  getTodosDerechos: async () =>
+    _fetch('/api/derechos/todos', {}, true),
+
+  // Crear nuevo derecho
+  crearDerecho: async (id, datos) =>
+    _fetch('/api/derechos', { method: 'POST', body: JSON.stringify({ id, ...datos }) }, true),
+
+  // Editar derecho existente
+  editarDerecho: async (id, cambios) =>
+    _fetch(`/api/derechos/${id}`, { method: 'PUT', body: JSON.stringify(cambios) }, true),
+
+  // Activar / desactivar derecho
+  toggleDerecho: async (id) =>
+    _fetch(`/api/derechos/${id}/toggle`, { method: 'PUT' }, true),
 
   // ── Solicitudes ─────────────────────────────────────────
   createSolicitud: async (solicitud) =>
