@@ -392,24 +392,24 @@ const TabDerechos = ({ formularioHook, flujoHook }) => {
                     guardando={guardando}
                   />
                 )}
-                {subTab === 'formulario' && derechoSeleccionado && (
-  formularioHook?.config?.derechos?.[derechoSeleccionado.id]
-    ? <TabFormularios hook={formularioHook} derechoActivoExterno={derechoSeleccionado.id} />
-    : <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-        <div className="text-4xl mb-3">📋</div>
-        <p className="text-sm font-medium text-gray-500">Sin formulario configurado</p>
-        <p className="text-xs text-gray-400 mt-1">Este derecho aún no tiene campos definidos en config/formularios</p>
-      </div>
-)}
-{subTab === 'flujo' && derechoSeleccionado && (
-  flujoHook?.config?.derechos?.[derechoSeleccionado.id]
-    ? <TabFlujos hook={flujoHook} derechoActivoExterno={derechoSeleccionado.id} />
-    : <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-        <div className="text-4xl mb-3">🔄</div>
-        <p className="text-sm font-medium text-gray-500">Sin flujo configurado</p>
-        <p className="text-xs text-gray-400 mt-1">Este derecho aún no tiene estados definidos en config/flujos</p>
-      </div>
-)}
+  {subTab === 'formulario' && derechoSeleccionado && (() => {
+  if (!formularioHook?.config?.derechos?.[derechoSeleccionado.id]) {
+    formularioHook?.updateConfig?.(c => {
+      if (!c.derechos) c.derechos = {};
+      c.derechos[derechoSeleccionado.id] = { activo: true, campos: [] };
+    });
+  }
+  return <TabFormularios hook={formularioHook} derechoActivoExterno={derechoSeleccionado.id} />;
+})()}
+{subTab === 'flujo' && derechoSeleccionado && (() => {
+  if (!flujoHook?.config?.derechos?.[derechoSeleccionado.id]) {
+    flujoHook?.update?.(c => {
+      if (!c.derechos) c.derechos = {};
+      c.derechos[derechoSeleccionado.id] = { activo: true, estados: [] };
+    });
+  }
+  return <TabFlujos hook={flujoHook} derechoActivoExterno={derechoSeleccionado.id} />;
+})()}
               </>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">

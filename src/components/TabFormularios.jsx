@@ -114,15 +114,12 @@ const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, on
 
         {/* Acciones */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Editar label */}
           {campo.editable && !editando && (
             <button onClick={() => setEditando(true)} title="Editar texto"
               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded">
               <Edit2 className="w-3.5 h-3.5" />
             </button>
           )}
-
-          {/* Toggle obligatorio */}
           {!campo.protegido && (
             <button onClick={() => onToggleObligatorio(campo.id)}
               title={campo.obligatorio ? 'Hacer opcional' : 'Hacer obligatorio'}
@@ -134,8 +131,6 @@ const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, on
               {campo.obligatorio ? '✱ Obl.' : 'Opc.'}
             </button>
           )}
-
-          {/* Activar/desactivar */}
           {!campo.protegido && (
             <button onClick={() => onToggle(campo.id)}
               title={campo.activo ? 'Desactivar campo' : 'Activar campo'}
@@ -147,8 +142,6 @@ const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, on
               {campo.activo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           )}
-
-          {/* Eliminar (solo custom) */}
           {campo.origen === 'custom' && (
             <button onClick={() => onEliminar(campo.id)} title="Eliminar campo"
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
@@ -168,7 +161,7 @@ const ModalNuevoCampo = ({ onConfirmar, onCancelar }) => {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">➕ Agregar campo personalizado</h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Agregar campo personalizado</h3>
 
         <div className="space-y-4">
           <div>
@@ -238,10 +231,9 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
   } = hook;
 
   const [derechoActivoInterno, setDerechoActivoInterno] = useState('ACCESO');
-  // Si viene prop externa (desde TabDerechos), usarla; sino usar estado interno
   const derechoActivo    = derechoActivoExterno || derechoActivoInterno;
   const setDerechoActivo = derechoActivoExterno ? () => {} : setDerechoActivoInterno;
-  const [modalNuevo, setModalNuevo]       = useState(false);
+  const [modalNuevo, setModalNuevo] = useState(false);
 
   if (loading || !config) {
     return (
@@ -254,20 +246,21 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
     );
   }
 
-  const derechos   = Object.keys(DERECHOS_META);
-  const meta       = DERECHOS_META[derechoActivo];
-  const colores    = COLOR_MAP[meta.color];
+  const derechos      = Object.keys(DERECHOS_META);
+  // ── FIX: fallback para derechos custom no en DERECHOS_META ──
+  const meta          = DERECHOS_META[derechoActivo] || { nombre: derechoActivo, color: 'blue', icono: '📋', articulo: '', descripcion: '' };
+  const colores       = COLOR_MAP[meta.color] || COLOR_MAP['blue'];
   const derechoConfig = config.derechos?.[derechoActivo];
-  const campos     = derechoConfig?.campos || [];
+  const campos        = derechoConfig?.campos || [];
   const camposOrdenados = [...campos].sort((a, b) => a.orden - b.orden);
 
-  const camposActivos   = camposOrdenados.filter(c => c.activo).length;
-  const camposTotal     = camposOrdenados.length;
+  const camposActivos = camposOrdenados.filter(c => c.activo).length;
+  const camposTotal   = camposOrdenados.length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">📋 Configuración de Formularios</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">Configuración de Formularios</h2>
         <p className="text-sm text-gray-500">
           Personalice los campos que se solicitan en cada derecho ARCOP. Los campos marcados como
           <span className="mx-1 font-medium text-yellow-700">protegidos por ley</span>
@@ -277,41 +270,42 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-       {/* Sidebar: lista de derechos — oculto cuando viene prop externa */}
+        {/* Sidebar — oculto cuando viene prop externa */}
         {!derechoActivoExterno && (
           <div className="lg:col-span-1 space-y-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Derechos ARCOP</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Derechos ARCOP</p>
             {derechos.map(key => {
-            const m  = DERECHOS_META[key];
-            const c  = COLOR_MAP[m.color];
-            const dc = config.derechos?.[key];
-            const activo = dc?.activo !== false;
-            return (
-              <button
-                key={key}
-                onClick={() => setDerechoActivo(key)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
-                  derechoActivo === key
-                    ? `${c.border} ${c.header} border`
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-800">
-                    {m.icono} {m.nombre}
-                  </span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${activo ? c.badge : 'bg-gray-100 text-gray-400'}`}>
-                    {activo ? `${dc?.campos?.filter(c => c.activo).length || 0} campos` : 'inactivo'}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mt-0.5">{m.articulo}</p>
-              </button>
-            );
-          })}
-        </div>)}
+              const m  = DERECHOS_META[key];
+              const c  = COLOR_MAP[m.color] || COLOR_MAP['blue'];
+              const dc = config.derechos?.[key];
+              const activo = dc?.activo !== false;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setDerechoActivo(key)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+                    derechoActivo === key
+                      ? `${c.border} ${c.header} border`
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-800">
+                      {m.icono} {m.nombre}
+                    </span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${activo ? c.badge : 'bg-gray-100 text-gray-400'}`}>
+                      {activo ? `${dc?.campos?.filter(c => c.activo).length || 0} campos` : 'inactivo'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">{m.articulo}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        {/* Panel principal: campos del derecho */}
-        <div className="lg:col-span-3">
+        {/* Panel principal */}
+        <div className={derechoActivoExterno ? 'lg:col-span-4' : 'lg:col-span-3'}>
           <div className={`border-2 ${colores.border} rounded-xl overflow-hidden`}>
 
             {/* Header del derecho */}
@@ -321,21 +315,23 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
                   {meta.icono} Derecho de {meta.nombre}
                 </h3>
                 <p className="text-sm text-gray-600 mt-0.5">
-                  {meta.descripcion} — <span className="font-medium">{meta.articulo} Ley 21.719</span>
+                  {meta.descripcion}{meta.articulo ? ` — ${meta.articulo} Ley 21.719` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-600">{camposActivos}/{camposTotal} campos activos</span>
-                <button
-                  onClick={() => { if (window.confirm(`¿Restaurar los campos de ${meta.nombre} a los valores legales por defecto?`)) restaurarDerecho(derechoActivo); }}
-                  title="Restaurar a defaults"
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
-                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar
-                </button>
+                {DERECHOS_META[derechoActivo] && (
+                  <button
+                    onClick={() => { if (window.confirm(`¿Restaurar los campos de ${meta.nombre} a los valores legales por defecto?`)) restaurarDerecho(derechoActivo); }}
+                    title="Restaurar a defaults"
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <RotateCcw className="w-3.5 h-3.5" /> Restaurar
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* Campos de identidad — solo informativos */}
+            {/* Campos de identidad */}
             <div className="px-5 pt-4 pb-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 text-blue-500" />
@@ -356,7 +352,7 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
               </div>
             </div>
 
-            {/* Campos específicos del derecho */}
+            {/* Campos específicos */}
             <div className="px-5 pb-4 pt-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 Campos específicos del derecho
@@ -374,17 +370,16 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
                       campo={campo}
                       isFirst={idx === 0}
                       isLast={idx === camposOrdenados.length - 1}
-                      onToggle={(id)             => toggleCampo(derechoActivo, id)}
-                      onToggleObligatorio={(id)  => toggleObligatorio(derechoActivo, id)}
-                      onEditar={(id, changes)    => editarCampo(derechoActivo, id, changes)}
-                      onMover={(id, dir)         => moverCampo(derechoActivo, id, dir)}
-                      onEliminar={(id)           => eliminarCampo(derechoActivo, id)}
+                      onToggle={(id)            => toggleCampo(derechoActivo, id)}
+                      onToggleObligatorio={(id) => toggleObligatorio(derechoActivo, id)}
+                      onEditar={(id, changes)   => editarCampo(derechoActivo, id, changes)}
+                      onMover={(id, dir)        => moverCampo(derechoActivo, id, dir)}
+                      onEliminar={(id)          => eliminarCampo(derechoActivo, id)}
                     />
                   ))}
                 </div>
               )}
 
-              {/* Agregar campo */}
               <button
                 onClick={() => setModalNuevo(true)}
                 className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all text-sm">
@@ -393,7 +388,6 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
             </div>
           </div>
 
-          {/* Nota */}
           <div className="mt-3 flex items-start gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
             <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
             Los cambios se aplican al formulario público inmediatamente después de guardar.
@@ -402,7 +396,6 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
         </div>
       </div>
 
-      {/* Modal nuevo campo */}
       {modalNuevo && (
         <ModalNuevoCampo
           onCancelar={() => setModalNuevo(false)}

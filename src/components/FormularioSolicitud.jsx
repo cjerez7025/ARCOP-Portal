@@ -169,9 +169,9 @@ const getGridColumn = (campo) => {
   }
 };
 
-const CamposGrid = ({ campos, register, watch, setValue, errors }) => (
+const CamposGrid = ({ campos = [], register, watch, setValue, errors }) => (
   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
-    {campos.map(campo => (
+    {(campos || []).map(campo => (
       <div key={campo.id} style={{ gridColumn: getGridColumn(campo) }}>
         <CampoRenderer dark={true} campo={campo} register={register} watch={watch} setValue={campo.tipo === 'rut' ? setValue : undefined} errors={errors} />
       </div>
@@ -191,9 +191,7 @@ const FormularioSolicitud = () => {
 
   // Cargar derechos activos desde backend (sin Firestore SDK)
   useEffect(() => {
-  const fn = adapter.getDerechos || adapter.getConfig;
-  if (!fn) { setLoadingDerechos(false); return; }
-  adapter.getDerechos().then(result => {
+    adapter.getDerechos().then(result => {
       if (result.status === 'success') setDerechos(result.data || []);
       setLoadingDerechos(false);
     }).catch(() => setLoadingDerechos(false));
@@ -317,7 +315,9 @@ const FormularioSolicitud = () => {
 
   // ── Formulario dinámico ────────────────────────────────────
   const { color, gradient, Icon } = buildCfg(tipoSeleccionado);
-  const { identidad, especificos } = getCamposParaFormulario(tipoSeleccionado.id);
+  const _campos     = getCamposParaFormulario(tipoSeleccionado.id);
+  const identidad   = _campos?.identidad   || [];
+  const especificos = _campos?.especificos || [];
 
   return (
     <div className="arcop-portal-publico" style={{ padding: '2rem 1rem 4rem' }}>

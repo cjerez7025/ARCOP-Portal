@@ -11,7 +11,9 @@ const fromEnv = process.env.REACT_APP_DATA_PROVIDER;
 
 const DEFAULT_PROVIDER = 'http';
 
-export const DATA_PROVIDER = fromStorage || fromEnv || DEFAULT_PROVIDER;
+// En producción ignorar localStorage — solo usar en desarrollo
+const isDev = process.env.NODE_ENV === 'development';
+export const DATA_PROVIDER = (isDev && fromStorage) || fromEnv || DEFAULT_PROVIDER;
 
 export const VALID_PROVIDERS = ['sheets', 'firebase', 'http'];
 

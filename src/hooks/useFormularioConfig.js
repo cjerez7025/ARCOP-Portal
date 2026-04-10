@@ -1,7 +1,7 @@
 // ============================================================
 // useFormularioConfig — Hook
 // Carga y expone la configuración dinámica de formularios.
-// Usado tanto por el Configurador (DPO) como por el Formulario público.
+// FIX: agregarCampo inicializa estructura si no existe (derechos custom)
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -63,16 +63,28 @@ const useFormularioConfig = () => {
 
   const updateConfig = (fn) => {
     setConfig(prev => {
-      const next = JSON.parse(JSON.stringify(prev)); // deep clone
+      const next = JSON.parse(JSON.stringify(prev));
       fn(next);
       return next;
     });
     setDirty(true);
   };
 
+  // Helper: asegurar que existe la entrada del derecho
+  const _ensureDerecho = (c, derechoKey) => {
+    if (!c.derechos) c.derechos = {};
+    if (!c.derechos[derechoKey]) {
+      c.derechos[derechoKey] = { activo: true, campos: [] };
+    }
+    if (!c.derechos[derechoKey].campos) {
+      c.derechos[derechoKey].campos = [];
+    }
+  };
+
   // Activar/desactivar un derecho completo
   const toggleDerecho = (derechoKey) => {
     updateConfig(c => {
+      _ensureDerecho(c, derechoKey);
       c.derechos[derechoKey].activo = !c.derechos[derechoKey].activo;
     });
   };
@@ -80,6 +92,7 @@ const useFormularioConfig = () => {
   // Activar/desactivar un campo
   const toggleCampo = (derechoKey, campoId) => {
     updateConfig(c => {
+      _ensureDerecho(c, derechoKey);
       const campo = c.derechos[derechoKey].campos.find(f => f.id === campoId);
       if (campo && !campo.protegido) campo.activo = !campo.activo;
     });
@@ -88,6 +101,7 @@ const useFormularioConfig = () => {
   // Marcar obligatorio / opcional
   const toggleObligatorio = (derechoKey, campoId) => {
     updateConfig(c => {
+      _ensureDerecho(c, derechoKey);
       const campo = c.derechos[derechoKey].campos.find(f => f.id === campoId);
       if (campo && !campo.protegido) campo.obligatorio = !campo.obligatorio;
     });
@@ -96,6 +110,7 @@ const useFormularioConfig = () => {
   // Editar label o texto de ayuda
   const editarCampo = (derechoKey, campoId, changes) => {
     updateConfig(c => {
+      _ensureDerecho(c, derechoKey);
       const campo = c.derechos[derechoKey].campos.find(f => f.id === campoId);
       if (campo && campo.editable) Object.assign(campo, changes);
     });
@@ -104,19 +119,20 @@ const useFormularioConfig = () => {
   // Mover campo arriba/abajo
   const moverCampo = (derechoKey, campoId, direccion) => {
     updateConfig(c => {
+      _ensureDerecho(c, derechoKey);
       const campos = c.derechos[derechoKey].campos;
-      const idx = campos.findIndex(f => f.id === campoId);
+      const idx  = campos.findIndex(f => f.id === campoId);
       const swap = direccion === 'up' ? idx - 1 : idx + 1;
       if (swap < 0 || swap >= campos.length) return;
       [campos[idx], campos[swap]] = [campos[swap], campos[idx]];
-      // Actualizar orden
       campos.forEach((f, i) => { f.orden = i + 1; });
     });
   };
 
-  // Agregar campo custom
+  // Agregar campo custom — FIX: inicializa estructura si no existe
   const agregarCampo = (derechoKey, override = {}) => {
     updateConfig(c => {
+      _ensureDerecho(c, derechoKey);
       const nuevo = crearCampoCustom(derechoKey, override);
       c.derechos[derechoKey].campos.push(nuevo);
     });
@@ -125,6 +141,7 @@ const useFormularioConfig = () => {
   // Eliminar campo custom (solo origen: 'custom')
   const eliminarCampo = (derechoKey, campoId) => {
     updateConfig(c => {
+      _ensureDerecho(c, derechoKey);
       const campo = c.derechos[derechoKey].campos.find(f => f.id === campoId);
       if (!campo || campo.origen !== 'custom') return;
       c.derechos[derechoKey].campos = c.derechos[derechoKey].campos.filter(f => f.id !== campoId);
@@ -140,11 +157,11 @@ const useFormularioConfig = () => {
 
   // ── Selector: campos activos para el formulario público ──
   const getCamposParaFormulario = (derechoKey) => {
-    if (!config?.derechos?.[derechoKey]) return [];
-    const specificos = config.derechos[derechoKey].campos
+    if (!config?.derechos?.[derechoKey]) return { identidad: CAMPOS_IDENTIDAD, especificos: [] };
+    const especificos = (config.derechos[derechoKey].campos || [])
       .filter(c => c.activo)
       .sort((a, b) => a.orden - b.orden);
-    return { identidad: CAMPOS_IDENTIDAD, especificos: specificos };
+    return { identidad: CAMPOS_IDENTIDAD, especificos };
   };
 
   return {
@@ -155,6 +172,7 @@ const useFormularioConfig = () => {
     // acciones
     guardar,
     recargar:         cargar,
+    updateConfig,
     toggleDerecho,
     toggleCampo,
     toggleObligatorio,

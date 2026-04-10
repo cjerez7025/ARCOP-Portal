@@ -1,7 +1,7 @@
 // ============================================================
 // TAB FLUJOS — v4
 // Agrega: SlackWebhookPanel — configura webhook por derecho
-// desde la UI, sin tocar código.
+// FIX: fallback para derechos custom no en DERECHOS_META_FLUJO
 // ============================================================
 
 import React, { useState } from 'react';
@@ -18,7 +18,6 @@ import {
 } from '../services/flujoService';
 import FlowDiagramEditor from './FlowDiagramEditor';
 
-// ── Badge de color ────────────────────────────────────────
 const Badge = ({ color, children }) => {
   const c = getColor(color);
   const dot = {
@@ -34,7 +33,6 @@ const Badge = ({ color, children }) => {
   );
 };
 
-// ── Fila de campo de transición ───────────────────────────
 const CampoTransicionRow = ({ campo, protegido, onEditar, onEliminar }) => {
   const [editando, setEditando] = useState(false);
   const [draft, setDraft] = useState({ label: campo.label, tipo: campo.tipo, obligatorio: campo.obligatorio });
@@ -74,7 +72,6 @@ const CampoTransicionRow = ({ campo, protegido, onEditar, onEliminar }) => {
   );
 };
 
-// ── Panel de estado (fila expandible) ─────────────────────
 const PanelEstado = ({
   estado, todos, isFirst, isLast,
   onToggle, onEditar, onToggleProtegido, onMover, onEliminar,
@@ -104,13 +101,10 @@ const PanelEstado = ({
       ? 'border-gray-200 bg-white shadow-sm'
       : 'border-gray-100 bg-gray-50 opacity-60'
     }`}>
-      {/* Cabecera del estado */}
       <div className="flex items-center gap-3 px-4 py-3">
-        {/* Badge color */}
         <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${c.bg.replace('bg-', 'bg-').replace('-100', '-400')}`}
           style={{ backgroundColor: getColor(estado.color).text.replace('text-', '') }} />
 
-        {/* Nombre */}
         <div className="flex-1 min-w-0">
           {editandoNombre ? (
             <div className="flex items-center gap-2">
@@ -137,7 +131,6 @@ const PanelEstado = ({
           )}
         </div>
 
-        {/* Acciones inline */}
         <div className="flex items-center gap-1 flex-shrink-0">
           {!esLeyNativo && !editandoNombre && (
             <button onClick={() => setEditandoNombre(true)}
@@ -171,11 +164,8 @@ const PanelEstado = ({
         </div>
       </div>
 
-      {/* Panel expandido */}
       {expandido && (
         <div className="border-t border-gray-100 px-4 py-4 space-y-4">
-
-          {/* Descripción */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Descripción</label>
             <textarea value={estado.descripcion || ''} rows={2}
@@ -184,7 +174,6 @@ const PanelEstado = ({
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-200" />
           </div>
 
-          {/* Color */}
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Color</label>
             <div className="flex flex-wrap gap-2">
@@ -201,7 +190,6 @@ const PanelEstado = ({
             </div>
           </div>
 
-          {/* Opciones */}
           <div className="flex gap-4">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={estado.envia_email || false}
@@ -217,7 +205,6 @@ const PanelEstado = ({
             </label>
           </div>
 
-          {/* SLA */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -257,7 +244,6 @@ const PanelEstado = ({
             )}
           </div>
 
-          {/* Actores */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -288,7 +274,6 @@ const PanelEstado = ({
             )}
           </div>
 
-          {/* Transiciones posibles */}
           <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <ArrowRight className="w-3.5 h-3.5 text-blue-500" /> Transiciones posibles
@@ -315,7 +300,6 @@ const PanelEstado = ({
             </div>
           </div>
 
-          {/* Campos de transición */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -342,14 +326,12 @@ const PanelEstado = ({
               </div>
             )}
           </div>
-
         </div>
       )}
     </div>
   );
 };
 
-// ── Modal nuevo estado ────────────────────────────────────
 const ModalNuevoEstado = ({ estadosExistentes, onCancelar, onConfirmar }) => {
   const [form, setForm] = useState({
     nombre: '', descripcion: '', color: 'blue',
@@ -440,20 +422,17 @@ const ModalNuevoEstado = ({ estadosExistentes, onCancelar, onConfirmar }) => {
   );
 };
 
-// ── Panel Slack Webhook por derecho ── NUEVO ──────────────
 const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
   const [editando, setEditando] = useState(false);
   const [draft,    setDraft]    = useState(webhook || '');
   const [probando, setProbando] = useState(false);
 
-  // Sincronizar cuando cambia el derecho activo
   React.useEffect(() => {
     setDraft(webhook || '');
     setEditando(false);
   }, [derechoKey, webhook]);
 
-  const esValida = (url) =>
-    !url || url.startsWith('https://hooks.slack.com/services/');
+  const esValida = (url) => !url || url.startsWith('https://hooks.slack.com/services/');
 
   const handleGuardar = () => {
     if (!esValida(draft)) return;
@@ -466,15 +445,10 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
     setProbando(true);
     try {
       const appsScriptUrl = process.env.REACT_APP_APPS_SCRIPT_URL;
-      // Apps Script lee `action` desde e.parameter (query string)
-      // y el body desde e.postData.contents
       const resp = await fetch(appsScriptUrl + '?action=probarSlackWebhook', {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          webhook_url: webhook,
-          derecho:     derechoKey,
-        }),
+        body: JSON.stringify({ webhook_url: webhook, derecho: derechoKey }),
       });
       const text = await resp.text();
       const data = JSON.parse(text);
@@ -494,13 +468,9 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl px-5 py-4 space-y-3">
-
-      {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-            tieneWebhook ? 'bg-green-100' : 'bg-gray-100'
-          }`}>
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${tieneWebhook ? 'bg-green-100' : 'bg-gray-100'}`}>
             <Link2 className={`w-3.5 h-3.5 ${tieneWebhook ? 'text-green-600' : 'text-gray-400'}`} />
           </div>
           <div>
@@ -512,21 +482,15 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
             </p>
           </div>
         </div>
-
         <div className="flex items-center gap-2">
           {tieneWebhook && !editando && (
-            <button
-              onClick={handleProbar}
-              disabled={probando}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50 transition-colors"
-            >
+            <button onClick={handleProbar} disabled={probando}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50 transition-colors">
               {probando ? '⏳' : '🧪'} {probando ? 'Enviando...' : 'Probar'}
             </button>
           )}
-          <button
-            onClick={() => { setEditando(!editando); setDraft(webhook || ''); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-          >
+          <button onClick={() => { setEditando(!editando); setDraft(webhook || ''); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
             {editando
               ? <><X className="w-3.5 h-3.5" /> Cancelar</>
               : <><Edit2 className="w-3.5 h-3.5" /> {tieneWebhook ? 'Editar' : 'Configurar'}</>
@@ -535,7 +499,6 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
         </div>
       </div>
 
-      {/* URL actual (solo lectura) */}
       {tieneWebhook && !editando && (
         <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
           <code className="text-xs text-gray-500 truncate flex-1">
@@ -544,46 +507,31 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
         </div>
       )}
 
-      {/* Formulario edición */}
       {editando && (
         <div className="space-y-2">
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Webhook URL de Slack</label>
-            <input
-              type="url"
-              value={draft}
-              onChange={e => setDraft(e.target.value)}
+            <input type="url" value={draft} onChange={e => setDraft(e.target.value)}
               placeholder="https://hooks.slack.com/services/T.../B.../..."
               className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                 draft && !esValida(draft)
                   ? 'border-red-300 focus:ring-red-200 bg-red-50'
                   : 'border-gray-300 focus:ring-blue-200'
-              }`}
-            />
+              }`} />
             {draft && !esValida(draft) && (
               <p className="text-xs text-red-500 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
                 La URL debe comenzar con https://hooks.slack.com/services/
               </p>
             )}
-            {!draft && (
-              <p className="text-xs text-gray-400">
-                Deja vacío para usar el webhook general (SLACK_WEBHOOK_URL en Script Properties)
-              </p>
-            )}
           </div>
           <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => { setDraft(''); onGuardar(''); setEditando(false); }}
-              className="px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors"
-            >
+            <button onClick={() => { setDraft(''); onGuardar(''); setEditando(false); }}
+              className="px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors">
               Limpiar
             </button>
-            <button
-              onClick={handleGuardar}
-              disabled={!esValida(draft)}
-              className="flex-1 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors"
-            >
+            <button onClick={handleGuardar} disabled={!esValida(draft)}
+              className="flex-1 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">
               Guardar webhook
             </button>
           </div>
@@ -610,8 +558,8 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
   const [derechoActivoInterno, setDerechoActivoInterno] = useState('ACCESO');
   const derechoActivo    = derechoActivoExterno || derechoActivoInterno;
   const setDerechoActivo = derechoActivoExterno ? () => {} : setDerechoActivoInterno;
-  const [vista,         setVista]         = useState('lista'); // 'lista' | 'diagrama'
-  const [modalNuevo,    setModalNuevo]    = useState(false);
+  const [vista,      setVista]      = useState('lista');
+  const [modalNuevo, setModalNuevo] = useState(false);
 
   if (loading || !config) {
     return (
@@ -625,7 +573,8 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
   }
 
   const derechos = Object.keys(DERECHOS_META_FLUJO);
-  const meta     = DERECHOS_META_FLUJO[derechoActivo];
+  // ── FIX: fallback para derechos custom no en DERECHOS_META_FLUJO ──
+  const meta     = DERECHOS_META_FLUJO[derechoActivo] || { nombre: derechoActivo, color: 'blue', icono: '📋', articulo: '' };
   const estados  = getEstadosOrdenados(derechoActivo);
 
   const DERECHO_COLORS = {
@@ -640,7 +589,7 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-1">🔄 Configuración de Flujos</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">Configuración de Flujos</h2>
         <p className="text-sm text-gray-500">
           Define estados, transiciones, SLA y actores responsables por derecho ARCOP.
           Los estados <span className="font-medium text-amber-700">protegidos por ley</span> no pueden eliminarse.
@@ -649,46 +598,42 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-       {/* Sidebar — oculto cuando viene prop externa */}
-      {!derechoActivoExterno && (
-      <div className="lg:col-span-1 space-y-1.5">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Derechos ARCOP</p>
+        {/* Sidebar — oculto cuando viene prop externa */}
+        {!derechoActivoExterno && (
+          <div className="lg:col-span-1 space-y-1.5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Derechos ARCOP</p>
             {derechos.map(key => {
-            const m    = DERECHOS_META_FLUJO[key];
-            const dc2  = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
-            const est  = config.derechos?.[key]?.estados || [];
-            const hook_url = config.derechos?.[key]?.slack_webhook;
-            return (
-              <button key={key}
-                onClick={() => { setDerechoActivo(key); setVista('lista'); }}
-                className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
-                  derechoActivo === key
-                    ? `${dc2.sidebar} border-2`
-                    : 'border-gray-200 hover:border-gray-300 bg-white'
-                }`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-800">{m.icono} {m.nombre}</span>
-                  <div className="flex items-center gap-1">
-                    {hook_url && (
-                      <span title="Webhook Slack configurado">
-                        <Link2 className="w-3 h-3 text-green-500" />
+              const m    = DERECHOS_META_FLUJO[key];
+              const dc2  = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
+              const est  = config.derechos?.[key]?.estados || [];
+              const hook_url = config.derechos?.[key]?.slack_webhook;
+              return (
+                <button key={key}
+                  onClick={() => { setDerechoActivo(key); setVista('lista'); }}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
+                    derechoActivo === key
+                      ? `${dc2.sidebar} border-2`
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-800">{m.icono} {m.nombre}</span>
+                    <div className="flex items-center gap-1">
+                      {hook_url && <Link2 className="w-3 h-3 text-green-500" />}
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                        {est.filter(e => e.activo !== false).length} estados
                       </span>
-                    )}
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                      {est.filter(e => e.activo !== false).length} estados
-                    </span>
+                    </div>
                   </div>
-                </div>
-                <p className="text-xs text-gray-400 mt-0.5">{m.articulo}</p>
-              </button>
-            );
-          })}
-        </div>)}
+                  <p className="text-xs text-gray-400 mt-0.5">{m.articulo}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Panel principal */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className={derechoActivoExterno ? 'lg:col-span-4' : 'lg:col-span-3'} style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
 
-          {/* Header con toggle Editar | Diagrama */}
           <div className={`bg-gradient-to-r ${dc.header} rounded-2xl px-5 py-4`}>
             <div className="flex items-center justify-between">
               <div>
@@ -698,7 +643,6 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {/* Toggle lista / diagrama */}
                 <div className="flex bg-white/20 rounded-xl p-1 gap-1">
                   <button onClick={() => setVista('lista')}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -713,38 +657,32 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
                     <GitBranch className="w-3.5 h-3.5" /> Diagrama
                   </button>
                 </div>
-                <button
-                  onClick={() => {
-                    if (window.confirm(`¿Restaurar flujo de ${meta.nombre} a los estados por defecto?`))
-                      restaurarDerecho(derechoActivo);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/90 bg-white/20 border border-white/30 rounded-xl hover:bg-white/30">
-                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar defaults
-                </button>
+                {DERECHOS_META_FLUJO[derechoActivo] && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`¿Restaurar flujo de ${meta.nombre} a los estados por defecto?`))
+                        restaurarDerecho(derechoActivo);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/90 bg-white/20 border border-white/30 rounded-xl hover:bg-white/30">
+                    <RotateCcw className="w-3.5 h-3.5" /> Restaurar defaults
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* ── Canal Slack por derecho ── NUEVO v4 ── */}
           <SlackWebhookPanel
             derechoKey={derechoActivo}
             webhook={config.derechos?.[derechoActivo]?.slack_webhook || ''}
             onGuardar={(url) => editarSlackWebhook(derechoActivo, url)}
           />
 
-          {/* ── Vista Diagrama ── */}
           {vista === 'diagrama' && (
-            <FlowDiagramEditor
-              estados={estados}
-              hook={hook}
-              derechoKey={derechoActivo}
-            />
+            <FlowDiagramEditor estados={estados} hook={hook} derechoKey={derechoActivo} />
           )}
 
-          {/* ── Vista Lista ── */}
           {vista === 'lista' && (
             <div className="space-y-3">
-              {/* Leyenda */}
               <div className="flex flex-wrap gap-3 text-xs text-gray-500 bg-white rounded-xl border border-gray-200 px-4 py-2.5">
                 <span className="font-semibold text-gray-400 uppercase tracking-wider">Leyenda:</span>
                 <span className="flex items-center gap-1.5">
@@ -765,19 +703,19 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
                   todos={estados}
                   isFirst={idx === 0}
                   isLast={idx === estados.length - 1}
-                  onToggle={(id)                 => toggleEstado(derechoActivo, id)}
-                  onEditar={(id, changes)         => editarEstado(derechoActivo, id, changes)}
-                  onToggleProtegido={(id)         => toggleProtegidoPorLey(derechoActivo, id)}
-                  onMover={(id, dir)              => moverEstado(derechoActivo, id, dir)}
-                  onEliminar={(id)                => eliminarEstado(derechoActivo, id)}
-                  onAgregarCampo={(id)            => agregarCampoTransicion(derechoActivo, id)}
-                  onEditarCampo={(eid, cid, ch)   => editarCampoTransicion(derechoActivo, eid, cid, ch)}
-                  onEliminarCampo={(eid, cid)     => eliminarCampoTransicion(derechoActivo, eid, cid)}
-                  onToggleTransicion={(eid, tid)  => toggleTransicion(derechoActivo, eid, tid)}
-                  onEditarSLA={(id, sla)          => editarSLA(derechoActivo, id, sla)}
-                  onAgregarActor={(id)            => agregarActor(derechoActivo, id)}
-                  onEditarActor={(eid, aid, ch)   => editarActor(derechoActivo, eid, aid, ch)}
-                  onEliminarActor={(eid, aid)     => eliminarActor(derechoActivo, eid, aid)}
+                  onToggle={(id)               => toggleEstado(derechoActivo, id)}
+                  onEditar={(id, changes)      => editarEstado(derechoActivo, id, changes)}
+                  onToggleProtegido={(id)      => toggleProtegidoPorLey(derechoActivo, id)}
+                  onMover={(id, dir)           => moverEstado(derechoActivo, id, dir)}
+                  onEliminar={(id)             => eliminarEstado(derechoActivo, id)}
+                  onAgregarCampo={(id)         => agregarCampoTransicion(derechoActivo, id)}
+                  onEditarCampo={(eid,cid,ch)  => editarCampoTransicion(derechoActivo, eid, cid, ch)}
+                  onEliminarCampo={(eid,cid)   => eliminarCampoTransicion(derechoActivo, eid, cid)}
+                  onToggleTransicion={(eid,tid)=> toggleTransicion(derechoActivo, eid, tid)}
+                  onEditarSLA={(id, sla)       => editarSLA(derechoActivo, id, sla)}
+                  onAgregarActor={(id)         => agregarActor(derechoActivo, id)}
+                  onEditarActor={(eid,aid,ch)  => editarActor(derechoActivo, eid, aid, ch)}
+                  onEliminarActor={(eid,aid)   => eliminarActor(derechoActivo, eid, aid)}
                 />
               ))}
 
@@ -793,7 +731,6 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
               </div>
             </div>
           )}
-
         </div>
       </div>
 

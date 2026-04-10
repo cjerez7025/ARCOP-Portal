@@ -1,6 +1,6 @@
 // ============================================================
 // useFlujoConfig — Hook v4
-// Agrega editarSlackWebhook(derechoKey, url)
+// FIX: _ensureDerecho inicializa estructura para derechos custom
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -69,8 +69,21 @@ const useFlujoConfig = () => {
     setDirty(true);
   };
 
-  const getEstado = (cfg, derechoKey, estadoId) =>
-    cfg.derechos[derechoKey].estados.find(e => e.id === estadoId);
+  // Helper: asegurar que existe la entrada del derecho con estados
+  const _ensureDerecho = (c, derechoKey) => {
+    if (!c.derechos) c.derechos = {};
+    if (!c.derechos[derechoKey]) {
+      c.derechos[derechoKey] = { activo: true, estados: [] };
+    }
+    if (!c.derechos[derechoKey].estados) {
+      c.derechos[derechoKey].estados = [];
+    }
+  };
+
+  const getEstado = (cfg, derechoKey, estadoId) => {
+    if (!cfg.derechos?.[derechoKey]?.estados) return null;
+    return cfg.derechos[derechoKey].estados.find(e => e.id === estadoId);
+  };
 
   // ── Estados ───────────────────────────────────────────────
 
@@ -100,6 +113,7 @@ const useFlujoConfig = () => {
 
   const moverEstado = (derechoKey, estadoId, dir) => {
     update(c => {
+      _ensureDerecho(c, derechoKey);
       const estados = c.derechos[derechoKey].estados;
       const idx  = estados.findIndex(e => e.id === estadoId);
       const swap = dir === 'up' ? idx - 1 : idx + 1;
@@ -119,8 +133,10 @@ const useFlujoConfig = () => {
     });
   };
 
+  // FIX: inicializa estructura si no existe para derechos custom
   const agregarEstado = (derechoKey, override = {}) => {
     update(c => {
+      _ensureDerecho(c, derechoKey);
       const estados = c.derechos[derechoKey].estados;
       const nuevo = crearEstadoCustom({ orden: estados.length + 1, ...override });
       estados.push(nuevo);
@@ -129,6 +145,7 @@ const useFlujoConfig = () => {
 
   const eliminarEstado = (derechoKey, estadoId) => {
     update(c => {
+      _ensureDerecho(c, derechoKey);
       const e = c.derechos[derechoKey].estados.find(s => s.id === estadoId);
       if (!e || e.protegido || e.origen === 'ley') return;
       c.derechos[derechoKey].estados = c.derechos[derechoKey].estados.filter(s => s.id !== estadoId);
@@ -251,11 +268,11 @@ const useFlujoConfig = () => {
     });
   };
 
-  // ── Slack Webhook por derecho ← NUEVO ────────────────────
+  // ── Slack Webhook por derecho ─────────────────────────────
 
   const editarSlackWebhook = (derechoKey, url) => {
     update(c => {
-      if (!c.derechos[derechoKey]) return;
+      _ensureDerecho(c, derechoKey);
       c.derechos[derechoKey].slack_webhook = url.trim();
     });
   };
@@ -263,13 +280,14 @@ const useFlujoConfig = () => {
   // ── Selector ──────────────────────────────────────────────
 
   const getEstadosOrdenados = (derechoKey) => {
-    if (!config?.derechos?.[derechoKey]) return [];
+    if (!config?.derechos?.[derechoKey]?.estados) return [];
     return [...config.derechos[derechoKey].estados].sort((a, b) => a.orden - b.orden);
   };
 
   return {
     config, loading, guardando, dirty,
     guardar, recargar: cargar,
+    update,
     // Estados
     toggleEstado, editarEstado, toggleProtegidoPorLey,
     moverEstado, agregarEstado, eliminarEstado, restaurarDerecho,
@@ -285,7 +303,7 @@ const useFlujoConfig = () => {
     editarSLA,
     // Actores
     agregarActor, editarActor, eliminarActor,
-    // Slack ← NUEVO
+    // Slack
     editarSlackWebhook,
     // Selector
     getEstadosOrdenados,

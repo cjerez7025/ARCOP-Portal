@@ -1,7 +1,9 @@
 // ============================================================
 // src/pages/ValidarIdentidad.jsx
-// FIX: adapter retorna { status, data: { numero_solicitud, ... } }
-//      el código anterior buscaba resultado.success y resultado.solicitud
+// FIX v2: mapea correctamente la respuesta del backend
+//   Backend retorna: { status, solicitud: { id, numero, estado } }
+//   httpAdapter hace: _ok(data.data ?? data)
+//   Por tanto resultado.data = { solicitud: { id, numero, estado } }
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
@@ -23,11 +25,19 @@ const ValidarIdentidad = () => {
   const procesarValidacion = async () => {
     setEstado('validando');
     try {
-      // adapter.validarIdentidad retorna { status, data: { numero_solicitud, email, nuevo_estado } }
       const resultado = await adapter.validarIdentidad(token);
 
       if (resultado.status === 'success') {
-        setSolicitud(resultado.data || {});
+        // El backend retorna: { solicitud: { id, numero, estado } }
+        // httpAdapter retorna eso en resultado.data
+        const data = resultado.data || {};
+        const sol  = data.solicitud || data;
+        setSolicitud({
+          numero_solicitud: sol.numero || sol.numero_solicitud || data.numero_solicitud || '—',
+          estado:           sol.estado || 'VALIDADA',
+          fecha_limite:     sol.fecha_limite || data.fecha_limite || null,
+          id:               sol.id || data.id || null,
+        });
         setEstado('exitoso');
         setMensaje('Tu identidad ha sido confirmada exitosamente');
       } else {
@@ -75,8 +85,8 @@ const ValidarIdentidad = () => {
                 Información de tu solicitud
               </p>
               {[
-                { label: 'Número',  value: solicitud?.numero_solicitud || '—', mono: true },
-                { label: 'Estado',  value: 'Identidad Validada', color: '#10B981' },
+                { label: 'Número',       value: solicitud?.numero_solicitud || '—', mono: true },
+                { label: 'Estado',       value: 'Identidad Validada', color: '#10B981' },
                 { label: 'Plazo máximo', value: solicitud?.fecha_limite
                     ? new Date(solicitud.fecha_limite).toLocaleDateString('es-CL')
                     : '15 días hábiles' },
