@@ -16,6 +16,7 @@ const healthRouter       = require('./routes/health');
 const estadisticasRouter = require('./routes/estadisticas');
 
 const app  = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
 const derechosRoutes = require('./routes/derechos');
