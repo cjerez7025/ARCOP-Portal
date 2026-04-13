@@ -1,10 +1,11 @@
 // ============================================================
-// src/pages/LoginDPO.jsx — v2 con AlignDataSeal animado
+// src/pages/LoginDPO.jsx — v3 con recuperación de contraseña
 // ============================================================
 import React, { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import AlignDataSeal from '../components/AlignDataSeal';
 
 const ERRORES_FIREBASE = {
@@ -20,11 +21,13 @@ export default function LoginDPO() {
   const { user, login } = useAuth();
   const navigate        = useNavigate();
 
-  const [email,    setEmail]    = useState('');
-  const [password, setPassword] = useState('');
-  const [showPass, setShowPass] = useState(false);
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
+  const [email,       setEmail]       = useState('');
+  const [password,    setPassword]    = useState('');
+  const [showPass,    setShowPass]    = useState(false);
+  const [error,       setError]       = useState('');
+  const [loading,     setLoading]     = useState(false);
+  const [modoReset,   setModoReset]   = useState(false);
+  const [resetOk,     setResetOk]     = useState(false);
 
   if (user) return <Navigate to="/dpo" replace />;
 
@@ -45,7 +48,24 @@ export default function LoginDPO() {
     }
   };
 
-  const handleKeyDown = (e) => { if (e.key === 'Enter') handleSubmit(); };
+  const handleReset = async () => {
+    if (!email.trim()) {
+      setError('Ingresa tu email para recuperar la contraseña.');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(getAuth(), email.trim());
+      setResetOk(true);
+    } catch (e) {
+      setError(ERRORES_FIREBASE[e.code] || 'Error al enviar el correo. Verifica el email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => { if (e.key === 'Enter') modoReset ? handleReset() : handleSubmit(); };
 
   return (
     <div style={{
@@ -75,13 +95,24 @@ export default function LoginDPO() {
         {/* Card */}
         <div style={{ background: '#fff', borderRadius: '1rem', boxShadow: '0 25px 50px rgba(0,0,0,0.4)', padding: '2rem' }}>
           <h2 style={{ fontSize: '1.1rem', fontWeight: 600, color: '#111827', marginBottom: '1.5rem' }}>
-            Iniciar sesión
+            {modoReset ? 'Recuperar contraseña' : 'Iniciar sesión'}
           </h2>
 
+          {/* Error */}
           {error && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '0.5rem', padding: '0.75rem', marginBottom: '1rem' }}>
               <AlertCircle style={{ width: 16, height: 16, color: '#EF4444', flexShrink: 0, marginTop: 2 }} />
               <p style={{ fontSize: '0.875rem', color: '#B91C1C', margin: 0 }}>{error}</p>
+            </div>
+          )}
+
+          {/* Confirmación reset */}
+          {resetOk && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '0.5rem', padding: '0.75rem', marginBottom: '1rem' }}>
+              <CheckCircle style={{ width: 16, height: 16, color: '#16A34A', flexShrink: 0, marginTop: 2 }} />
+              <p style={{ fontSize: '0.875rem', color: '#15803D', margin: 0 }}>
+                Correo enviado. Revisa tu bandeja de entrada y sigue las instrucciones.
+              </p>
             </div>
           )}
 
@@ -97,31 +128,43 @@ export default function LoginDPO() {
             </div>
           </div>
 
-          {/* Contraseña */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '0.25rem' }}>Contraseña</label>
-            <div style={{ position: 'relative' }}>
-              <Lock style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#9CA3AF' }} />
-              <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder="••••••••" disabled={loading} autoComplete="current-password"
-                style={{ width: '100%', boxSizing: 'border-box', paddingLeft: '2.5rem', paddingRight: '2.5rem', paddingTop: '0.625rem', paddingBottom: '0.625rem', border: '1px solid #D1D5DB', borderRadius: '0.5rem', fontSize: '0.875rem', outline: 'none' }}
-              />
-              <button onClick={() => setShowPass(v => !v)} tabIndex={-1}
-                style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0 }}>
-                {showPass ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
-              </button>
+          {/* Contraseña — solo en modo login */}
+          {!modoReset && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, color: '#374151', marginBottom: '0.25rem' }}>Contraseña</label>
+              <div style={{ position: 'relative' }}>
+                <Lock style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#9CA3AF' }} />
+                <input type={showPass ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={handleKeyDown}
+                  placeholder="••••••••" disabled={loading} autoComplete="current-password"
+                  style={{ width: '100%', boxSizing: 'border-box', paddingLeft: '2.5rem', paddingRight: '2.5rem', paddingTop: '0.625rem', paddingBottom: '0.625rem', border: '1px solid #D1D5DB', borderRadius: '0.5rem', fontSize: '0.875rem', outline: 'none' }}
+                />
+                <button onClick={() => setShowPass(v => !v)} tabIndex={-1}
+                  style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0 }}>
+                  {showPass ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          <button onClick={handleSubmit} disabled={loading}
-            style={{ width: '100%', padding: '0.675rem', background: loading ? '#93C5FD' : '#2563EB', color: '#fff', fontWeight: 600, fontSize: '0.875rem', border: 'none', borderRadius: '0.5rem', cursor: loading ? 'not-allowed' : 'pointer' }}>
-            {loading ? 'Iniciando sesión...' : 'Ingresar al Panel DPO'}
+          {/* Botón principal */}
+          <button
+            onClick={modoReset ? handleReset : handleSubmit}
+            disabled={loading || (modoReset && resetOk)}
+            style={{ width: '100%', padding: '0.75rem', background: loading ? '#93C5FD' : '#2563EB', color: '#fff', border: 'none', borderRadius: '0.5rem', fontSize: '0.875rem', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}
+          >
+            {loading ? 'Procesando...' : modoReset ? 'Enviar correo de recuperación' : 'Iniciar sesión'}
           </button>
-        </div>
 
-        <p style={{ textAlign: 'center', color: '#334155', fontSize: '0.75rem', marginTop: '1.5rem' }}>
-          ¿Problemas para acceder? Contacta al administrador del sistema.
-        </p>
+          {/* Toggle modo */}
+          <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+            <button
+              onClick={() => { setModoReset(v => !v); setError(''); setResetOk(false); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', color: '#2563EB', textDecoration: 'underline' }}
+            >
+              {modoReset ? '← Volver al inicio de sesión' : '¿Olvidaste tu contraseña?'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

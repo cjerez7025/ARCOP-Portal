@@ -1,7 +1,6 @@
 // ============================================================
-// FormularioSolicitud.jsx — v4.0
-// v4.0: carga derechos desde /api/derechos via httpAdapter
-//       elimina Firestore SDK del frontend
+// FormularioSolicitud.jsx — v4.1
+// v4.1: OnboardingTour + fix icono eye + minHeight cards
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
@@ -10,6 +9,7 @@ import { Send, CheckCircle, Loader, AlertCircle, ChevronLeft, ArrowRight, Lock }
 import { toast } from 'react-toastify';
 import useFormularioConfig from '../hooks/useFormularioConfig';
 import CampoRenderer from './CampoRenderer';
+import OnboardingTour from './OnboardingTour';
 import adapter from '../adapters';
 
 const generarToken        = () => Math.random().toString(36).substr(2) + Math.random().toString(36).substr(2);
@@ -19,7 +19,7 @@ const calcularFechaLimite = () => {
   return f.toISOString();
 };
 
-// ── SVG Icons para los 5 derechos base ───────────────────
+// ── SVG Icons ─────────────────────────────────────────────
 const IconAcceso = ({ size = 22, color = 'currentColor' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
@@ -55,6 +55,7 @@ const IconPortabilidad = ({ size = 22, color = 'currentColor' }) => (
 
 const ICON_SVG_MAP = {
   search: IconAcceso,
+  eye:    IconAcceso,
   edit:   IconRectificacion,
   trash:  IconCancelacion,
   hand:   IconOposicion,
@@ -66,7 +67,6 @@ const ARTNUMS_MAP = {
   OPOSICION: '8°', PORTABILIDAD: '9°',
 };
 
-// ── Helper visual desde datos Firestore ───────────────────
 const buildCfg = (derecho) => {
   const color = derecho.color || '#6B7280';
   const hex   = color.replace('#', '');
@@ -95,7 +95,7 @@ const DerechoCard = ({ derecho, onSeleccionar, index }) => {
       onMouseLeave={() => setHovered(false)}
       className={`animate-fade-up stagger-${(index % 4) + 1}`}
       style={{
-        display: 'block', width: '100%', textAlign: 'left',
+        display: 'block', width: '100%', height: '100%', minHeight: '120px', textAlign: 'left',
         background:   hovered ? gradient : 'rgba(22,22,31,0.8)',
         border:       `1px solid ${hovered ? color + '40' : 'rgba(255,255,255,0.08)'}`,
         borderRadius: '16px', padding: '24px', cursor: 'pointer',
@@ -145,11 +145,11 @@ const CardsGrid = ({ derechos, onSeleccionar }) => {
   const total = derechos.length;
   const isPar = total % 2 === 0;
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+    <div className="arcop-derechos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', alignItems: 'stretch' }}>
       {derechos.map((derecho, i) => {
         const isOrfan = i === total - 1 && !isPar;
         return (
-          <div key={derecho.id} style={{ gridColumn: isOrfan ? '1 / -1' : 'auto', maxWidth: isOrfan ? 'calc(50% - 6px)' : undefined, margin: isOrfan ? '0 auto' : undefined, width: isOrfan ? '100%' : undefined }}>
+          <div key={derecho.id} style={{ gridColumn: isOrfan ? '1 / -1' : 'auto', maxWidth: isOrfan ? 'calc(50% - 6px)' : undefined, margin: isOrfan ? '0 auto' : undefined, width: isOrfan ? '100%' : undefined, display: 'flex' }}>
             <DerechoCard derecho={derecho} onSeleccionar={onSeleccionar} index={i} />
           </div>
         );
@@ -189,7 +189,6 @@ const FormularioSolicitud = () => {
   const [derechos,         setDerechos]         = useState([]);
   const [loadingDerechos,  setLoadingDerechos]  = useState(true);
 
-  // Cargar derechos activos desde backend (sin Firestore SDK)
   useEffect(() => {
     adapter.getDerechos().then(result => {
       if (result.status === 'success') setDerechos(result.data || []);
@@ -248,61 +247,47 @@ const FormularioSolicitud = () => {
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '28px' }}>
             Tu solicitud de <strong style={{ color: cfg.color }}>{tipoSeleccionado.nombre}</strong> fue recibida correctamente.
           </p>
-          <div style={{ background: 'var(--bg-overlay)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.07)', padding: '20px', marginBottom: '20px', textAlign: 'left' }}>
-            {[
-              { label: 'Número',  value: solicitudCreada.numero_solicitud, mono: true },
-              { label: 'Derecho', value: `${tipoSeleccionado.articulo || ''} — ${tipoSeleccionado.nombre}` },
-              { label: 'Estado',  value: 'Pendiente de validación', highlight: '#F59E0B' },
-            ].map(({ label, value, mono, highlight }) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: highlight || '#F0F0F5', fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: '10px', padding: '14px', textAlign: 'left', marginBottom: '24px' }}>
-            <AlertCircle size={15} color="#818CF8" style={{ flexShrink: 0, marginTop: '1px' }} />
-            <p style={{ fontSize: '13px', color: '#A5B4FC', margin: 0, lineHeight: 1.5 }}>
-              Revisa tu email y confirma tu identidad. El enlace expira en <strong>30 minutos</strong>.
-            </p>
-          </div>
-          <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-secondary)', margin: '0 auto' }}>
-            <ChevronLeft size={14} /> Enviar otra solicitud
+          {solicitudCreada.numero_solicitud && (
+            <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Número de caso</p>
+              <p style={{ fontSize: '22px', fontWeight: 700, color: '#F0F0F5', fontFamily: 'var(--font-display)' }}>{solicitudCreada.numero_solicitud}</p>
+            </div>
+          )}
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>
+            Revisa tu email para confirmar tu identidad. El plazo legal de respuesta es de <strong style={{ color: '#F0F0F5' }}>15 días hábiles</strong>.
+          </p>
+          <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--text-secondary)', borderRadius: '10px', padding: '10px 20px', cursor: 'pointer', fontSize: '13px' }}>
+            Nueva solicitud
           </button>
         </div>
       </div>
     );
   }
 
-  // ── Loading ────────────────────────────────────────────────
-  if (loadingConfig || loadingDerechos) return (
-    <div className="arcop-portal-publico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Loader size={28} color="var(--text-muted)" className="animate-spin" />
-    </div>
-  );
-
-  // ── Selector de derechos ───────────────────────────────────
+  // ── Selección de derecho ───────────────────────────────────
   if (!tipoSeleccionado) {
     return (
-      <div className="arcop-portal-publico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem' }}>
-        <div style={{ position: 'fixed', top: '20%', left: '50%', transform: 'translateX(-50%)', width: '600px', height: '300px', background: 'radial-gradient(ellipse, rgba(99,102,241,0.06) 0%, transparent 70%)', pointerEvents: 'none', zIndex: 0 }} />
-        <div style={{ width: '100%', maxWidth: '720px', position: 'relative', zIndex: 1 }}>
-          <div className="animate-fade-up" style={{ textAlign: 'center', marginBottom: '48px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: '20px', padding: '4px 14px', fontSize: '11px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#818CF8', marginBottom: '20px' }}>
-              <Lock size={10} /> Portal ARCOP · Ley 21.719
+      <div className="arcop-portal-publico" style={{ padding: '2rem 1rem 4rem' }}>
+        <OnboardingTour />
+        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+          <div className="animate-fade-up" style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.25)', borderRadius: '20px', padding: '4px 14px', marginBottom: '16px' }}>
+              <Lock size={11} color="#60A5FA" />
+              <span style={{ fontSize: '11px', fontWeight: 700, color: '#60A5FA', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Portal ARCOP · Ley 21.719</span>
             </div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 5vw, 48px)', fontWeight: 400, color: '#F0F0F5', lineHeight: 1.1, marginBottom: '12px', letterSpacing: '-0.02em' }}>
-              Ejerce tus<br /><em style={{ color: '#818CF8', fontStyle: 'italic' }}>Derechos</em> ARCOP
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 5vw, 42px)', fontWeight: 400, color: '#F0F0F5', marginBottom: '12px', lineHeight: 1.1 }}>
+              Ejerce tus<br /><em style={{ fontStyle: 'italic', color: '#60A5FA' }}>Derechos</em> ARCOP
             </h1>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '400px', margin: '0 auto', lineHeight: 1.6 }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', maxWidth: '480px', margin: '0 auto' }}>
               Selecciona el derecho que deseas ejercer conforme a la Ley 21.719 de Protección de Datos Personales.
             </p>
           </div>
 
-          {derechos.length === 0
-            ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px', fontSize: '14px' }}>No hay derechos habilitados actualmente.</div>
-            : <CardsGrid derechos={derechos} onSeleccionar={handleSeleccionar} />
+          {loadingDerechos || loadingConfig
+            ? <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}><Loader size={24} style={{ animation: 'spin 1s linear infinite' }} /></div>
+            : derechos.length === 0
+              ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px', fontSize: '14px' }}>No hay derechos habilitados actualmente.</div>
+              : <CardsGrid derechos={derechos} onSeleccionar={handleSeleccionar} />
           }
 
           <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '32px', fontSize: '12px', color: 'var(--text-muted)' }}>
@@ -333,52 +318,36 @@ const FormularioSolicitud = () => {
               Derecho de {tipoSeleccionado.nombre}{tipoSeleccionado.articulo ? ` · ${tipoSeleccionado.articulo}` : ''}
             </span>
           </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', fontWeight: 400, color: '#F0F0F5', margin: '0 0 6px', letterSpacing: '-0.01em' }}>
-            Solicitud de {tipoSeleccionado.nombre}
-          </h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>{tipoSeleccionado.descripcion}</p>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', color: '#F0F0F5', marginBottom: '6px' }}>Tu solicitud</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{tipoSeleccionado.descripcion}</p>
         </div>
 
-        <div className="animate-fade-up" style={{ background: 'var(--bg-surface)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-          <div style={{ height: '2px', background: `linear-gradient(90deg, ${color}, transparent)` }} />
-          <form onSubmit={handleSubmit(onSubmit)} style={{ padding: '28px' }}>
-
-            <div style={{ marginBottom: '28px' }}>
-              <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '16px' }}>Tus datos personales</p>
+        <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {identidad.length > 0 && (
+            <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Tus datos</h3>
               <CamposGrid campos={identidad} register={register} watch={watch} setValue={setValue} errors={errors} />
             </div>
-
-            {especificos && especificos.length > 0 && (
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '24px', marginBottom: '28px' }}>
-                <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '16px' }}>Detalles de tu solicitud</p>
-                <CamposGrid campos={especificos} register={register} watch={watch} setValue={setValue} errors={errors} />
-              </div>
-            )}
-
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '24px', marginBottom: '24px' }}>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: errors.acepta_terminos ? 'rgba(239,68,68,0.08)' : 'rgba(30,30,48,0.8)', border: `1px solid ${errors.acepta_terminos ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.07)'}`, borderRadius: '12px', padding: '16px', cursor: 'pointer' }}>
-                <input {...register('acepta_terminos', { required: 'Debes aceptar para continuar' })} type="checkbox" style={{ width: '15px', height: '15px', marginTop: '2px', flexShrink: 0, accentColor: color }} />
-                <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  Declaro que la información es verídica y acepto el tratamiento de mis datos conforme a la <strong style={{ color: '#F0F0F5' }}>Ley 21.719</strong>.
-                </span>
-              </label>
-              {errors.acepta_terminos && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
-                  <AlertCircle size={12} color="#EF4444" />
-                  <span style={{ fontSize: '12px', color: '#EF4444' }}>{errors.acepta_terminos.message}</span>
-                </div>
-              )}
+          )}
+          {especificos.length > 0 && (
+            <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Detalles de tu solicitud</h3>
+              <CamposGrid campos={especificos} register={register} watch={watch} setValue={setValue} errors={errors} />
             </div>
+          )}
 
-            <button type="submit" disabled={loading} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 24px', background: loading ? 'rgba(255,255,255,0.05)' : color, border: 'none', borderRadius: '12px', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, transition: 'all 0.2s', boxShadow: loading ? 'none' : `0 4px 20px ${color}40` }}>
-              {loading ? <><Loader size={15} className="animate-spin" /> Enviando...</> : <><Send size={15} /> Enviar Solicitud</>}
-            </button>
-          </form>
-        </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <input type="checkbox" id="acepta_terminos" {...register('acepta_terminos', { required: true })} style={{ marginTop: '2px', accentColor: color }} />
+            <label htmlFor="acepta_terminos" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5, cursor: 'pointer' }}>
+              Declaro que los datos entregados son verídicos y autorizo su uso para el procesamiento de esta solicitud conforme a la Ley 21.719.
+            </label>
+          </div>
+          {errors.acepta_terminos && <p style={{ fontSize: '12px', color: '#EF4444', marginTop: '-16px' }}>Debes aceptar para continuar.</p>}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '20px', fontSize: '11px', color: 'var(--text-muted)' }}>
-          <Lock size={11} /> Datos protegidos conforme a la Ley 21.719 — Chile
-        </div>
+          <button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 24px', background: loading ? color + '80' : color, color: '#fff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
+            {loading ? <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Enviando...</> : <><Send size={16} /> Enviar solicitud</>}
+          </button>
+        </form>
       </div>
     </div>
   );
