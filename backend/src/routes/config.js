@@ -48,9 +48,8 @@ router.get('/', async (req, res, next) => {
   try {
     const snap = await db.collection('config').doc('sistema').get();
     const data = snap.exists ? snap.data() : CONFIG_DEFAULT;
-    const { empresa_nombre, portal_nombre, portal_color, logo_url, dias_respuesta } = data;
-    res.json({ status: 'success', data: { empresa_nombre, portal_nombre, portal_color, logo_url, dias_respuesta } });
-  } catch (e) { next(e); }
+    const { empresa_nombre, empresa_rut, portal_nombre, portal_color, logo_url, dias_respuesta, dpo_email, dpo_telefono } = data;
+    res.json({ status: 'success', data: { empresa_nombre, empresa_rut, portal_nombre, portal_color, logo_url, dias_respuesta, dpo_email, dpo_telefono } });  } catch (e) { next(e); }
 });
 
 // ─────────────────────────────────────────────────────────

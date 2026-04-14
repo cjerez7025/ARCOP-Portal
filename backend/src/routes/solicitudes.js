@@ -139,10 +139,26 @@ router.post('/', async (req, res, next) => {
         timestamp:       FieldValue.serverTimestamp(),
       });
 
-    // Email recepción al titular + notif DPO (ya incluida en enviarRecepcion)
+    // Email recepción al titular
     const config = await _getConfig();
     emailService.enviarRecepcion({ ...solicitud, id: ref.id }, config)
       .catch(e => console.error('[solicitudes] Fallo email recepcion:', e.message));
+
+    // Notificación al DPO — nueva solicitud recibida
+    _ccDpo(
+      { ...solicitud, id: ref.id },
+      `[ARCOP] Nueva solicitud ${numero} — ${solicitud.tipo_derecho}`,
+      `<p style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
+        <strong>Nueva solicitud recibida en el Portal ARCOP</strong><br><br>
+        <strong>Número:</strong> ${numero}<br>
+        <strong>Titular:</strong> ${solicitud.nombre_completo}<br>
+        <strong>Derecho:</strong> ${solicitud.tipo_derecho}<br>
+        <strong>Email:</strong> ${solicitud.email}<br>
+        <strong>Fecha límite:</strong> ${solicitud.fecha_limite?.split('T')[0] || 'Por calcular'}<br><br>
+        Estado actual: <strong>PENDIENTE</strong> — esperando validación de identidad del titular.
+      </p>`,
+      config
+    );
 
     res.status(201).json({
       status:           'success',
