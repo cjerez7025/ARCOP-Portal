@@ -135,4 +135,49 @@ router.post('/flujos', requireAuth, requireDPO, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ─────────────────────────────────────────────────────────
+// POST /api/config/probar-gchat — solo DPO
+// Envía mensaje de prueba a un webhook de Google Chat
+// ─────────────────────────────────────────────────────────
+router.post('/probar-gchat', requireAuth, requireDPO, async (req, res, next) => {
+  try {
+    const { webhook_url, derecho } = req.body;
+ 
+    if (!webhook_url) {
+      return res.status(400).json({ status: 'error', message: 'webhook_url requerido' });
+    }
+    if (!webhook_url.startsWith('https://chat.googleapis.com/v1/spaces/')) {
+      return res.status(400).json({ status: 'error', message: 'URL de Google Chat no válida' });
+    }
+ 
+    const payload = {
+      text: `🧪 *Test Portal ARCOP* — Webhook del derecho *${derecho || '?'}* configurado correctamente ✅`,
+    };
+ 
+    const response = await fetch(webhook_url, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+ 
+    if (response.ok) {
+      return res.json({ status: 'success', message: 'Mensaje de prueba enviado' });
+    }
+ 
+    const text = await response.text();
+    return res.status(502).json({
+      status:  'error',
+      message: `Google Chat respondió HTTP ${response.status}: ${text}`,
+    });
+ 
+  } catch (e) {
+    next(e);
+  }
+});
+ 
 module.exports = router;
+ 
+
+
+
+

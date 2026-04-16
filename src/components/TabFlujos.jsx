@@ -1,7 +1,10 @@
 // ============================================================
-// TAB FLUJOS — v4
-// Agrega: SlackWebhookPanel — configura webhook por derecho
-// FIX: fallback para derechos custom no en DERECHOS_META_FLUJO
+// TAB FLUJOS — v5
+// CAMBIO: SlackWebhookPanel → GoogleChatWebhookPanel
+//   - Validación URL: chat.googleapis.com/v1/spaces/
+//   - Probar: POST /api/config/probar-gchat (backend Express)
+//   - Campo: gchat_webhook (antes: slack_webhook)
+//   - Función hook: editarGChatWebhook (antes: editarSlackWebhook)
 // ============================================================
 
 import React, { useState } from 'react';
@@ -422,7 +425,8 @@ const ModalNuevoEstado = ({ estadosExistentes, onCancelar, onConfirmar }) => {
   );
 };
 
-const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
+// ── Google Chat Webhook Panel ─────────────────────────────
+const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
   const [editando, setEditando] = useState(false);
   const [draft,    setDraft]    = useState(webhook || '');
   const [probando, setProbando] = useState(false);
@@ -432,7 +436,7 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
     setEditando(false);
   }, [derechoKey, webhook]);
 
-  const esValida = (url) => !url || url.startsWith('https://hooks.slack.com/services/');
+  const esValida = (url) => !url || url.startsWith('https://chat.googleapis.com/v1/spaces/');
 
   const handleGuardar = () => {
     if (!esValida(draft)) return;
@@ -444,18 +448,12 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
     if (!webhook) return;
     setProbando(true);
     try {
-      const appsScriptUrl = process.env.REACT_APP_APPS_SCRIPT_URL;
-      const resp = await fetch(appsScriptUrl + '?action=probarSlackWebhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ webhook_url: webhook, derecho: derechoKey }),
-      });
-      const text = await resp.text();
-      const data = JSON.parse(text);
-      if (data.status === 'success') {
-        alert('✅ Mensaje de prueba enviado al canal de Slack');
+      const adapter = (await import('../adapters')).default;
+      const result  = await adapter.probarGChat(webhook, derechoKey);
+      if (result.status === 'success') {
+        alert('✅ Mensaje de prueba enviado al espacio de Google Chat');
       } else {
-        alert('❌ Error: ' + (data.message || 'Revisa la URL del webhook'));
+        alert('❌ Error: ' + (result.message || 'Revisa la URL del webhook'));
       }
     } catch (e) {
       alert('❌ Error de conexión: ' + e.message);
@@ -474,11 +472,11 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
             <Link2 className={`w-3.5 h-3.5 ${tieneWebhook ? 'text-green-600' : 'text-gray-400'}`} />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-800">Canal Slack</p>
+            <p className="text-sm font-semibold text-gray-800">Canal Google Chat</p>
             <p className="text-xs text-gray-400">
               {tieneWebhook
-                ? '✅ Webhook configurado — notificaciones activas en este canal'
-                : 'Sin canal propio — usa el webhook general (SLACK_WEBHOOK_URL)'}
+                ? '✅ Webhook configurado — notificaciones activas en este espacio'
+                : 'Sin espacio configurado — pega el webhook del canal de Google Chat'}
             </p>
           </div>
         </div>
@@ -502,7 +500,7 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
       {tieneWebhook && !editando && (
         <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
           <code className="text-xs text-gray-500 truncate flex-1">
-            {webhook.replace('https://hooks.slack.com/services/', 'hooks.slack.com/…/')}
+            {webhook.replace('https://chat.googleapis.com/v1/spaces/', 'chat.googleapis.com/…/')}
           </code>
         </div>
       )}
@@ -510,9 +508,9 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
       {editando && (
         <div className="space-y-2">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-600">Webhook URL de Slack</label>
+            <label className="text-xs font-medium text-gray-600">Webhook URL de Google Chat</label>
             <input type="url" value={draft} onChange={e => setDraft(e.target.value)}
-              placeholder="https://hooks.slack.com/services/T.../B.../..."
+              placeholder="https://chat.googleapis.com/v1/spaces/XXX/messages?key=..."
               className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
                 draft && !esValida(draft)
                   ? 'border-red-300 focus:ring-red-200 bg-red-50'
@@ -521,7 +519,7 @@ const SlackWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
             {draft && !esValida(draft) && (
               <p className="text-xs text-red-500 flex items-center gap-1">
                 <AlertCircle className="w-3 h-3" />
-                La URL debe comenzar con https://hooks.slack.com/services/
+                La URL debe comenzar con https://chat.googleapis.com/v1/spaces/
               </p>
             )}
           </div>
@@ -552,7 +550,7 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
     editarSLA,
     agregarActor, editarActor, eliminarActor,
     getEstadosOrdenados,
-    editarSlackWebhook,
+    editarGChatWebhook,
   } = hook;
 
   const [derechoActivoInterno, setDerechoActivoInterno] = useState('ACCESO');
@@ -573,7 +571,6 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
   }
 
   const derechos = Object.keys(DERECHOS_META_FLUJO);
-  // ── FIX: fallback para derechos custom no en DERECHOS_META_FLUJO ──
   const meta     = DERECHOS_META_FLUJO[derechoActivo] || { nombre: derechoActivo, color: 'blue', icono: '📋', articulo: '' };
   const estados  = getEstadosOrdenados(derechoActivo);
 
@@ -606,7 +603,7 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
               const m    = DERECHOS_META_FLUJO[key];
               const dc2  = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
               const est  = config.derechos?.[key]?.estados || [];
-              const hook_url = config.derechos?.[key]?.slack_webhook;
+              const hook_url = config.derechos?.[key]?.google_chat_webhook;
               return (
                 <button key={key}
                   onClick={() => { setDerechoActivo(key); setVista('lista'); }}
@@ -671,10 +668,10 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
             </div>
           </div>
 
-          <SlackWebhookPanel
+          <GoogleChatWebhookPanel
             derechoKey={derechoActivo}
-            webhook={config.derechos?.[derechoActivo]?.slack_webhook || ''}
-            onGuardar={(url) => editarSlackWebhook(derechoActivo, url)}
+            webhook={config.derechos?.[derechoActivo]?.google_chat_webhook || ''}
+            onGuardar={(url) => editarGChatWebhook(derechoActivo, url)}
           />
 
           {vista === 'diagrama' && (

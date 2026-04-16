@@ -1,6 +1,6 @@
 // ============================================================
-// useFlujoConfig — Hook v4
-// FIX: _ensureDerecho inicializa estructura para derechos custom
+// useFlujoConfig — Hook v5
+// CAMBIO: editarSlackWebhook → editarGChatWebhook, campo gchat_webhook
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -133,7 +133,6 @@ const useFlujoConfig = () => {
     });
   };
 
-  // FIX: inicializa estructura si no existe para derechos custom
   const agregarEstado = (derechoKey, override = {}) => {
     update(c => {
       _ensureDerecho(c, derechoKey);
@@ -268,12 +267,12 @@ const useFlujoConfig = () => {
     });
   };
 
-  // ── Slack Webhook por derecho ─────────────────────────────
+  // ── Google Chat Webhook por derecho ──────────────────────
 
-  const editarSlackWebhook = (derechoKey, url) => {
+  const editarGChatWebhook = (derechoKey, url) => {
     update(c => {
       _ensureDerecho(c, derechoKey);
-      c.derechos[derechoKey].slack_webhook = url.trim();
+      c.derechos[derechoKey].google_chat_webhook = url.trim();
     });
   };
 
@@ -303,8 +302,8 @@ const useFlujoConfig = () => {
     editarSLA,
     // Actores
     agregarActor, editarActor, eliminarActor,
-    // Slack
-    editarSlackWebhook,
+    // Google Chat
+    editarGChatWebhook,
     // Selector
     getEstadosOrdenados,
   };

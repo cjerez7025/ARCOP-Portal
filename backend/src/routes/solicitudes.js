@@ -1,10 +1,9 @@
 // ============================================================
-// src/routes/solicitudes.js — v1.1
-// CAMBIOS respecto a v1.0:
-//   - _getConfig() sin caché: siempre lee Firestore (config puede
-//     cambiar desde el panel DPO en cualquier momento)
-//   - enviarCambioEstado y enviarDatosListos envían CC al DPO
-//     usando config.email_cc de Firestore
+// src/routes/solicitudes.js — v1.2
+// CAMBIOS respecto a v1.1:
+//   - Integra googleChatService para notificaciones por canal
+//   - notificarNuevaSolicitud al crear
+//   - notificarCambioEstado al cambiar estado y al validar
 // ============================================================
 'use strict';
 
@@ -12,6 +11,7 @@ const express       = require('express');
 const crypto        = require('crypto');
 const { db }        = require('../services/firebase');
 const emailService  = require('../services/emailService');
+const gchat         = require('../services/googleChatService');
 const { requireAuth, requireDPO } = require('../middleware/auth');
 const {
   FieldValue,
@@ -21,8 +21,6 @@ const {
 const router = express.Router();
 
 // ── Helper: obtener config del sistema (sin caché) ────────
-// Se lee Firestore en cada llamada para que los cambios del
-// panel DPO se reflejen de inmediato en los emails.
 async function _getConfig() {
   const snap = await db.collection('config').doc('sistema').get();
   return snap.exists ? snap.data() : {};
@@ -139,12 +137,20 @@ router.post('/', async (req, res, next) => {
         timestamp:       FieldValue.serverTimestamp(),
       });
 
-    // Email recepción al titular
     const config = await _getConfig();
+
+    // Email recepción al titular
     emailService.enviarRecepcion({ ...solicitud, id: ref.id }, config)
       .catch(e => console.error('[solicitudes] Fallo email recepcion:', e.message));
 
-    // Notificación al DPO — nueva solicitud recibida
+    // Notificación Google Chat — nueva solicitud
+    gchat.notificarNuevaSolicitud({
+      ...solicitud,
+      id:   ref.id,
+      tipo: solicitud.tipo_derecho,
+    }).catch(e => console.error('[solicitudes] Fallo GChat nueva solicitud:', e.message));
+
+    // CC al DPO por email
     _ccDpo(
       { ...solicitud, id: ref.id },
       `[ARCOP] Nueva solicitud ${numero} — ${solicitud.tipo_derecho}`,
@@ -215,8 +221,19 @@ router.post('/validar/:token', async (req, res, next) => {
     });
 
     const config = await _getConfig();
+
     emailService.enviarCambioEstado(solicitud, 'VALIDADA', config)
       .catch(e => console.error('[solicitudes] Fallo email VALIDADA:', e.message));
+
+    // Notificación Google Chat — identidad validada
+    gchat.notificarCambioEstado({
+      numero:         solicitud.numero_solicitud,
+      tipo:           solicitud.tipo_derecho,
+      nombreTitular:  solicitud.nombre_completo,
+      estadoAnterior: 'PENDIENTE',
+      estadoNuevo:    'VALIDADA',
+      fechaTerminoSLA: solicitud.fecha_limite,
+    }).catch(e => console.error('[solicitudes] Fallo GChat VALIDADA:', e.message));
 
     res.json({
       status:   'success',
@@ -297,7 +314,6 @@ router.get('/', requireAuth, async (req, res, next) => {
 
 // ─────────────────────────────────────────────────────────
 // PUT /api/solicitudes/:id/estado  (DPO)
-// Cambia estado + email al titular + CC al DPO
 // ─────────────────────────────────────────────────────────
 router.put('/:id/estado', requireAuth, async (req, res, next) => {
   try {
@@ -326,14 +342,12 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
       timestamp:       FieldValue.serverTimestamp(),
     });
 
-    if (estado !== 'RESUELTA') {
-      const config = await _getConfig();
+    const config = await _getConfig();
 
-      // Email al titular
+    if (estado !== 'RESUELTA') {
       emailService.enviarCambioEstado({ ...prev, id }, estado, config)
         .catch(e => console.error('[solicitudes] Fallo email estado titular:', e.message));
 
-      // CC al DPO — notificación interna del cambio de estado
       _ccDpo(
         prev,
         `[DPO] ${prev.numero_solicitud} cambio a ${estado}`,
@@ -346,6 +360,17 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
       );
     }
 
+    // Notificación Google Chat — cambio de estado
+    gchat.notificarCambioEstado({
+      numero:         prev.numero_solicitud,
+      tipo:           prev.tipo_derecho,
+      nombreTitular:  prev.nombre_completo,
+      estadoAnterior: prev.estado,
+      estadoNuevo:    estado,
+      asignadoA:      req.user.email || req.user.uid,
+      fechaTerminoSLA: prev.fecha_limite,
+    }).catch(e => console.error('[solicitudes] Fallo GChat cambio estado:', e.message));
+
     res.json({ status: 'success', id, estado });
   } catch (e) {
     next(e);
@@ -354,7 +379,6 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
 
 // ─────────────────────────────────────────────────────────
 // PUT /api/solicitudes/:id/resolver  (DPO)
-// Marca RESUELTA + email especial al titular + CC al DPO
 // ─────────────────────────────────────────────────────────
 router.put('/:id/resolver', requireAuth, async (req, res, next) => {
   try {
@@ -387,11 +411,9 @@ router.put('/:id/resolver', requireAuth, async (req, res, next) => {
 
     const config = await _getConfig();
 
-    // Email al titular con link de descarga
     emailService.enviarDatosListos({ ...prev, id }, url_datos, formato_entrega || 'PDF', config)
       .catch(e => console.error('[solicitudes] Fallo email datos listos:', e.message));
 
-    // CC al DPO
     _ccDpo(
       prev,
       `[DPO] ${prev.numero_solicitud} RESUELTA — datos entregados`,
@@ -403,6 +425,16 @@ router.put('/:id/resolver', requireAuth, async (req, res, next) => {
       </p>`,
       config
     );
+
+    // Notificación Google Chat — resuelta
+    gchat.notificarCambioEstado({
+      numero:         prev.numero_solicitud,
+      tipo:           prev.tipo_derecho,
+      nombreTitular:  prev.nombre_completo,
+      estadoAnterior: prev.estado,
+      estadoNuevo:    'RESUELTA',
+      asignadoA:      req.user.email || req.user.uid,
+    }).catch(e => console.error('[solicitudes] Fallo GChat RESUELTA:', e.message));
 
     res.json({ status: 'success', id, estado: 'RESUELTA' });
   } catch (e) {

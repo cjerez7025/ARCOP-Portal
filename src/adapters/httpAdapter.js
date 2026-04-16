@@ -1,10 +1,6 @@
 // ============================================================
-// src/adapters/httpAdapter.js — v2.0
-// Adapter que habla con el backend Node.js en Cloud Run.
-// v2.0: agrega métodos de derechos (MMPA-104)
-//
-// ENV requerida:
-//   REACT_APP_API_URL=https://arcop-backend-xxxx-uc.a.run.app
+// src/adapters/httpAdapter.js — v2.1
+// v2.1: agrega probarGChat para test de webhook Google Chat
 // ============================================================
 
 import { getAuth } from 'firebase/auth';
@@ -56,25 +52,22 @@ const httpAdapter = {
   saveFormularioConfig: async (config) => _fetch('/api/config/formularios', { method: 'POST', body: JSON.stringify(config) }, true),
   getFlujoConfig:       async ()       => _fetch('/api/config/flujos'),
   saveFlujoConfig:      async (config) => _fetch('/api/config/flujos', { method: 'POST', body: JSON.stringify(config) }, true),
+  probarGChat:          async (webhook_url, derecho) =>
+    _fetch('/api/config/probar-gchat', { method: 'POST', body: JSON.stringify({ webhook_url, derecho }) }, true),
 
   // ── Derechos ────────────────────────────────────────────
-  // Público: derechos activos para portal público
   getDerechos: async () =>
     _fetch('/api/derechos'),
 
-  // Protegido: todos los derechos para panel DPO/Config
   getTodosDerechos: async () =>
     _fetch('/api/derechos/todos', {}, true),
 
-  // Crear nuevo derecho
   crearDerecho: async (id, datos) =>
     _fetch('/api/derechos', { method: 'POST', body: JSON.stringify({ id, ...datos }) }, true),
 
-  // Editar derecho existente
   editarDerecho: async (id, cambios) =>
     _fetch(`/api/derechos/${id}`, { method: 'PUT', body: JSON.stringify(cambios) }, true),
 
-  // Activar / desactivar derecho
   toggleDerecho: async (id) =>
     _fetch(`/api/derechos/${id}/toggle`, { method: 'PUT' }, true),
 
