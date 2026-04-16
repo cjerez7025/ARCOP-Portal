@@ -1,7 +1,11 @@
 // ============================================================
-// backend/src/services/googleChatService.js
+// backend/src/services/googleChatService.js — v1.1
 // Envía notificaciones a canales Google Chat vía webhooks
-// configurados en config.flujos → derechos[TIPO].gchat_webhook
+// configurados en config.flujos → derechos[TIPO].google_chat_webhook
+//
+// CAMBIOS v1.1:
+//   - getWebhookUrl acepta google_chat_webhook | gchat_webhook | slack_webhook
+//   - notificarCambioEstado recibe asignadoEmail y lo muestra en el mensaje
 // ============================================================
 'use strict';
 
@@ -14,7 +18,7 @@ async function getWebhookUrl(tipo) {
     if (snap.exists) {
       const tipoKey = (tipo || '').toUpperCase();
       const d = snap.data()?.derechos?.[tipoKey] || {};
-      const webhook = d.gchat_webhook || d.google_chat_webhook || d.slack_webhook;
+      const webhook = d.google_chat_webhook || d.gchat_webhook || d.slack_webhook;
       if (webhook?.trim()) return webhook.trim();
     }
   } catch (e) {
@@ -63,6 +67,7 @@ function emojiEstado(estado) {
     EN_PROCESO: '🟠',
     RESUELTA:   '✅',
     RECHAZADA:  '❌',
+    CERRADA:    '🗂️',
   };
   return mapa[(estado || '').toUpperCase()] || '⚪';
 }
@@ -74,6 +79,7 @@ function textoEstado(estado) {
     EN_PROCESO: 'En proceso',
     RESUELTA:   'Resuelta',
     RECHAZADA:  'Rechazada',
+    CERRADA:    'Cerrada',
   };
   return mapa[(estado || '').toUpperCase()] || (estado || '—');
 }
@@ -113,7 +119,16 @@ async function notificarNuevaSolicitud(solicitud) {
  * Notifica cambio de estado.
  * Llamar desde routes/solicitudes.js al actualizar estado.
  */
-async function notificarCambioEstado({ numero, tipo, nombreTitular, estadoAnterior, estadoNuevo, asignadoA, fechaTerminoSLA }) {
+async function notificarCambioEstado({
+  numero,
+  tipo,
+  nombreTitular,
+  estadoAnterior,
+  estadoNuevo,
+  asignadoA,
+  asignadoEmail,
+  fechaTerminoSLA,
+}) {
   const tipoKey = (tipo || 'ACCESO').toUpperCase();
   const webhook = await getWebhookUrl(tipoKey);
   if (!webhook) return false;
@@ -126,9 +141,16 @@ async function notificarCambioEstado({ numero, tipo, nombreTitular, estadoAnteri
     `👤 Titular: ${nombreTitular || '—'}\n` +
     `🔄 Transición: ${textoEstado(estadoAnterior)} → *${textoEstado(estadoNuevo)}*`;
 
-  if (asignadoA)      text += `\n👷 Asignado a: ${asignadoA}`;
-  if (fechaTerminoSLA) text += `\n⏱️ SLA hasta: ${fechaTerminoSLA}`;
-  if (portalUrl)       text += `\n🔗 ${portalUrl}/#/dpo`;
+  if (asignadoA) {
+    text += `\n👷 Asignado a: *${asignadoA}*` + (asignadoEmail ? ` <${asignadoEmail}>` : '');
+  }
+  if (fechaTerminoSLA) {
+    const f = typeof fechaTerminoSLA === 'string'
+      ? fechaTerminoSLA.split('T')[0]
+      : fechaTerminoSLA;
+    text += `\n⏱️ SLA hasta: ${f}`;
+  }
+  if (portalUrl) text += `\n🔗 ${portalUrl}/#/dpo`;
 
   return enviar(text, webhook);
 }
@@ -138,11 +160,11 @@ async function notificarCambioEstado({ numero, tipo, nombreTitular, estadoAnteri
  */
 async function notificarAlertasSLA() {
   try {
-    const snap      = await db.collection('solicitudes').get();
+    const snap        = await db.collection('solicitudes').get();
     const solicitudes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const hoy       = new Date();
-    const limite    = new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000);
-    const portalUrl = await getPortalUrl();
+    const hoy         = new Date();
+    const limite      = new Date(hoy.getTime() + 3 * 24 * 60 * 60 * 1000);
+    const portalUrl   = await getPortalUrl();
 
     const estadosActivos = ['PENDIENTE', 'VALIDADA', 'EN_PROCESO'];
     const urgentes = solicitudes.filter(s => {
@@ -156,7 +178,7 @@ async function notificarAlertasSLA() {
 
     const porTipo = {};
     urgentes.forEach(s => {
-      const t = (s.tipo || 'ACCESO').toUpperCase();
+      const t = (s.tipo_derecho || s.tipo || 'ACCESO').toUpperCase();
       if (!porTipo[t]) porTipo[t] = [];
       porTipo[t].push(s);
     });

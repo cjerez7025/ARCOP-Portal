@@ -1,9 +1,10 @@
 // ============================================================
-// src/routes/solicitudes.js — v1.2
-// CAMBIOS respecto a v1.1:
-//   - Integra googleChatService para notificaciones por canal
-//   - notificarNuevaSolicitud al crear
-//   - notificarCambioEstado al cambiar estado y al validar
+// src/routes/solicitudes.js — v1.4
+// CAMBIOS respecto a v1.3:
+//   - Eliminada notificación Google Chat al crear solicitud
+//   - GChat solo notifica cuando hay asignado_a (cambio estado)
+//   - GChat siempre notifica en RESUELTA (usa responsable previo)
+//   - No notifica en validar/:token (PENDIENTE → VALIDADA)
 // ============================================================
 'use strict';
 
@@ -143,14 +144,7 @@ router.post('/', async (req, res, next) => {
     emailService.enviarRecepcion({ ...solicitud, id: ref.id }, config)
       .catch(e => console.error('[solicitudes] Fallo email recepcion:', e.message));
 
-    // Notificación Google Chat — nueva solicitud
-    gchat.notificarNuevaSolicitud({
-      ...solicitud,
-      id:   ref.id,
-      tipo: solicitud.tipo_derecho,
-    }).catch(e => console.error('[solicitudes] Fallo GChat nueva solicitud:', e.message));
-
-    // CC al DPO por email
+    // CC al DPO por email (sin Google Chat — se notifica al asignar responsable)
     _ccDpo(
       { ...solicitud, id: ref.id },
       `[ARCOP] Nueva solicitud ${numero} — ${solicitud.tipo_derecho}`,
@@ -225,15 +219,7 @@ router.post('/validar/:token', async (req, res, next) => {
     emailService.enviarCambioEstado(solicitud, 'VALIDADA', config)
       .catch(e => console.error('[solicitudes] Fallo email VALIDADA:', e.message));
 
-    // Notificación Google Chat — identidad validada
-    gchat.notificarCambioEstado({
-      numero:         solicitud.numero_solicitud,
-      tipo:           solicitud.tipo_derecho,
-      nombreTitular:  solicitud.nombre_completo,
-      estadoAnterior: 'PENDIENTE',
-      estadoNuevo:    'VALIDADA',
-      fechaTerminoSLA: solicitud.fecha_limite,
-    }).catch(e => console.error('[solicitudes] Fallo GChat VALIDADA:', e.message));
+    // No se notifica a Google Chat — se notifica al asignar responsable
 
     res.json({
       status:   'success',
@@ -317,8 +303,17 @@ router.get('/', requireAuth, async (req, res, next) => {
 // ─────────────────────────────────────────────────────────
 router.put('/:id/estado', requireAuth, async (req, res, next) => {
   try {
-    const { id }                  = req.params;
-    const { estado, comentario }  = req.body;
+    const { id } = req.params;
+    const {
+      estado,
+      comentario,
+      notas_dpo,
+      asignado_a,
+      asignado_email,
+      asignado_en,
+      fecha_termino_sla,
+      fecha_entrada_estado,
+    } = req.body;
 
     if (!estado) return res.status(400).json({ error: 'Campo estado requerido' });
 
@@ -328,16 +323,26 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
 
     const prev = snap.data();
 
-    await ref.update({
+    // Construir update dinámico (no escribir campos vacíos)
+    const update = {
       estado,
       comentario_interno: comentario || '',
       updatedAt:          FieldValue.serverTimestamp(),
-    });
+    };
+    if (notas_dpo)            update.notas_dpo            = notas_dpo;
+    if (asignado_a)           update.asignado_a           = asignado_a;
+    if (asignado_email)       update.asignado_email       = asignado_email;
+    if (asignado_en)          update.asignado_en          = asignado_en;
+    if (fecha_termino_sla)    update.fecha_termino_sla    = fecha_termino_sla;
+    if (fecha_entrada_estado) update.fecha_entrada_estado = fecha_entrada_estado;
+
+    await ref.update(update);
 
     await ref.collection('historial').add({
       estado_anterior: prev.estado,
       estado_nuevo:    estado,
       comentario:      comentario || '',
+      asignado_a:      asignado_a || null,
       actor:           req.user.email || req.user.uid,
       timestamp:       FieldValue.serverTimestamp(),
     });
@@ -354,22 +359,26 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
         `<p style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
           La solicitud <strong>${prev.numero_solicitud}</strong> de <strong>${prev.nombre_completo}</strong>
           cambio de estado <strong>${prev.estado}</strong> &rarr; <strong>${estado}</strong>.
+          ${asignado_a ? `<br>Asignado a: <strong>${asignado_a}</strong>${asignado_email ? ` &lt;${asignado_email}&gt;` : ''}` : ''}
           ${comentario ? `<br>Comentario: ${comentario}` : ''}
         </p>`,
         config
       );
     }
 
-    // Notificación Google Chat — cambio de estado
-    gchat.notificarCambioEstado({
-      numero:         prev.numero_solicitud,
-      tipo:           prev.tipo_derecho,
-      nombreTitular:  prev.nombre_completo,
-      estadoAnterior: prev.estado,
-      estadoNuevo:    estado,
-      asignadoA:      req.user.email || req.user.uid,
-      fechaTerminoSLA: prev.fecha_limite,
-    }).catch(e => console.error('[solicitudes] Fallo GChat cambio estado:', e.message));
+    // Notificación Google Chat — SOLO cuando hay responsable asignado
+    if (asignado_a) {
+      gchat.notificarCambioEstado({
+        numero:          prev.numero_solicitud,
+        tipo:            prev.tipo_derecho,
+        nombreTitular:   prev.nombre_completo,
+        estadoAnterior:  prev.estado,
+        estadoNuevo:     estado,
+        asignadoA:       asignado_a,
+        asignadoEmail:   asignado_email || '',
+        fechaTerminoSLA: fecha_termino_sla || prev.fecha_limite,
+      }).catch(e => console.error('[solicitudes] Fallo GChat cambio estado:', e.message));
+    }
 
     res.json({ status: 'success', id, estado });
   } catch (e) {
@@ -426,14 +435,16 @@ router.put('/:id/resolver', requireAuth, async (req, res, next) => {
       config
     );
 
-    // Notificación Google Chat — resuelta
+    // Notificación Google Chat — resuelta (usa responsable previo si existe)
     gchat.notificarCambioEstado({
-      numero:         prev.numero_solicitud,
-      tipo:           prev.tipo_derecho,
-      nombreTitular:  prev.nombre_completo,
-      estadoAnterior: prev.estado,
-      estadoNuevo:    'RESUELTA',
-      asignadoA:      req.user.email || req.user.uid,
+      numero:          prev.numero_solicitud,
+      tipo:            prev.tipo_derecho,
+      nombreTitular:   prev.nombre_completo,
+      estadoAnterior:  prev.estado,
+      estadoNuevo:     'RESUELTA',
+      asignadoA:       prev.asignado_a    || (req.user.email || req.user.uid),
+      asignadoEmail:   prev.asignado_email || '',
+      fechaTerminoSLA: prev.fecha_termino_sla || prev.fecha_limite,
     }).catch(e => console.error('[solicitudes] Fallo GChat RESUELTA:', e.message));
 
     res.json({ status: 'success', id, estado: 'RESUELTA' });

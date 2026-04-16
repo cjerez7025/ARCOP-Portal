@@ -584,8 +584,20 @@ const tabs = [
   { id: 'avanzado', nombre: 'Avanzado', icono: Settings  },
 ];
 
-  const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
+const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
   const tabActivaEsSimple = tabsSimples.includes(tabActiva);
+  const flujoDirty       = flujoHook?.dirty;
+  const formularioDirty  = formularioHook?.dirty;
+  const derechosDirty    = tabActiva === 'derechos' && (flujoDirty || formularioDirty);
+
+  const handleGuardarDerechos = async () => {
+    try {
+      if (flujoDirty)      await flujoHook.guardar();
+      if (formularioDirty) await formularioHook.guardar();
+    } catch (e) {
+      toast.error('Error al guardar derechos: ' + (e.message || ''));
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -633,10 +645,12 @@ const tabs = [
           </div>
 
           {/* Footer */}
+          {/* Footer */}
           <div className="border-t border-gray-200 px-8 py-5 bg-gray-50 flex justify-between items-center">
             <div className="text-sm text-yellow-600">
-              {cambiosPendientes && tabActivaEsSimple &&
-                <span className="flex items-center gap-1"><AlertCircle className="w-4 h-4" />Cambios sin guardar</span>}
+              {((cambiosPendientes && tabActivaEsSimple) || derechosDirty) && (
+                <span className="flex items-center gap-1"><AlertCircle className="w-4 h-4" />Cambios sin guardar</span>
+              )}
             </div>
 
             <div>
@@ -647,7 +661,15 @@ const tabs = [
                              : <><Save className="w-4 h-4" />Guardar cambios</>}
                 </button>
               )}
-              
+              {tabActiva === 'derechos' && (
+                <button onClick={handleGuardarDerechos}
+                  disabled={flujoHook?.guardando || formularioHook?.guardando || !derechosDirty}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
+                  {(flujoHook?.guardando || formularioHook?.guardando)
+                    ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</>
+                    : <><Save className="w-4 h-4" />Guardar cambios</>}
+                </button>
+              )}
             </div>
           </div>
         </div>
