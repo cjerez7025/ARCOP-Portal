@@ -329,7 +329,90 @@ const CampoRenderer = ({ campo, register, watch, setValue, errors, dark = false 
       </div>
     );
   }
+if (campo.tipo === 'file') {
+    const maxSizeMB = campo.maxSizeMB || 5;
+    const maxFiles  = campo.maxFiles  || 3;
+    const acceptStr = campo.accept    || '.pdf,.jpg,.jpeg,.png,.doc,.docx';
 
+    register(campo.id);
+    const currentFiles = watch?.(campo.id) || [];
+    const fileListItems = Array.isArray(currentFiles) ? currentFiles : [];
+
+    const formatSize = (bytes) => {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    };
+
+    return (
+      <div>
+        <label style={dark ? s.label : undefined} className={dark ? undefined : "block text-sm font-medium text-gray-700 mb-1"}>
+          {campo.label}
+          {campo.obligatorio && <span style={dark ? s.labelAst : undefined} className={dark ? undefined : "text-red-500 ml-1"}>*</span>}
+        </label>
+
+        <label
+          style={dark ? {
+            display: 'block', border: '2px dashed rgba(255,255,255,0.15)', borderRadius: '12px', padding: '24px 16px',
+            textAlign: 'center', cursor: 'pointer', background: 'rgba(28,28,40,0.6)', transition: 'border-color 0.2s',
+          } : {
+            display: 'block', border: '2px dashed #D1D5DB', borderRadius: '12px', padding: '24px 16px',
+            textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s',
+          }}
+        >
+          <input type="file" accept={acceptStr} multiple={maxFiles > 1}
+            style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, overflow: 'hidden' }}
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              const existentes = Array.isArray(currentFiles) ? [...currentFiles] : [];
+              const errores = [];
+              for (const f of files) {
+                if (f.size > maxSizeMB * 1024 * 1024) { errores.push(`"${f.name}" supera ${maxSizeMB} MB`); continue; }
+                if (existentes.length >= maxFiles) { errores.push(`Máximo ${maxFiles} archivos`); break; }
+                if (!existentes.some(ex => ex.name === f.name && ex.size === f.size)) existentes.push(f);
+              }
+              if (errores.length > 0) alert(errores.join('\n'));
+              setValue(campo.id, existentes, { shouldValidate: true, shouldDirty: true });
+              e.target.value = '';
+            }}
+          />
+          <div style={{ fontSize: '28px', marginBottom: '8px', opacity: 0.5 }}>📎</div>
+          <p style={{ fontSize: '13px', color: dark ? '#9090A8' : '#6B7280', margin: 0 }}>
+            {campo.placeholder || 'Haz clic para seleccionar archivos'}
+          </p>
+          <p style={{ fontSize: '11px', color: dark ? '#5A5A72' : '#9CA3AF', marginTop: '6px' }}>
+            Máx. {maxSizeMB} MB · {acceptStr.replace(/\./g, '').toUpperCase().replace(/,/g, ', ')} · Hasta {maxFiles} archivo{maxFiles > 1 ? 's' : ''}
+          </p>
+        </label>
+
+        {fileListItems.length > 0 && (
+          <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {fileListItems.map((f, i) => (
+              <div key={`${f.name}-${i}`} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px', background: dark ? 'rgba(28,28,40,0.8)' : '#F9FAFB',
+                border: dark ? '1px solid rgba(255,255,255,0.08)' : '1px solid #E5E7EB', borderRadius: '8px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                  <span>📄</span>
+                  <span style={{ fontSize: '12px', color: dark ? '#C8C8D8' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <span style={{ fontSize: '11px', color: dark ? '#5A5A72' : '#9CA3AF', flexShrink: 0 }}>{formatSize(f.size)}</span>
+                </div>
+                <button type="button" onClick={() => {
+                  const updated = [...fileListItems];
+                  updated.splice(i, 1);
+                  setValue(campo.id, updated, { shouldValidate: true, shouldDirty: true });
+                }} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: '16px', padding: '2px 6px' }}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {campo.ayuda && <p style={dark ? s.ayuda : { fontSize: '11px', color: '#6B7280', marginTop: '5px' }}>{campo.ayuda}</p>}
+        <ErrorMsg />
+      </div>
+    );
+  }
   // Fallback
   return (
     <div>

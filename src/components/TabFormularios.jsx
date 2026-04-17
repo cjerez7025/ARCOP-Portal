@@ -24,13 +24,13 @@ const TIPOS_CAMPO = [
   { value: 'select',         label: 'Lista desplegable' },
   { value: 'radio',          label: 'Selección única' },
   { value: 'checkbox_single',label: 'Casilla de verificación' },
+  { value: 'file',           label: 'Adjuntar archivo(s)' },
 ];
 
 // ── Componente de campo editable inline ───────────────────
 const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, onEliminar, isFirst, isLast }) => {
   const [editando, setEditando] = useState(false);
-  const [draft, setDraft]       = useState({ label: campo.label, ayuda: campo.ayuda, placeholder: campo.placeholder || '' });
-
+  const [draft, setDraft] = useState({ label: campo.label, ayuda: campo.ayuda, placeholder: campo.placeholder || '', tipo: campo.tipo });
   const confirmarEdicion = () => {
     onEditar(campo.id, draft);
     setEditando(false);
@@ -62,7 +62,15 @@ const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, on
         {/* Contenido */}
         <div className="flex-1 min-w-0">
           {editando ? (
+            
             <div className="space-y-2">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de campo</label>
+                <select value={draft.tipo} onChange={e => setDraft(p => ({ ...p, tipo: e.target.value }))}
+                 className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                 {TIPOS_CAMPO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+          </div>
               <input
                 value={draft.label}
                 onChange={e => setDraft(p => ({ ...p, label: e.target.value }))}

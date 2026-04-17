@@ -2,6 +2,7 @@
 // useFormularioConfig — Hook
 // Carga y expone la configuración dinámica de formularios.
 // FIX: agregarCampo inicializa estructura si no existe (derechos custom)
+// FIX: editarCampo inyecta props de file al cambiar tipo a 'file'
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react';
@@ -13,6 +14,17 @@ import {
   CAMPOS_IDENTIDAD,
 } from '../services/formularioService';
 import { toast } from 'react-toastify';
+
+// Props por defecto cuando un campo cambia a tipo 'file'
+const FILE_DEFAULTS = {
+  accept:      '.pdf,.jpg,.jpeg,.png,.doc,.docx',
+  maxSizeMB:   5,
+  maxFiles:    3,
+  placeholder: 'Arrastra archivos aquí o haz clic para seleccionar',
+};
+
+// Props que se limpian cuando un campo deja de ser tipo 'file'
+const FILE_KEYS = ['accept', 'maxSizeMB', 'maxFiles'];
 
 const useFormularioConfig = () => {
   const [config, setConfig]       = useState(null);
@@ -107,12 +119,29 @@ const useFormularioConfig = () => {
     });
   };
 
-  // Editar label o texto de ayuda
+  // Editar label, tipo, ayuda, placeholder, etc.
   const editarCampo = (derechoKey, campoId, changes) => {
     updateConfig(c => {
       _ensureDerecho(c, derechoKey);
       const campo = c.derechos[derechoKey].campos.find(f => f.id === campoId);
-      if (campo && campo.editable) Object.assign(campo, changes);
+      if (!campo || !campo.editable) return;
+
+      const tipoAnterior = campo.tipo;
+      Object.assign(campo, changes);
+
+      // Si el tipo cambió a 'file', inyectar props por defecto
+      if (changes.tipo === 'file' && tipoAnterior !== 'file') {
+        Object.keys(FILE_DEFAULTS).forEach(k => {
+          if (campo[k] === undefined || campo[k] === null || campo[k] === '') {
+            campo[k] = FILE_DEFAULTS[k];
+          }
+        });
+      }
+
+      // Si el tipo cambió DESDE 'file' a otro, limpiar props de file
+      if (tipoAnterior === 'file' && changes.tipo && changes.tipo !== 'file') {
+        FILE_KEYS.forEach(k => { delete campo[k]; });
+      }
     });
   };
 
@@ -134,6 +163,14 @@ const useFormularioConfig = () => {
     updateConfig(c => {
       _ensureDerecho(c, derechoKey);
       const nuevo = crearCampoCustom(derechoKey, override);
+
+      // Si el campo nuevo es tipo file, inyectar defaults
+      if (nuevo.tipo === 'file') {
+        Object.keys(FILE_DEFAULTS).forEach(k => {
+          if (nuevo[k] === undefined) nuevo[k] = FILE_DEFAULTS[k];
+        });
+      }
+
       c.derechos[derechoKey].campos.push(nuevo);
     });
   };

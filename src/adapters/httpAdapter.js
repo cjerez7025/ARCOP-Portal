@@ -81,6 +81,34 @@ const httpAdapter = {
     ).toString();
     return _fetch(`/api/solicitudes${params ? '?' + params : ''}`, {}, true);
   },
+uploadDocumentacion: async (solicitudId, archivos) => {
+    try {
+      const API_URL = process.env.REACT_APP_API_URL;
+      const formData = new FormData();
+      formData.append('solicitudId', solicitudId);
+ 
+      for (const archivo of archivos) {
+        formData.append('archivos', archivo);
+      }
+ 
+      const res = await fetch(`${API_URL}/api/upload`, {
+        method: 'POST',
+        body:   formData,
+        // NO poner Content-Type — fetch lo setea automáticamente con boundary
+      });
+ 
+      const data = await res.json();
+ 
+      if (!res.ok) {
+        return { status: 'error', data: null, message: data.error || `Error ${res.status}` };
+      }
+ 
+      return { status: 'success', data: data.data };
+    } catch (e) {
+      console.error('[httpAdapter] uploadDocumentacion error:', e.message);
+      return { status: 'error', data: null, message: e.message };
+    }
+  },
 
   getSolicitudPorNumero: async (numero) =>
     _fetch(`/api/solicitudes/numero/${numero}`),

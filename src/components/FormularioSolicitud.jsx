@@ -11,6 +11,7 @@ import useFormularioConfig from '../hooks/useFormularioConfig';
 import CampoRenderer from './CampoRenderer';
 import OnboardingTour from './OnboardingTour';
 import adapter from '../adapters';
+import { crearSolicitud } from '../services/googleSheetsService';
 
 const generarToken        = () => Math.random().toString(36).substr(2) + Math.random().toString(36).substr(2);
 const calcularFechaLimite = () => {
@@ -163,7 +164,7 @@ const getGridColumn = (campo) => {
   if (campo.id === 'nombre_completo') return '1 / -1';
   switch (campo.tipo) {
     case 'text': case 'email': case 'tel': case 'rut': case 'number': case 'date': return 'auto';
-    case 'textarea': case 'radio': case 'checkbox': return '1 / -1';
+    case 'textarea': case 'radio': case 'checkbox': case 'file': return '1 / -1';
     case 'select': return (campo.opciones?.length ?? 0) > 3 ? '1 / -1' : 'auto';
     default: return '1 / -1';
   }
@@ -173,7 +174,7 @@ const CamposGrid = ({ campos = [], register, watch, setValue, errors }) => (
   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
     {(campos || []).map(campo => (
       <div key={campo.id} style={{ gridColumn: getGridColumn(campo) }}>
-        <CampoRenderer dark={true} campo={campo} register={register} watch={watch} setValue={campo.tipo === 'rut' ? setValue : undefined} errors={errors} />
+        <CampoRenderer dark={true} campo={campo} register={register} watch={watch} setValue={campo.tipo === 'rut' || campo.tipo === 'file' ? setValue : undefined} errors={errors} />
       </div>
     ))}
   </div>
@@ -206,29 +207,61 @@ const FormularioSolicitud = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const onSubmit = async (data) => {
+    const onSubmit = async (data) => {
     setLoading(true);
     try {
-      const solicitud = {
-        token_validacion: generarToken(),
-        fecha_limite:     calcularFechaLimite(),
-        frontend_url:     process.env.REACT_APP_FRONTEND_URL || window.location.origin,
-        ip_origen:        window.location.hostname,
-        user_agent:       navigator.userAgent,
-        creado_en:        new Date().toISOString(),
-        ...data,
-        email:            data.email?.toLowerCase(),
-        categorias:       JSON.stringify(data.categorias || []),
-        tipo_derecho:     tipoSeleccionado.id,
+      // Separar archivos del resto de datos
+      const archivos = data.documentacion; // File[] o undefined
+      const datosLimpios = { ...data };
+      delete datosLimpios.documentacion;
+      delete datosLimpios.acepta_terminos;
+ 
+      // Construir objeto solicitud
+      const solicitudData = {
+        ...datosLimpios,
+        tipo_derecho: tipoSeleccionado.id,
       };
-      const result = await adapter.createSolicitud(solicitud);
-      if (result.status === 'error') throw new Error(result.message);
-      setSolicitudCreada({ numero_solicitud: result.data?.numero_solicitud });
+ 
+      // 1. Crear solicitud primero (para obtener el ID)
+      const result = await crearSolicitud(solicitudData);
+ 
+      if (result.status !== 'success') {
+        throw new Error(result.message || 'Error al crear solicitud');
+      }
+ 
+      const solicitudId = result.data?.id;
+ 
+      // 2. Si hay archivos, subirlos y actualizar la solicitud
+      if (archivos && archivos.length > 0 && solicitudId) {
+        try {
+          const uploadResult = await adapter.uploadDocumentacion(solicitudId, archivos);
+ 
+          if (uploadResult.status === 'success' && uploadResult.data) {
+            // Guardar las URLs en la solicitud
+            await adapter.updateSolicitud(solicitudId, {
+              documentacion_archivos: uploadResult.data.map(a => ({
+                nombre: a.nombre,
+                url:    a.url,
+                path:   a.path,
+                tipo:   a.tipo,
+                tamaño: a.tamaño,
+              })),
+            });
+          } else {
+            console.warn('⚠️ Archivos no se pudieron subir:', uploadResult.message);
+            // No falla la solicitud — solo advierte
+          }
+        } catch (uploadErr) {
+          console.warn('⚠️ Error subiendo documentación:', uploadErr.message);
+        }
+      }
+ 
+      setSolicitudCreada(result.data);
       setSuccess(true);
-      toast.success('Solicitud enviada');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      toast.error(err.message || 'Error al enviar solicitud');
+ 
+    } catch (error) {
+      console.error('Error en onSubmit:', error);
+      alert('Error: ' + error.message);
     } finally {
       setLoading(false);
     }

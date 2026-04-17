@@ -9,15 +9,16 @@
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
-  admin.initializeApp({
+admin.initializeApp({
     projectId: process.env.FIREBASE_PROJECT_ID,
-    // En Cloud Run no se necesita credential explícita:
-    // GCP infiere el Service Account del container automáticamente.
-    // En local con emulador se usa FIREBASE_AUTH_EMULATOR_HOST etc.
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'aligndata-arcop.firebasestorage.app',
   });
 }
 
 const db   = admin.firestore();
 const auth = admin.auth();
+const bucket = admin.storage().bucket(
+  process.env.FIREBASE_STORAGE_BUCKET || 'aligndata-arcop.firebasestorage.app'
+);
 
-module.exports = { admin, db, auth };
+module.exports = { admin, db, auth, bucket };

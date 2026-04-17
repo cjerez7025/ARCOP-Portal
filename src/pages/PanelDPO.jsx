@@ -1,12 +1,7 @@
 // ============================================================
-// PanelDPO.jsx — v4.1
-// CORRECCIONES sobre v4.0:
-//   1. getFieldValue: fallback tipo_derecho → tipo (datos legacy Firestore)
-//   2. Modal detalle: campo 'tipo' → 'tipo_derecho'
-//   3. handleAbrirCambiarEstado: lee tipo_derecho con fallback
-//   4. handleCambioEstadoDestino: idem
-//   5. handleCambiarEstado: idem
-//   6. Modal cambiar estado (render): idem
+// PanelDPO.jsx — v4.2
+// CAMBIOS sobre v4.1:
+//   - Modal detalle: muestra documentacion_archivos con botón descarga
 // ============================================================
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -85,11 +80,8 @@ const PanelDPO = () => {
   const [actorSeleccionado,   setActorSeleccionado]   = useState(null);
   const [actorLibre,          setActorLibre]          = useState('');
   const [actoresDisponibles,  setActoresDisponibles]  = useState([]);
-  // Inicializado con config por defecto para que el modal funcione inmediatamente
-  // Se reemplaza con la config guardada en Sheets cuando carga
   const [flujoConfig,         setFlujoConfig]         = useState(() => buildConfigDefault());
 
-  // NUEVO: valores de campos de transición capturados en el modal
   const [valoresCampos,       setValoresCampos]       = useState({});
 
   const [procesando,          setProcesando]          = useState(false);
@@ -165,7 +157,6 @@ const PanelDPO = () => {
     } else if (filtroEspecial?.estado) {
       s = s.filter(x => x.estado === filtroEspecial.estado);
     }
-    // Ordenar por fecha_solicitud descendente (más recientes primero)
     s.sort((a, b) => {
       const fa = a.fecha_solicitud ? new Date(a.fecha_solicitud).getTime() : 0;
       const fb = b.fecha_solicitud ? new Date(b.fecha_solicitud).getTime() : 0;
@@ -175,8 +166,6 @@ const PanelDPO = () => {
   }, [solicitudes, filtros, filtroEspecial]);
 
   // ── Helpers ────────────────────────────────────────────
-
-  // ▸ CORRECCIÓN v4.1: fallback tipo_derecho → tipo para datos legacy Firestore
   const getFieldValue = (obj, fieldName) => {
     if (!obj) return '';
     if (fieldName === 'tipo_derecho') {
@@ -209,12 +198,8 @@ const PanelDPO = () => {
     } catch { return 'Fecha inválida'; }
   };
 
-  // ── Helpers de flujo (normalizados, sin race condition) ──
-
-  // ID canónico: mayúsculas, sin espacios
   const normId = (s) => (s || '').toString().toUpperCase().trim();
 
-  // Estados del flujo con IDs y transiciones completamente normalizados
   const getEstadosDerecho = (tipo) => {
     if (!flujoConfig) return [];
     const tipoNorm = normId(tipo);
@@ -227,7 +212,6 @@ const PanelDPO = () => {
     }));
   };
 
-  // Calcula fecha de término en días hábiles desde hoy
   const calcFechaTerminoSLA = (slaDias) => {
     if (!slaDias) return null;
     let dias = slaDias;
@@ -245,28 +229,21 @@ const PanelDPO = () => {
 
   const handleAbrirCambiarEstado = async (solicitud) => {
     const estadoActualId = normId(getFieldValue(solicitud, 'estado') || 'PENDIENTE');
-    // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback a tipo legacy
     const tipo           = normId(getFieldValue(solicitud, 'tipo_derecho') || 'ACCESO');
 
-    // Si flujoConfig aún no cargó, esperar a que lo haga antes de abrir el modal
     let config = flujoConfig;
     if (!config) {
-      console.log('⏳ flujoConfig null — cargando antes de abrir modal...');
       try {
         const result = await obtenerFlujoConfig();
         if (result.status === 'success' && result.data) {
           config = result.data;
           setFlujoConfig(config);
-          console.log('✅ flujoConfig cargado on-demand');
-        } else {
-          console.warn('⚠️ obtenerFlujoConfig falló on-demand:', result);
         }
       } catch (e) {
         console.error('❌ Error cargando flujoConfig on-demand:', e);
       }
     }
 
-    // Resolver transiciones usando config local (no el state que puede estar desactualizado)
     const estadosDerecho = config
       ? (config.derechos?.[tipo]?.estados || []).map(e => ({
           ...e,
@@ -282,8 +259,6 @@ const PanelDPO = () => {
     const estadosDestino = estadosDerecho.filter(e => transIds.includes(e.id) && e.activo !== false);
     const primerDestino  = estadosDestino.length > 0 ? estadosDestino[0].id : '';
 
-    console.log('🎯 Modal flujo —', tipo, estadoActualId, '→', primerDestino, '| destinos:', estadosDestino.map(e => e.id));
-
     const actoresInicio = primerDestino
       ? (estadosDerecho.find(e => e.id === primerDestino)?.actores || [])
       : [];
@@ -298,7 +273,6 @@ const PanelDPO = () => {
 
   const handleCambioEstadoDestino = (estadoId) => {
     const id             = normId(estadoId);
-    // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback
     const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo_derecho') || 'ACCESO');
     const estadosDerecho = getEstadosDerecho(tipo);
     const actores        = estadosDerecho.find(e => e.id === id)?.actores || [];
@@ -320,8 +294,6 @@ const PanelDPO = () => {
       return;
     }
 
-    // ── Validar campos de transición obligatorios ──────
-    // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback
     const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo_derecho') || 'ACCESO');
     const estadosDerecho = getEstadosDerecho(tipo);
     const defDestino     = estadosDerecho.find(e => e.id === normId(nuevoEstado));
@@ -338,7 +310,6 @@ const PanelDPO = () => {
       return;
     }
 
-    // ── Determinar actor asignado ──────────────────────
     let asignadoNombre = '';
     let asignadoEmail  = '';
     if (actorSeleccionado) {
@@ -356,18 +327,10 @@ const PanelDPO = () => {
       const id = getSolicitudId(modalCambiarEstado);
       if (!id) { toast.error('No se pudo obtener el ID'); return; }
 
-      // ── Payload completo hacia dpoService ─────────────
-      console.log('🚀 handleCambiarEstado — nuevoEstado:', nuevoEstado, '| valoresCampos:', valoresCampos);
-
-      // ── Si el estado destino es RESUELTA y hay url_datos,
-      //    usar resolverSolicitud (marcarResuelta en backend) que ya
-      //    envía el email correcto con botón de descarga.
-      //    Para todos los demás estados, usar actualizarSolicitud normal.
       const esResueltaConUrl = nuevoEstado.toUpperCase() === 'RESUELTA' && valoresCampos.url_datos;
 
       let result;
       if (esResueltaConUrl) {
-        console.log('📦 Ruta RESUELTA → marcarComoResuelta con url:', valoresCampos.url_datos);
         result = await marcarComoResuelta(id, valoresCampos.url_datos, valoresCampos.formato_entrega || 'PDF');
       } else {
         result = await actualizarSolicitud(id, {
@@ -515,7 +478,7 @@ const PanelDPO = () => {
                 ['Email',          'email'],
                 ['Teléfono',       'telefono'],
                 ['Estado',         'estado'],
-                ['Tipo',           'tipo_derecho'],   // ▸ CORRECCIÓN v4.1
+                ['Tipo',           'tipo_derecho'],
                 ['Fecha Solicitud','fecha_solicitud'],
                 ['Fecha Límite',   'fecha_limite'],
               ].map(([label, field]) => (
@@ -529,6 +492,21 @@ const PanelDPO = () => {
                 </div>
               ))}
             </div>
+
+            {/* Datos específicos de la solicitud */}
+            {getFieldValue(modalDetalle, 'dato_incorrecto') && (
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <label className="block text-xs font-semibold text-yellow-700 uppercase tracking-wider mb-1">Dato a rectificar</label>
+                <p className="text-sm text-gray-900">{getFieldValue(modalDetalle, 'dato_incorrecto')}</p>
+                {getFieldValue(modalDetalle, 'valor_correcto') && (
+                  <>
+                    <label className="block text-xs font-semibold text-yellow-700 uppercase tracking-wider mb-1 mt-3">Valor correcto</label>
+                    <p className="text-sm text-gray-900">{getFieldValue(modalDetalle, 'valor_correcto')}</p>
+                  </>
+                )}
+              </div>
+            )}
+
             {getFieldValue(modalDetalle, 'asignado_a') && (
               <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
                 <User className="w-4 h-4 text-indigo-600" />
@@ -553,6 +531,35 @@ const PanelDPO = () => {
                 </p>
               </div>
             )}
+
+            {/* ── Archivos adjuntos ── */}
+            {modalDetalle.documentacion_archivos && modalDetalle.documentacion_archivos.length > 0 && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-500 mb-2">📎 Documentación adjunta</label>
+                <div className="space-y-2">
+                  {modalDetalle.documentacion_archivos.map((arch, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg">
+                          {arch.tipo?.includes('pdf') ? '📕' : arch.tipo?.includes('image') ? '🖼️' : '📄'}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{arch.nombre}</p>
+                          <p className="text-xs text-gray-400">
+                            {arch.tamaño ? (arch.tamaño / 1024).toFixed(0) + ' KB' : ''} · {arch.tipo?.split('/')[1]?.toUpperCase() || ''}
+                          </p>
+                        </div>
+                      </div>
+                      <a href={arch.url} target="_blank" rel="noopener noreferrer" download={arch.nombre}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 flex-shrink-0">
+                        ⬇ Descargar
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3 mt-6 justify-end">
               <button onClick={() => { handleCerrarDetalle(); handleAbrirCambiarEstado(modalDetalle); }}
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm">
@@ -568,34 +575,29 @@ const PanelDPO = () => {
       )}
 
       {/* ══════════════════════════════════════════════════
-          MODAL CAMBIAR ESTADO — v4.1 con tipo_derecho
+          MODAL CAMBIAR ESTADO
       ══════════════════════════════════════════════════ */}
       {modalCambiarEstado && (() => {
-        // ▸ CORRECCIÓN v4.1: leer tipo_derecho con fallback a tipo legacy
         const tipo           = normId(getFieldValue(modalCambiarEstado, 'tipo_derecho') || 'ACCESO');
         const estadoActualId = normId(getFieldValue(modalCambiarEstado, 'estado') || 'PENDIENTE');
         const numero         = getFieldValue(modalCambiarEstado, 'numero_solicitud');
         const nombreTitular  = getFieldValue(modalCambiarEstado, 'nombre_completo');
 
-        // getEstadosDerecho ya normaliza id Y transiciones_posibles — fuente única de verdad
         const estadosDerecho  = getEstadosDerecho(tipo);
         const defActual       = estadosDerecho.find(e => e.id === estadoActualId);
-        const transicionesIds = defActual?.transiciones_posibles || [];  // ya normalizados
+        const transicionesIds = defActual?.transiciones_posibles || [];
         const estadosDestino  = estadosDerecho.filter(
           e => transicionesIds.includes(e.id) && e.activo !== false
         );
 
-        // ── Lógica de presentación ──────────────────────────────
         const tieneFlujoCargado = !!flujoConfig && estadosDerecho.length > 0;
         const destinoUnico      = tieneFlujoCargado && estadosDestino.length === 1;
         const variosDestinos    = tieneFlujoCargado && estadosDestino.length > 1;
-        // Fallback SOLO si no hay flujo cargado para este tipo
         const usarFallback      = !tieneFlujoCargado;
 
-        // Estado final: es_final explícito O sin transiciones configuradas
         const esEstadoFinal = tieneFlujoCargado && (
           defActual?.es_final === true ||
-          (!defActual && false) ||  // estado desconocido → no bloquear
+          (!defActual && false) ||
           (defActual && transicionesIds.length === 0)
         );
 
@@ -619,12 +621,10 @@ const PanelDPO = () => {
                 <span className="font-semibold text-gray-700">{tipo}</span>
               </p>
 
-              {/* Estado actual */}
               <div className="mb-4 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
                 Estado actual: <strong className="text-gray-800">{defActual?.nombre || estadoActualId}</strong>
               </div>
 
-              {/* ── Estado final: no hay a dónde ir ── */}
               {esEstadoFinal && tieneFlujoCargado && (
                 <div className="mb-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-slate-400 flex-shrink-0" />
@@ -632,7 +632,6 @@ const PanelDPO = () => {
                 </div>
               )}
 
-              {/* ── Destino único: mostrar como info, sin selector ── */}
               {destinoUnico && !esEstadoFinal && (() => {
                 const dest = estadosDestino[0];
                 return (
@@ -659,7 +658,6 @@ const PanelDPO = () => {
                 );
               })()}
 
-              {/* ── Varios destinos: radio buttons ── */}
               {variosDestinos && !esEstadoFinal && (
                 <div className="mb-4">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Mover a estado</label>
@@ -689,7 +687,6 @@ const PanelDPO = () => {
                 </div>
               )}
 
-              {/* ── Fallback: flujo no cargado, mostrar advertencia + selector básico ── */}
               {usarFallback && !esEstadoFinal && (
                 <div className="mb-4">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Mover a estado</label>
@@ -707,7 +704,6 @@ const PanelDPO = () => {
                 </div>
               )}
 
-              {/* ── Campos de transición del estado destino ── */}
               {hayCampos && nuevoEstado !== estadoActualId && (
                 <div className="mb-4 border border-violet-200 rounded-xl p-4 bg-violet-50 space-y-4">
                   <p className="text-xs font-bold text-violet-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -715,7 +711,6 @@ const PanelDPO = () => {
                     Información requerida para esta transición
                   </p>
                   {camposDestino.map(campo => {
-                    // Los campos tipo "checkbox" se renderizan de manera diferente
                     if (campo.tipo === 'checkbox') {
                       return (
                         <div key={campo.id}>
@@ -756,11 +751,6 @@ const PanelDPO = () => {
                 </div>
               )}
 
-              {/* ── Asignación de responsable ──
-                   Muestra el bloque si:
-                   - hay actores predefinidos en el estado destino (hayActores), O
-                   - el estado destino tiene SLA (sla_dias > 0), lo que indica que requiere responsable
-              */}
               {nuevoEstado && nuevoEstado !== estadoActualId && (hayActores || (defDestinoRender?.sla_dias > 0)) && (
                 <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 mb-4">
                   <div className="flex items-center gap-2 mb-3">
@@ -792,7 +782,6 @@ const PanelDPO = () => {
                           )}
                         </label>
                       ))}
-                      {/* Opción texto libre */}
                       <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
                         !actorSeleccionado && !!actorLibre ? 'border-indigo-500 bg-white' : 'border-transparent bg-white/60 hover:bg-white'
                       }`}>
@@ -815,7 +804,6 @@ const PanelDPO = () => {
                 </div>
               )}
 
-              {/* SLA info */}
               {fechaTermino && nuevoEstado !== estadoActualId && (
                 <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg mb-4 text-sm">
                   <Clock className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />

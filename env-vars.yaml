@@ -6,3 +6,4 @@ RESEND_FROM: onboarding@resend.dev
 DPO_EMAIL: carlos.jerez@aligndata.cl
 
 FRONTEND_URL: https://aligndata-arcop-portal-38081.web.app
+FIREBASE_STORAGE_BUCKET: "aligndata-arcop.firebasestorage.app"

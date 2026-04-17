@@ -20,7 +20,7 @@ app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
 const derechosRoutes = require('./routes/derechos');
-
+const uploadRouter = require('./routes/upload');
 // ── Seguridad ─────────────────────────────────────────────
 app.use(helmet());
 
@@ -37,7 +37,7 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json({ limit: '512kb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // ── Rate limiting global ──────────────────────────────────
 app.use(rateLimit({
@@ -54,7 +54,7 @@ app.use('/api/solicitudes',   solicitudesRouter);
 app.use('/api/estadisticas',  estadisticasRouter);
 app.use('/api/config',        configRouter);
 app.use('/api/derechos', derechosRoutes);
-
+app.use('/api/upload', uploadRouter);
 // ── Error handler global ──────────────────────────────────
 app.use((err, req, res, _next) => {
   console.error('[ERROR]', err.message);

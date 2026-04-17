@@ -155,12 +155,11 @@ export const CAMPOS_DEFAULT_POR_DERECHO = {
       orden: 2,
       seccion: 'solicitud',
     },
-    {
+   {
       id: 'documentacion',
-      tipo: 'textarea',
+      tipo: 'file',
       label: 'Documentación de respaldo',
-      ayuda: 'Indique si tiene documentos que acrediten la corrección (cédula, contrato, etc.)',
-      placeholder: 'Ej: adjunto copia de cédula de identidad actualizada',
+      ayuda: 'Art. 11 d) Ley 21.719 — adjunte documentos que sustenten la rectificación (cédula, contrato, certificado, etc.)',
       obligatorio: false,
       activo: true,
       editable: true,
@@ -168,6 +167,11 @@ export const CAMPOS_DEFAULT_POR_DERECHO = {
       origen: 'ley',
       orden: 3,
       seccion: 'solicitud',
+      // Configuración del campo file
+      accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx',
+      maxSizeMB: 5,
+      maxFiles: 3,
+      placeholder: 'Arrastra archivos aquí o haz clic para seleccionar',
     },
   ],
 
