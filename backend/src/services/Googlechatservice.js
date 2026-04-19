@@ -128,6 +128,7 @@ async function notificarCambioEstado({
   asignadoA,
   asignadoEmail,
   fechaTerminoSLA,
+  archivos,
 }) {
   const tipoKey = (tipo || 'ACCESO').toUpperCase();
   const webhook = await getWebhookUrl(tipoKey);
@@ -144,11 +145,17 @@ async function notificarCambioEstado({
   if (asignadoA) {
     text += `\n👷 Asignado a: *${asignadoA}*` + (asignadoEmail ? ` <${asignadoEmail}>` : '');
   }
-  if (fechaTerminoSLA) {
+if (fechaTerminoSLA) {
     const f = typeof fechaTerminoSLA === 'string'
       ? fechaTerminoSLA.split('T')[0]
       : fechaTerminoSLA;
     text += `\n⏱️ SLA hasta: ${f}`;
+  }
+  if (archivos && archivos.length > 0) {
+    text += `\n📎 *Documentación adjunta (${archivos.length}):*`;
+    archivos.forEach(a => {
+      text += `\n   📄 <${a.url}|${a.nombre}>`;
+    });
   }
   if (portalUrl) text += `\n🔗 ${portalUrl}/#/dpo`;
 

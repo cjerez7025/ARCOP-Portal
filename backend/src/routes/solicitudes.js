@@ -368,7 +368,7 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
 
     // Notificación Google Chat — SOLO cuando hay responsable asignado
     if (asignado_a) {
-      gchat.notificarCambioEstado({
+     gchat.notificarCambioEstado({
         numero:          prev.numero_solicitud,
         tipo:            prev.tipo_derecho,
         nombreTitular:   prev.nombre_completo,
@@ -377,8 +377,8 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
         asignadoA:       asignado_a,
         asignadoEmail:   asignado_email || '',
         fechaTerminoSLA: fecha_termino_sla || prev.fecha_limite,
-      }).catch(e => console.error('[solicitudes] Fallo GChat cambio estado:', e.message));
-    }
+        archivos:        prev.documentacion_archivos || [],
+      }).catch(e => console.error('[solicitudes] Fallo GChat cambio estado:', e.message));    }
 
     res.json({ status: 'success', id, estado });
   } catch (e) {
@@ -437,15 +437,16 @@ router.put('/:id/resolver', requireAuth, async (req, res, next) => {
 
     // Notificación Google Chat — resuelta (usa responsable previo si existe)
     gchat.notificarCambioEstado({
-      numero:          prev.numero_solicitud,
-      tipo:            prev.tipo_derecho,
-      nombreTitular:   prev.nombre_completo,
-      estadoAnterior:  prev.estado,
-      estadoNuevo:     'RESUELTA',
-      asignadoA:       prev.asignado_a    || (req.user.email || req.user.uid),
-      asignadoEmail:   prev.asignado_email || '',
-      fechaTerminoSLA: prev.fecha_termino_sla || prev.fecha_limite,
-    }).catch(e => console.error('[solicitudes] Fallo GChat RESUELTA:', e.message));
+        numero:          prev.numero_solicitud,
+        tipo:            prev.tipo_derecho,
+        nombreTitular:   prev.nombre_completo,
+        estadoAnterior:  prev.estado,
+        estadoNuevo:     'RESUELTA',
+        asignadoA:       prev.asignado_a    || (req.user.email || req.user.uid),
+        asignadoEmail:   prev.asignado_email || '',
+        fechaTerminoSLA: prev.fecha_termino_sla || prev.fecha_limite,
+        archivos:        prev.documentacion_archivos || [],
+      }).catch(e => console.error('[solicitudes] Fallo GChat RESUELTA:', e.message));
 
     res.json({ status: 'success', id, estado: 'RESUELTA' });
   } catch (e) {
