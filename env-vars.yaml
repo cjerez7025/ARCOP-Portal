@@ -2,7 +2,7 @@ NODE_ENV: production
 FIREBASE_PROJECT_ID: aligndata-arcop
 ALLOWED_ORIGINS: "http://localhost:3000,https://aligndata-arcop-portal-38081.web.app"
 RESEND_API_KEY: re_3Q4TUDcU_77sdRSSxFy8whSdXQ5xbSP9U
-RESEND_FROM: onboarding@resend.dev
+RESEND_FROM: admin@aligndata.cl
 DPO_EMAIL: carlos.jerez@aligndata.cl
 
 FRONTEND_URL: https://aligndata-arcop-portal-38081.web.app

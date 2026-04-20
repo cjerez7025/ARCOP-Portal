@@ -10,6 +10,7 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+
 // Layout
 import Layout from './components/layout/Layout';
 
@@ -28,7 +29,7 @@ import PanelDPO      from './pages/PanelDPO';
 import Dashboard     from './pages/Dashboard';
 import Reportes      from './pages/Reportes';
 import Configuracion from './pages/Configuracion';
-
+import BuscarSolicitud     from './pages/BuscarSolicitud'; 
 function App() {
   return (
     <AuthProvider>
@@ -41,7 +42,7 @@ function App() {
             <Route path="/validar/:token"      element={<ValidarIdentidad />} />
             <Route path="/seguimiento/:numero" element={<Seguimiento />} />
             <Route path="/login"               element={<LoginDPO />} />
-
+            <Route path="/buscar"              element={<BuscarSolicitud />} /> 
             {/* ── Rutas DPO protegidas ───────────────────── */}
             <Route path="/dpo" element={
               <ProtectedRoute><PanelDPO /></ProtectedRoute>

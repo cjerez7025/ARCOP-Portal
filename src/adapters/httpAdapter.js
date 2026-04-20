@@ -109,7 +109,8 @@ uploadDocumentacion: async (solicitudId, archivos) => {
       return { status: 'error', data: null, message: e.message };
     }
   },
-
+  desistirSolicitud: async (id, motivo) =>
+   _fetch(`/api/solicitudes/${id}/desistir`, { method: 'POST', body: JSON.stringify({ motivo }) }),
   getSolicitudPorNumero: async (numero) =>
     _fetch(`/api/solicitudes/numero/${numero}`),
 

@@ -1,13 +1,6 @@
 // ============================================================
-// src/pages/Reportes.jsx — v1.0
-// Página de Reportes y Cumplimiento — Zona DPO
-// Portal ARCOP — Ley 21.719
-//
-// Secciones:
-//   1. KPIs de cumplimiento (SLA, tasa resolución, tiempo promedio)
-//   2. Tabla de solicitudes con filtros y exportación CSV
-//   3. Gráficos: distribución por derecho, por estado, tendencia mensual
-//   4. Reporte ejecutivo exportable (texto estructurado)
+// src/pages/Reportes.jsx — v1.1
+// FIX: tipo_derecho || tipo en todos los lugares que leen el tipo
 // ============================================================
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -19,8 +12,6 @@ import {
   Loader, Info,
 } from 'lucide-react';
 import { obtenerTodasSolicitudes, obtenerEstadisticas } from '../services/dpoService';
-
-// ── Helpers ──────────────────────────────────────────────
 
 const fmt = (fecha) => {
   if (!fecha) return '—';
@@ -54,13 +45,15 @@ const diasHabilesEntre = (desde, hasta) => {
 const getSolicitudId = (s) =>
   s?.id || s?.rowIndex || s?.row_index || s?.numero_solicitud || null;
 
+const getTipo = (s) => s.tipo_derecho || s.tipo || '';
+
 const getTipoLabel = (tipo) => ({
   ACCESO:        'Acceso',
   RECTIFICACION: 'Rectificación',
   CANCELACION:   'Cancelación',
   OPOSICION:     'Oposición',
   PORTABILIDAD:  'Portabilidad',
-}[tipo] || tipo || 'Acceso');
+}[tipo] || tipo || '—');
 
 const TIPO_COLORS = {
   ACCESO:        'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
@@ -82,6 +75,7 @@ const ESTADO_COLORS = {
   DATOS_PREPARADOS:     'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200',
   COMUNICADO_A_TERCEROS:'bg-teal-50 text-teal-700 ring-1 ring-teal-200',
   DESCARGA_CONFIRMADA:  'bg-green-50 text-green-800 ring-1 ring-green-300',
+  DESISTIDA:            'bg-rose-50 text-rose-700 ring-1 ring-rose-200',
 };
 
 const ESTADO_LABELS = {
@@ -96,10 +90,11 @@ const ESTADO_LABELS = {
   DATOS_PREPARADOS:     'Datos Preparados',
   COMUNICADO_A_TERCEROS:'Comunicado a Terceros',
   DESCARGA_CONFIRMADA:  'Descarga Confirmada',
+  DESISTIDA:            'Desistida',
 };
 
 const esFinalizada = (estado) =>
-  ['RESUELTA', 'CERRADA', 'DESCARGA_CONFIRMADA'].includes(estado);
+  ['RESUELTA', 'CERRADA', 'DESCARGA_CONFIRMADA', 'DESISTIDA'].includes(estado);
 
 // ── Exportación CSV ───────────────────────────────────────
 
@@ -111,7 +106,7 @@ const exportarCSV = (solicitudes) => {
   ];
 
   const rows = solicitudes.map(s => {
-    const tipo        = getTipoLabel(s.tipo || 'ACCESO');
+    const tipo        = getTipoLabel(getTipo(s));
     const estado      = ESTADO_LABELS[s.estado] || s.estado || '';
     const nombre      = s.nombre_completo || s.nombre || '';
     const rut         = s.rut || '';
@@ -154,14 +149,15 @@ const exportarCSV = (solicitudes) => {
 // ── Reporte Ejecutivo TXT ─────────────────────────────────
 
 const exportarReporteEjecutivo = (solicitudes, stats, periodo) => {
-  const hoy    = new Date().toLocaleDateString('es-CL');
-  const totales = solicitudes.length;
+  const hoy      = new Date().toLocaleDateString('es-CL');
+  const totales  = solicitudes.length;
   const resueltas = solicitudes.filter(s => esFinalizada(s.estado)).length;
   const tasaCumplimiento = totales > 0 ? Math.round((resueltas / totales) * 100) : 0;
 
-  const porDerecho = ['ACCESO','RECTIFICACION','CANCELACION','OPOSICION','PORTABILIDAD']
+  const DERECHOS = ['ACCESO','RECTIFICACION','CANCELACION','OPOSICION','PORTABILIDAD'];
+  const porDerecho = DERECHOS
     .map(d => {
-      const n = solicitudes.filter(s => (s.tipo || 'ACCESO') === d).length;
+      const n = solicitudes.filter(s => getTipo(s) === d).length;
       return n > 0 ? `  - ${getTipoLabel(d)}: ${n} solicitud${n !== 1 ? 'es' : ''}` : null;
     }).filter(Boolean).join('\n');
 
@@ -248,7 +244,7 @@ ${porDerecho || '  Sin datos suficientes.'}
   URL.revokeObjectURL(url);
 };
 
-// ── Mini Bar Chart (SVG puro, sin dependencias) ───────────
+// ── Mini Bar Chart ────────────────────────────────────────
 
 const MiniBarChart = ({ data, colorClass }) => {
   if (!data || data.length === 0) return null;
@@ -273,7 +269,7 @@ const MiniBarChart = ({ data, colorClass }) => {
   );
 };
 
-// ── Donut Chart (SVG) ────────────────────────────────────
+// ── Donut Chart ───────────────────────────────────────────
 
 const DonutChart = ({ segments, size = 100 }) => {
   const r = 38;
@@ -288,12 +284,12 @@ const DonutChart = ({ segments, size = 100 }) => {
   );
   let offset = 0;
   return (
-    <svg width={size} height={size} className="-rotate-90" style={{ transform: 'rotate(-90deg)' }}>
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
       {segments.map((s, i) => {
-        const pct   = s.valor / total;
-        const dash  = pct * circ;
-        const gap   = circ - dash;
-        const el    = (
+        const pct  = s.valor / total;
+        const dash = pct * circ;
+        const gap  = circ - dash;
+        const el   = (
           <circle key={i} cx={cx} cy={cy} r={r} fill="none"
             stroke={s.stroke} strokeWidth="14"
             strokeDasharray={`${dash} ${gap}`}
@@ -308,17 +304,17 @@ const DonutChart = ({ segments, size = 100 }) => {
   );
 };
 
-// ── KPI Card ─────────────────────────────────────────────
+// ── KPI Card ──────────────────────────────────────────────
 
 const KPICard = ({ icon: Icon, label, valor, sub, color, trend }) => (
   <div className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3">
     <div className="flex items-center justify-between">
       <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}>
-        <Icon className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} />
+        <Icon style={{ width: 18, height: 18 }} />
       </div>
       {trend !== undefined && (
         <span className={`text-xs font-semibold flex items-center gap-0.5 ${trend >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-          <ArrowUpRight className="w-3 h-3" style={{ transform: trend < 0 ? 'rotate(90deg)' : undefined }} />
+          <ArrowUpRight style={{ width: 12, height: 12, transform: trend < 0 ? 'rotate(90deg)' : undefined }} />
           {Math.abs(trend)}%
         </span>
       )}
@@ -334,9 +330,9 @@ const KPICard = ({ icon: Icon, label, valor, sub, color, trend }) => (
 // ── Tabla de Solicitudes ──────────────────────────────────
 
 const TablaSolicitudes = ({ solicitudes }) => {
-  const [sortCol, setSortCol]     = useState('fecha_solicitud');
-  const [sortDir, setSortDir]     = useState('desc');
-  const [pagina, setPagina]       = useState(1);
+  const [sortCol, setSortCol] = useState('fecha_solicitud');
+  const [sortDir, setSortDir] = useState('desc');
+  const [pagina, setPagina]   = useState(1);
   const POR_PAGINA = 15;
 
   const toggleSort = (col) => {
@@ -358,15 +354,13 @@ const TablaSolicitudes = ({ solicitudes }) => {
     });
   }, [solicitudes, sortCol, sortDir]);
 
-  const total  = sorted.length;
-  const pages  = Math.ceil(total / POR_PAGINA);
-  const slice  = sorted.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  const total = sorted.length;
+  const pages = Math.ceil(total / POR_PAGINA);
+  const slice = sorted.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
 
   const Th = ({ col, label }) => (
-    <th
-      className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 cursor-pointer select-none hover:text-slate-800 transition-colors whitespace-nowrap"
-      onClick={() => toggleSort(col)}
-    >
+    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 cursor-pointer select-none hover:text-slate-800 transition-colors whitespace-nowrap"
+        onClick={() => toggleSort(col)}>
       <span className="inline-flex items-center gap-1">
         {label}
         {sortCol === col
@@ -386,10 +380,8 @@ const TablaSolicitudes = ({ solicitudes }) => {
         ? { label: 'Cumplió', cls: 'text-emerald-600' }
         : { label: 'Excedió', cls: 'text-rose-600' };
     }
-    const hoy  = new Date();
-    const lim  = new Date(limite);
-    const diff = Math.ceil((lim - hoy) / (1000 * 60 * 60 * 24));
-    if (diff < 0)  return { label: 'Vencido',  cls: 'text-rose-700 font-semibold' };
+    const diff = Math.ceil((new Date(limite) - new Date()) / (1000 * 60 * 60 * 24));
+    if (diff < 0)  return { label: 'Vencido', cls: 'text-rose-700 font-semibold' };
     if (diff <= 3) return { label: `${diff}d`,  cls: 'text-amber-600 font-semibold' };
     return { label: `${diff}d`, cls: 'text-slate-400' };
   };
@@ -408,7 +400,7 @@ const TablaSolicitudes = ({ solicitudes }) => {
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <Th col="numero_solicitud" label="N° Solicitud" />
-              <Th col="tipo"             label="Derecho" />
+              <Th col="tipo_derecho"     label="Derecho" />
               <Th col="estado"           label="Estado" />
               <Th col="nombre_completo"  label="Titular" />
               <Th col="fecha_solicitud"  label="Fecha ingreso" />
@@ -418,8 +410,8 @@ const TablaSolicitudes = ({ solicitudes }) => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {slice.map((s, i) => {
-              const sla = getSLAStatus(s);
-              const tipo = s.tipo || 'ACCESO';
+              const sla  = getSLAStatus(s);
+              const tipo = getTipo(s);
               return (
                 <tr key={getSolicitudId(s) || i} className="hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs text-slate-700 whitespace-nowrap">
@@ -427,7 +419,7 @@ const TablaSolicitudes = ({ solicitudes }) => {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TIPO_COLORS[tipo] || 'bg-slate-100 text-slate-600'}`}>
-                      {getTipoLabel(tipo)}
+                      {getTipoLabel(tipo) || '—'}
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -458,18 +450,14 @@ const TablaSolicitudes = ({ solicitudes }) => {
         </table>
       </div>
 
-      {/* Paginación */}
       {pages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50">
           <span className="text-xs text-slate-500">
             Mostrando {(pagina - 1) * POR_PAGINA + 1}–{Math.min(pagina * POR_PAGINA, total)} de {total}
           </span>
           <div className="flex gap-1">
-            <button
-              onClick={() => setPagina(p => Math.max(1, p - 1))}
-              disabled={pagina === 1}
-              className="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-white disabled:opacity-40 transition-colors"
-            >
+            <button onClick={() => setPagina(p => Math.max(1, p - 1))} disabled={pagina === 1}
+              className="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-white disabled:opacity-40 transition-colors">
               Anterior
             </button>
             {Array.from({ length: Math.min(pages, 7) }, (_, i) => {
@@ -477,19 +465,14 @@ const TablaSolicitudes = ({ solicitudes }) => {
               return (
                 <button key={pg} onClick={() => setPagina(pg)}
                   className={`px-3 py-1.5 text-xs rounded border transition-colors ${
-                    pagina === pg
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'border-slate-200 hover:bg-white text-slate-600'
+                    pagina === pg ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-slate-200 hover:bg-white text-slate-600'
                   }`}>
                   {pg}
                 </button>
               );
             })}
-            <button
-              onClick={() => setPagina(p => Math.min(pages, p + 1))}
-              disabled={pagina === pages}
-              className="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-white disabled:opacity-40 transition-colors"
-            >
+            <button onClick={() => setPagina(p => Math.min(pages, p + 1))} disabled={pagina === pages}
+              className="px-3 py-1.5 text-xs rounded border border-slate-200 hover:bg-white disabled:opacity-40 transition-colors">
               Siguiente
             </button>
           </div>
@@ -512,19 +495,18 @@ const PanelGraficos = ({ solicitudes }) => {
   };
 
   const porDerecho = DERECHOS.map(d => ({
-    label: getTipoLabel(d).slice(0, 4),
-    valor: solicitudes.filter(s => (s.tipo || 'ACCESO') === d).length,
+    label:  getTipoLabel(d).slice(0, 4),
+    valor:  solicitudes.filter(s => getTipo(s) === d).length,
     stroke: DERECHO_COLORS[d],
   }));
 
   const porEstado = [
-    { label: 'Pend.', valor: solicitudes.filter(s => s.estado === 'PENDIENTE').length,   stroke: '#f59e0b' },
-    { label: 'Val.',  valor: solicitudes.filter(s => s.estado === 'VALIDADA').length,    stroke: '#0ea5e9' },
-    { label: 'Proc.', valor: solicitudes.filter(s => s.estado === 'EN_PROCESO').length,  stroke: '#8b5cf6' },
-    { label: 'Res.',  valor: solicitudes.filter(s => esFinalizada(s.estado)).length,     stroke: '#22c55e' },
+    { label: 'Pend.', valor: solicitudes.filter(s => s.estado === 'PENDIENTE').length,  stroke: '#f59e0b' },
+    { label: 'Val.',  valor: solicitudes.filter(s => s.estado === 'VALIDADA').length,   stroke: '#0ea5e9' },
+    { label: 'Proc.', valor: solicitudes.filter(s => s.estado === 'EN_PROCESO').length, stroke: '#8b5cf6' },
+    { label: 'Res.',  valor: solicitudes.filter(s => esFinalizada(s.estado)).length,    stroke: '#22c55e' },
   ];
 
-  // Tendencia mensual (últimos 6 meses)
   const meses = Array.from({ length: 6 }, (_, i) => {
     const d = new Date();
     d.setMonth(d.getMonth() - (5 - i));
@@ -539,7 +521,7 @@ const PanelGraficos = ({ solicitudes }) => {
     }).length,
   }));
 
-  const totalSol = solicitudes.length;
+  const totalSol     = solicitudes.length;
   const donutDerecho = porDerecho.filter(d => d.valor > 0);
 
   return (
@@ -557,7 +539,7 @@ const PanelGraficos = ({ solicitudes }) => {
           </div>
           <div className="space-y-1.5 flex-1 min-w-0">
             {DERECHOS.map(d => {
-              const n   = solicitudes.filter(s => (s.tipo || 'ACCESO') === d).length;
+              const n   = solicitudes.filter(s => getTipo(s) === d).length;
               const pct = totalSol > 0 ? Math.round((n / totalSol) * 100) : 0;
               return (
                 <div key={d} className="flex items-center gap-2 text-xs">
@@ -598,7 +580,7 @@ const PanelGraficos = ({ solicitudes }) => {
         </div>
       </div>
 
-      {/* Barras tendencia mensual */}
+      {/* Tendencia mensual */}
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Tendencia (6 meses)</h3>
         <MiniBarChart data={tendencia} colorClass="bg-indigo-400" />
@@ -615,12 +597,11 @@ const PanelGraficos = ({ solicitudes }) => {
 // ── Componente Principal ──────────────────────────────────
 
 const Reportes = () => {
-  const [solicitudes, setSolicitudes]   = useState([]);
-  const [stats, setStats]               = useState(null);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(null);
+  const [solicitudes, setSolicitudes] = useState([]);
+  const [stats, setStats]             = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
 
-  // Filtros
   const [busqueda, setBusqueda]         = useState('');
   const [filtroTipo, setFiltroTipo]     = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -649,7 +630,6 @@ const Reportes = () => {
 
   useEffect(() => { cargarDatos(); }, [cargarDatos]);
 
-  // Filtrado
   const solicitudesFiltradas = useMemo(() => {
     let s = [...solicitudes];
     if (busqueda.trim()) {
@@ -661,7 +641,7 @@ const Reportes = () => {
         (x.email || '').toLowerCase().includes(q)
       );
     }
-    if (filtroTipo)   s = s.filter(x => (x.tipo || 'ACCESO') === filtroTipo);
+    if (filtroTipo)   s = s.filter(x => getTipo(x) === filtroTipo);
     if (filtroEstado) s = s.filter(x => x.estado === filtroEstado);
     if (filtroSLA === 'CUMPLE') s = s.filter(x => {
       if (!esFinalizada(x.estado)) return false;
@@ -684,15 +664,10 @@ const Reportes = () => {
   const hayFiltros = busqueda || filtroTipo || filtroEstado || filtroSLA || filtroDesde || filtroHasta;
 
   const limpiarFiltros = () => {
-    setBusqueda('');
-    setFiltroTipo('');
-    setFiltroEstado('');
-    setFiltroSLA('');
-    setFiltroDesde('');
-    setFiltroHasta('');
+    setBusqueda(''); setFiltroTipo(''); setFiltroEstado('');
+    setFiltroSLA(''); setFiltroDesde(''); setFiltroHasta('');
   };
 
-  // KPIs calculados
   const kpis = useMemo(() => {
     const total     = solicitudes.length;
     const resueltas = solicitudes.filter(s => esFinalizada(s.estado)).length;
@@ -704,17 +679,13 @@ const Reportes = () => {
       return esFinalizada(s.estado) && l && r;
     });
     const cumplieronSLA = conSLA.filter(s => {
-      const l = new Date(s.fecha_limite || s.fecha_termino_sla);
-      const r = new Date(s.fecha_ultima_actualizacion || s.updated_at);
-      return r <= l;
+      return new Date(s.fecha_ultima_actualizacion || s.updated_at) <= new Date(s.fecha_limite || s.fecha_termino_sla);
     }).length;
     const tasaSLA = conSLA.length > 0 ? Math.round((cumplieronSLA / conSLA.length) * 100) : null;
 
-    const tiempos = conSLA.map(s => {
-      const desde = s.fecha_solicitud;
-      const hasta = s.fecha_ultima_actualizacion || s.updated_at;
-      return diasHabilesEntre(desde, hasta);
-    }).filter(d => d !== null);
+    const tiempos = conSLA.map(s =>
+      diasHabilesEntre(s.fecha_solicitud, s.fecha_ultima_actualizacion || s.updated_at)
+    ).filter(d => d !== null);
     const promedio = tiempos.length > 0
       ? Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length)
       : null;
@@ -749,40 +720,28 @@ const Reportes = () => {
     <div className="min-h-screen bg-slate-50 py-8 px-4">
       <div className="max-w-7xl mx-auto space-y-6">
 
-        {/* ── Header ─────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold tracking-widest uppercase text-indigo-500 mb-1">
-              Gestión de cumplimiento
-            </p>
+            <p className="text-xs font-semibold tracking-widest uppercase text-indigo-500 mb-1">Gestión de cumplimiento</p>
             <h1 className="text-2xl font-bold text-slate-900">Reportes</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
-              Métricas y evidencia de cumplimiento — Ley 21.719
-            </p>
+            <p className="text-sm text-slate-400 mt-0.5">Métricas y evidencia de cumplimiento — Ley 21.719</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={cargarDatos}
-              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-white transition-colors"
-            >
+            <button onClick={cargarDatos}
+              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
               <RefreshCw className="w-3.5 h-3.5" /> Actualizar
             </button>
-            <button
-              onClick={() => exportarCSV(solicitudesFiltradas)}
-              className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg transition-colors font-medium"
-            >
+            <button onClick={() => exportarCSV(solicitudesFiltradas)}
+              className="flex items-center gap-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg transition-colors font-medium">
               <Download className="w-3.5 h-3.5" /> Exportar CSV
             </button>
-            <button
-              onClick={() => exportarReporteEjecutivo(solicitudesFiltradas, stats, periodo)}
-              className="flex items-center gap-1.5 text-sm bg-slate-800 hover:bg-slate-900 text-white px-4 py-1.5 rounded-lg transition-colors font-medium"
-            >
+            <button onClick={() => exportarReporteEjecutivo(solicitudesFiltradas, stats, periodo)}
+              className="flex items-center gap-1.5 text-sm bg-slate-800 hover:bg-slate-900 text-white px-4 py-1.5 rounded-lg transition-colors font-medium">
               <FileText className="w-3.5 h-3.5" /> Reporte ejecutivo
             </button>
           </div>
         </div>
 
-        {/* ── Error ──────────────────────────────────── */}
         {error && (
           <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-700">
             <AlertOctagon className="w-4 h-4 flex-shrink-0" />
@@ -790,33 +749,14 @@ const Reportes = () => {
           </div>
         )}
 
-        {/* ── KPIs ───────────────────────────────────── */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPICard
-            icon={FileText} label="Total solicitudes" valor={kpis.total}
-            sub="Historial completo"
-            color="bg-indigo-50 text-indigo-600"
-          />
-          <KPICard
-            icon={CheckCircle} label="Tasa de resolución" valor={`${kpis.tasa}%`}
-            sub="Resueltas vs total"
-            color="bg-emerald-50 text-emerald-600"
-          />
-          <KPICard
-            icon={Award} label="Cumplimiento SLA"
-            valor={kpis.tasaSLA !== null ? `${kpis.tasaSLA}%` : 'N/A'}
-            sub="Respondidas dentro del plazo legal"
-            color={kpis.tasaSLA !== null && kpis.tasaSLA < 80 ? 'bg-rose-50 text-rose-600' : 'bg-sky-50 text-sky-600'}
-          />
-          <KPICard
-            icon={Clock} label="Tiempo promedio"
-            valor={kpis.promedio !== null ? `${kpis.promedio}d` : 'N/A'}
-            sub="Días hábiles por solicitud"
-            color="bg-amber-50 text-amber-600"
-          />
+          <KPICard icon={FileText}    label="Total solicitudes"  valor={kpis.total}  sub="Historial completo"  color="bg-indigo-50 text-indigo-600" />
+          <KPICard icon={CheckCircle} label="Tasa de resolución" valor={`${kpis.tasa}%`} sub="Resueltas vs total" color="bg-emerald-50 text-emerald-600" />
+          <KPICard icon={Award}       label="Cumplimiento SLA"   valor={kpis.tasaSLA !== null ? `${kpis.tasaSLA}%` : 'N/A'} sub="Respondidas dentro del plazo legal"
+            color={kpis.tasaSLA !== null && kpis.tasaSLA < 80 ? 'bg-rose-50 text-rose-600' : 'bg-sky-50 text-sky-600'} />
+          <KPICard icon={Clock}       label="Tiempo promedio"    valor={kpis.promedio !== null ? `${kpis.promedio}d` : 'N/A'} sub="Días hábiles por solicitud" color="bg-amber-50 text-amber-600" />
         </div>
 
-        {/* Alerta por vencer */}
         {kpis.vencen3d > 0 && (
           <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-700">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
@@ -826,69 +766,51 @@ const Reportes = () => {
           </div>
         )}
 
-        {/* ── Gráficos ────────────────────────────────── */}
         {solicitudes.length > 0 && <PanelGraficos solicitudes={solicitudesFiltradas.length > 0 ? solicitudesFiltradas : solicitudes} />}
 
-        {/* ── Tabla con filtros ───────────────────────── */}
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-
-          {/* Header tabla */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
             <div>
               <h2 className="text-sm font-bold text-slate-900">Detalle de solicitudes</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                {solicitudesFiltradas.length} de {solicitudes.length} solicitudes
-                {hayFiltros && ' (filtrado)'}
+                {solicitudesFiltradas.length} de {solicitudes.length} solicitudes{hayFiltros && ' (filtrado)'}
               </p>
             </div>
             <div className="flex items-center gap-2">
               {hayFiltros && (
-                <button
-                  onClick={limpiarFiltros}
-                  className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 border border-rose-200 px-2.5 py-1.5 rounded-lg transition-colors"
-                >
+                <button onClick={limpiarFiltros}
+                  className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-700 border border-rose-200 px-2.5 py-1.5 rounded-lg transition-colors">
                   <X className="w-3 h-3" /> Limpiar
                 </button>
               )}
-              <button
-                onClick={() => setMostrarFiltros(f => !f)}
+              <button onClick={() => setMostrarFiltros(f => !f)}
                 className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                  mostrarFiltros || hayFiltros
-                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                    : 'border-slate-200 text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                <Filter className="w-3.5 h-3.5" />
-                Filtros
-                {hayFiltros && <span className="ml-1 bg-indigo-600 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center">
-                  {[busqueda, filtroTipo, filtroEstado, filtroSLA, filtroDesde, filtroHasta].filter(Boolean).length}
-                </span>}
+                  mostrarFiltros || hayFiltros ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                }`}>
+                <Filter className="w-3.5 h-3.5" /> Filtros
+                {hayFiltros && (
+                  <span className="ml-1 bg-indigo-600 text-white rounded-full w-4 h-4 text-xs flex items-center justify-center">
+                    {[busqueda, filtroTipo, filtroEstado, filtroSLA, filtroDesde, filtroHasta].filter(Boolean).length}
+                  </span>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Barra de búsqueda y filtros */}
           <div className="px-5 py-3 border-b border-slate-100 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar por número, nombre, RUT o email..."
-                value={busqueda}
-                onChange={e => setBusqueda(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition"
-              />
+              <input type="text" placeholder="Buscar por número, nombre, RUT o email..."
+                value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition" />
             </div>
 
             {mostrarFiltros && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1">Derecho</label>
-                  <select
-                    value={filtroTipo}
-                    onChange={e => setFiltroTipo(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-                  >
+                  <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
                     <option value="">Todos</option>
                     {['ACCESO','RECTIFICACION','CANCELACION','OPOSICION','PORTABILIDAD'].map(d => (
                       <option key={d} value={d}>{getTipoLabel(d)}</option>
@@ -897,11 +819,8 @@ const Reportes = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1">Estado</label>
-                  <select
-                    value={filtroEstado}
-                    onChange={e => setFiltroEstado(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-                  >
+                  <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
                     <option value="">Todos</option>
                     {Object.entries(ESTADO_LABELS).map(([k, v]) => (
                       <option key={k} value={k}>{v}</option>
@@ -910,11 +829,8 @@ const Reportes = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1">SLA</label>
-                  <select
-                    value={filtroSLA}
-                    onChange={e => setFiltroSLA(e.target.value)}
-                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
-                  >
+                  <select value={filtroSLA} onChange={e => setFiltroSLA(e.target.value)}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
                     <option value="">Todos</option>
                     <option value="CUMPLE">Cumplió plazo</option>
                     <option value="EXCEDE">Excedió plazo</option>
@@ -935,12 +851,9 @@ const Reportes = () => {
             )}
           </div>
 
-          {/* Tabla */}
           <TablaSolicitudes solicitudes={solicitudesFiltradas} />
-
         </div>
 
-        {/* ── Recuadro informativo APDP ───────────────── */}
         <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
           <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
           <div className="text-xs text-blue-700 space-y-1">

@@ -1,11 +1,11 @@
 // ============================================================
-// FormularioSolicitud.jsx — v4.1
-// v4.1: OnboardingTour + fix icono eye + minHeight cards
+// FormularioSolicitud.jsx — v4.2
+// v4.2: Preview paso de confirmación antes de enviar
 // ============================================================
 
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Send, CheckCircle, Loader, AlertCircle, ChevronLeft, ArrowRight, Lock } from 'lucide-react';
+import { Send, CheckCircle, Loader, AlertCircle, ChevronLeft, ArrowRight, Lock, Eye, Edit2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import useFormularioConfig from '../hooks/useFormularioConfig';
 import CampoRenderer from './CampoRenderer';
@@ -180,6 +180,148 @@ const CamposGrid = ({ campos = [], register, watch, setValue, errors }) => (
   </div>
 );
 
+// ── Preview de confirmación ────────────────────────────────
+const LABEL_MAP = {
+  nombre_completo:   'Nombre completo',
+  rut:               'RUT',
+  email:             'Email',
+  telefono:          'Teléfono',
+  alcance_acceso:    'Alcance',
+  formato_preferido: 'Formato',
+  dato_incorrecto:   'Dato incorrecto',
+  valor_correcto:    'Valor correcto',
+  alcance_cancelacion: 'Alcance cancelación',
+  causal_supresion:  'Causal de supresión',
+  motivo:            'Motivo',
+  tipo_oposicion:    'Tipo de oposición',
+  formato_portabilidad: 'Formato de portabilidad',
+};
+
+const formatValor = (key, val) => {
+  if (val === true || val === 'true') return 'Sí';
+  if (val === false || val === 'false') return 'No';
+  if (Array.isArray(val)) return val.join(', ');
+  if (val instanceof FileList || (val && val[0] instanceof File)) {
+    const files = Array.from(val);
+    return files.map(f => f.name).join(', ');
+  }
+  return String(val || '—');
+};
+
+// ── Preview de archivos ───────────────────────────────────
+const FilePreviewItem = ({ file }) => {
+  const [url, setUrl] = React.useState(null);
+  const esImagen = file.type?.startsWith('image/');
+  React.useEffect(() => {
+    if (esImagen) {
+      const objectUrl = URL.createObjectURL(file);
+      setUrl(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+  }, [file, esImagen]);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', width: '100px' }}>
+      {esImagen && url
+        ? <img src={url} alt={file.name} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} />
+        : <div style={{ width: '100px', height: '100px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '28px' }}>📄</span>
+            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{file.name.split('.').pop()}</span>
+          </div>
+      }
+      <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', wordBreak: 'break-all', maxWidth: '100px', lineHeight: 1.3 }}>{file.name}</span>
+    </div>
+  );
+};
+
+const PasoPreview = ({ data, identidad, especificos, tipoSeleccionado, onConfirmar, onEditar, loading }) => {
+  const { color, Icon } = buildCfg(tipoSeleccionado);
+  const todosLosCampos = [...identidad, ...especificos];
+
+  const todasFilas = Object.entries(data)
+    .filter(([k, v]) => k !== 'acepta_terminos' && v !== '' && v !== null && v !== undefined && v !== false)
+    .map(([k, v]) => {
+      const campoMeta = todosLosCampos.find(c => c.id === k);
+      const label = campoMeta?.label || LABEL_MAP[k] || k;
+      const esArchivo = campoMeta?.tipo === 'file';
+      return { label, valor: formatValor(k, v), esArchivo, archivos: esArchivo ? Array.from(v || []) : [] };
+    });
+
+  const filasTexto    = todasFilas.filter(f => !f.esArchivo);
+  const filasArchivos = todasFilas.filter(f => f.esArchivo && f.archivos.length > 0);
+
+  return (
+    <div className="animate-fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* Header preview */}
+      <div style={{ background: color + '10', border: `1px solid ${color}30`, borderRadius: '16px', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: color + '20', border: `1px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Eye size={18} color={color} />
+        </div>
+        <div>
+          <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Revisa tu solicitud</p>
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            Confirma que los datos sean correctos antes de enviar.
+          </p>
+        </div>
+      </div>
+
+      {/* Tabla de datos */}
+      <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {Icon && <Icon size={14} color={color} />}
+          <span style={{ fontSize: '12px', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Derecho de {tipoSeleccionado.nombre}
+          </span>
+        </div>
+        <div style={{ padding: '8px 0' }}>
+          {filasTexto.map(({ label, valor }, i) => (
+            <div key={i} style={{ display: 'flex', gap: '16px', padding: '10px 20px', borderBottom: i < filasTexto.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
+              <span style={{ flexShrink: 0, width: '160px', fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
+              <span style={{ flex: 1, fontSize: '13px', color: '#E0E0F0', wordBreak: 'break-word' }}>{valor}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Preview archivos adjuntos */}
+      {filasArchivos.map(({ label, archivos }, i) => (
+        <div key={i} style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+          </div>
+          <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+            {archivos.map((file, j) => <FilePreviewItem key={j} file={file} />)}
+          </div>
+        </div>
+      ))}
+
+      {/* Aviso legal */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <Lock size={13} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '1px' }} />
+        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          Al confirmar, declaras que los datos son verídicos y autorizas su uso para el procesamiento conforme a la Ley 21.719.
+        </p>
+      </div>
+
+      {/* Botones */}
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={onEditar}
+          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '13px 20px', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
+        >
+          <Edit2 size={15} /> Editar datos
+        </button>
+        <button
+          onClick={onConfirmar}
+          disabled={loading}
+          style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '13px 24px', background: loading ? color + '80' : color, color: '#fff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}
+        >
+          {loading ? <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Enviando...</> : <><Send size={16} /> Confirmar y enviar</>}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ── Componente principal ───────────────────────────────────
 const FormularioSolicitud = () => {
   const { config, loading: loadingConfig, getCamposParaFormulario } = useFormularioConfig();
@@ -189,6 +331,8 @@ const FormularioSolicitud = () => {
   const [tipoSeleccionado, setTipoSeleccionado] = useState(null);
   const [derechos,         setDerechos]         = useState([]);
   const [loadingDerechos,  setLoadingDerechos]  = useState(true);
+  const [preview,          setPreview]          = useState(false);
+  const [datosPreview,     setDatosPreview]     = useState(null);
 
   useEffect(() => {
     adapter.getDerechos().then(result => {
@@ -203,64 +347,64 @@ const FormularioSolicitud = () => {
 
   const handleSeleccionar = (derecho) => {
     setTipoSeleccionado(derecho);
+    setPreview(false);
+    setDatosPreview(null);
     reset({ alcance_acceso: 'TODOS', formato_preferido: 'PDF', categorias: [], acepta_terminos: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-    const onSubmit = async (data) => {
+  // Al hacer submit del form → ir a preview
+  const onSubmitForm = (data) => {
+    setDatosPreview(data);
+    setPreview(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Desde preview → enviar de verdad
+  const onConfirmar = async () => {
+    const data = datosPreview;
     setLoading(true);
     try {
-      // Separar archivos del resto de datos
-      const archivos = data.documentacion; // File[] o undefined
+      const archivos = data.documentacion;
       const datosLimpios = { ...data };
       delete datosLimpios.documentacion;
       delete datosLimpios.acepta_terminos;
- 
-      // Construir objeto solicitud
+
       const solicitudData = {
         ...datosLimpios,
         tipo_derecho: tipoSeleccionado.id,
       };
- 
-      // 1. Crear solicitud primero (para obtener el ID)
+
       const result = await crearSolicitud(solicitudData);
- 
+
       if (result.status !== 'success') {
         throw new Error(result.message || 'Error al crear solicitud');
       }
- 
+
       const solicitudId = result.data?.id;
- 
-      // 2. Si hay archivos, subirlos y actualizar la solicitud
+
       if (archivos && archivos.length > 0 && solicitudId) {
         try {
           const uploadResult = await adapter.uploadDocumentacion(solicitudId, archivos);
- 
           if (uploadResult.status === 'success' && uploadResult.data) {
-            // Guardar las URLs en la solicitud
             await adapter.updateSolicitud(solicitudId, {
               documentacion_archivos: uploadResult.data.map(a => ({
-                nombre: a.nombre,
-                url:    a.url,
-                path:   a.path,
-                tipo:   a.tipo,
-                tamaño: a.tamaño,
+                nombre: a.nombre, url: a.url, path: a.path, tipo: a.tipo, tamaño: a.tamaño,
               })),
             });
           } else {
             console.warn('⚠️ Archivos no se pudieron subir:', uploadResult.message);
-            // No falla la solicitud — solo advierte
           }
         } catch (uploadErr) {
           console.warn('⚠️ Error subiendo documentación:', uploadErr.message);
         }
       }
- 
+
       setSolicitudCreada(result.data);
       setSuccess(true);
- 
+
     } catch (error) {
-      console.error('Error en onSubmit:', error);
+      console.error('Error en onConfirmar:', error);
       alert('Error: ' + error.message);
     } finally {
       setLoading(false);
@@ -289,7 +433,7 @@ const FormularioSolicitud = () => {
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>
             Revisa tu email para confirmar tu identidad. El plazo legal de respuesta es de <strong style={{ color: '#F0F0F5' }}>15 días hábiles</strong>.
           </p>
-          <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--text-secondary)', borderRadius: '10px', padding: '10px 20px', cursor: 'pointer', fontSize: '13px' }}>
+          <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); setPreview(false); setDatosPreview(null); }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--text-secondary)', borderRadius: '10px', padding: '10px 20px', cursor: 'pointer', fontSize: '13px' }}>
             Nueva solicitud
           </button>
         </div>
@@ -331,7 +475,7 @@ const FormularioSolicitud = () => {
     );
   }
 
-  // ── Formulario dinámico ────────────────────────────────────
+  // ── Formulario dinámico + Preview ─────────────────────────
   const { color, gradient, Icon } = buildCfg(tipoSeleccionado);
   const _campos     = getCamposParaFormulario(tipoSeleccionado.id);
   const identidad   = _campos?.identidad   || [];
@@ -340,8 +484,8 @@ const FormularioSolicitud = () => {
   return (
     <div className="arcop-portal-publico" style={{ padding: '2rem 1rem 4rem' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <button onClick={() => setTipoSeleccionado(null)} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px', padding: 0 }}>
-          <ChevronLeft size={15} /> Cambiar tipo de solicitud
+        <button onClick={() => { if (preview) { setPreview(false); } else { setTipoSeleccionado(null); } }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px', padding: 0 }}>
+          <ChevronLeft size={15} /> {preview ? 'Volver al formulario' : 'Cambiar tipo de solicitud'}
         </button>
 
         <div className="animate-fade-up" style={{ marginBottom: '28px' }}>
@@ -351,36 +495,69 @@ const FormularioSolicitud = () => {
               Derecho de {tipoSeleccionado.nombre}{tipoSeleccionado.articulo ? ` · ${tipoSeleccionado.articulo}` : ''}
             </span>
           </div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', color: '#F0F0F5', marginBottom: '6px' }}>Tu solicitud</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{tipoSeleccionado.descripcion}</p>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', color: '#F0F0F5', marginBottom: '6px' }}>
+            {preview ? 'Confirma tu solicitud' : 'Tu solicitud'}
+          </h2>
+          {!preview && <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{tipoSeleccionado.descripcion}</p>}
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {identidad.length > 0 && (
-            <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Tus datos</h3>
-              <CamposGrid campos={identidad} register={register} watch={watch} setValue={setValue} errors={errors} />
-            </div>
-          )}
-          {especificos.length > 0 && (
-            <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
-              <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Detalles de tu solicitud</h3>
-              <CamposGrid campos={especificos} register={register} watch={watch} setValue={setValue} errors={errors} />
-            </div>
-          )}
+        {/* Indicador de pasos */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '28px' }}>
+          {['Completar datos', 'Revisar', 'Enviar'].map((paso, i) => {
+            const activo = preview ? i === 1 : i === 0;
+            const completado = preview ? i === 0 : false;
+            return (
+              <React.Fragment key={paso}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ width: '22px', height: '22px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, background: completado ? '#10B981' : activo ? color : 'rgba(255,255,255,0.08)', color: completado || activo ? '#fff' : 'var(--text-muted)', border: `1px solid ${completado ? '#10B981' : activo ? color : 'rgba(255,255,255,0.12)'}`, transition: 'all 0.3s' }}>
+                    {completado ? '✓' : i + 1}
+                  </div>
+                  <span style={{ fontSize: '12px', color: activo ? '#F0F0F5' : 'var(--text-muted)', fontWeight: activo ? 600 : 400 }}>{paso}</span>
+                </div>
+                {i < 2 && <div style={{ flex: 1, height: '1px', background: completado ? '#10B98140' : 'rgba(255,255,255,0.08)' }} />}
+              </React.Fragment>
+            );
+          })}
+        </div>
 
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <input type="checkbox" id="acepta_terminos" {...register('acepta_terminos', { required: true })} style={{ marginTop: '2px', accentColor: color }} />
-            <label htmlFor="acepta_terminos" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5, cursor: 'pointer' }}>
-              Declaro que los datos entregados son verídicos y autorizo su uso para el procesamiento de esta solicitud conforme a la Ley 21.719.
-            </label>
-          </div>
-          {errors.acepta_terminos && <p style={{ fontSize: '12px', color: '#EF4444', marginTop: '-16px' }}>Debes aceptar para continuar.</p>}
+        {preview ? (
+          <PasoPreview
+            data={datosPreview}
+            identidad={identidad}
+            especificos={especificos}
+            tipoSeleccionado={tipoSeleccionado}
+            onConfirmar={onConfirmar}
+            onEditar={() => { setPreview(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            loading={loading}
+          />
+        ) : (
+          <form onSubmit={handleSubmit(onSubmitForm)} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {identidad.length > 0 && (
+              <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Tus datos</h3>
+                <CamposGrid campos={identidad} register={register} watch={watch} setValue={setValue} errors={errors} />
+              </div>
+            )}
+            {especificos.length > 0 && (
+              <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
+                <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Detalles de tu solicitud</h3>
+                <CamposGrid campos={especificos} register={register} watch={watch} setValue={setValue} errors={errors} />
+              </div>
+            )}
 
-          <button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 24px', background: loading ? color + '80' : color, color: '#fff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}>
-            {loading ? <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Enviando...</> : <><Send size={16} /> Enviar solicitud</>}
-          </button>
-        </form>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <input type="checkbox" id="acepta_terminos" {...register('acepta_terminos', { required: true })} style={{ marginTop: '2px', accentColor: color }} />
+              <label htmlFor="acepta_terminos" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5, cursor: 'pointer' }}>
+                Declaro que los datos entregados son verídicos y autorizo su uso para el procesamiento de esta solicitud conforme a la Ley 21.719.
+              </label>
+            </div>
+            {errors.acepta_terminos && <p style={{ fontSize: '12px', color: '#EF4444', marginTop: '-16px' }}>Debes aceptar para continuar.</p>}
+
+            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 24px', background: color, color: '#fff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
+              <Eye size={16} /> Revisar solicitud
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -37,7 +37,7 @@ function _ccDpo(solicitud, asunto, html, config) {
 
   const { Resend } = require('resend');
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const FROM   = `${process.env.RESEND_FROM_NAME || 'Portal ARCOP'} <${process.env.RESEND_FROM || 'onboarding@resend.dev'}>`;
+  const FROM   = `${process.env.RESEND_FROM_NAME || 'Portal ARCOP'} <${process.env.RESEND_FROM || 'admin@aligndata.cl'}>`;
 
   resend.emails.send({
     from:    FROM,
@@ -490,4 +490,57 @@ router.post('/:id/descarga', async (req, res, next) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────
+// POST /api/solicitudes/:id/desistir  (público — titular)
+// ─────────────────────────────────────────────────────────
+router.post('/:id/desistir', async (req, res, next) => {
+  try {
+    const { id }     = req.params;
+    const { motivo } = req.body;
+
+    const ref  = db.collection('solicitudes').doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const prev = snap.data();
+    const ESTADOS_FINALES = ['CERRADA', 'DESCARGA_CONFIRMADA', 'WITHDRAWN', 'DESISTIDA'];
+    if (ESTADOS_FINALES.includes(prev.estado)) {
+      return res.status(409).json({ error: `No es posible desistir una solicitud en estado ${prev.estado}` });
+    }
+
+    await ref.update({
+      estado:          'DESISTIDA',
+      motivo_desistimiento: motivo || 'Sin motivo indicado',
+      fecha_desistimiento:  new Date().toISOString(),
+      updatedAt:       FieldValue.serverTimestamp(),
+    });
+
+    await ref.collection('historial').add({
+      estado_anterior: prev.estado,
+      estado_nuevo:    'DESISTIDA',
+      comentario:      `Titular desistió de la solicitud. Motivo: ${motivo || 'no indicado'}`,
+      actor:           'TITULAR',
+      timestamp:       FieldValue.serverTimestamp(),
+    });
+
+    const config = await _getConfig();
+
+    // Notificar al DPO
+    _ccDpo(
+      prev,
+      `[ARCOP] ${prev.numero_solicitud} — Titular desistió`,
+      `<p style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
+        El titular <strong>${prev.nombre_completo}</strong> desistió de la solicitud
+        <strong>${prev.numero_solicitud}</strong> (${prev.tipo_derecho}).<br><br>
+        Estado anterior: <strong>${prev.estado}</strong><br>
+        Motivo: ${motivo || 'No indicado'}
+      </p>`,
+      config
+    );
+
+    res.json({ status: 'success', id, estado: 'DESISTIDA' });
+  } catch (e) {
+    next(e);
+  }
+});
 module.exports = router;

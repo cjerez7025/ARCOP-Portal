@@ -1,10 +1,6 @@
 // ============================================================
-// TAB FLUJOS — v5
-// CAMBIO: SlackWebhookPanel → GoogleChatWebhookPanel
-//   - Validación URL: chat.googleapis.com/v1/spaces/
-//   - Probar: POST /api/config/probar-gchat (backend Express)
-//   - Campo: gchat_webhook (antes: slack_webhook)
-//   - Función hook: editarGChatWebhook (antes: editarSlackWebhook)
+// TAB FLUJOS — v5.1
+// FIX: botones editar/eliminar de campos siempre visibles
 // ============================================================
 
 import React, { useState } from 'react';
@@ -36,8 +32,9 @@ const Badge = ({ color, children }) => {
   );
 };
 
-const CampoTransicionRow = ({ campo, protegido, onEditar, onEliminar }) => {
-  const [editando, setEditando] = useState(false);
+// ── FIX: botones siempre visibles, sin condición protegido ──
+const CampoTransicionRow = ({ campo, protegido, onEditar, onEliminar, autoEdit = false }) => {
+  const [editando, setEditando] = useState(autoEdit || !campo.label);
   const [draft, setDraft] = useState({ label: campo.label, tipo: campo.tipo, obligatorio: campo.obligatorio });
   const confirmar = () => { onEditar(draft); setEditando(false); };
 
@@ -63,12 +60,8 @@ const CampoTransicionRow = ({ campo, protegido, onEditar, onEliminar }) => {
           <span className="flex-1 text-xs text-gray-700 font-medium">{campo.label}</span>
           <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{campo.tipo}</span>
           {campo.obligatorio && <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold">*</span>}
-          {!protegido && (
-            <>
-              <button onClick={() => setEditando(true)} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="w-3 h-3" /></button>
-              <button onClick={onEliminar} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
-            </>
-          )}
+          <button onClick={() => setEditando(true)} className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"><Edit2 className="w-3 h-3" /></button>
+          <button onClick={onEliminar} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3" /></button>
         </>
       )}
     </div>
@@ -105,7 +98,7 @@ const PanelEstado = ({
       : 'border-gray-100 bg-gray-50 opacity-60'
     }`}>
       <div className="flex items-center gap-3 px-4 py-3">
-        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${c.bg.replace('bg-', 'bg-').replace('-100', '-400')}`}
+        <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0`}
           style={{ backgroundColor: getColor(estado.color).text.replace('text-', '') }} />
 
         <div className="flex-1 min-w-0">
@@ -183,9 +176,7 @@ const PanelEstado = ({
               {COLORES_ESTADO.map(col => (
                 <button key={col.value} onClick={() => onEditar(estado.id, { color: col.value })}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all
-                    ${estado.color === col.value
-                      ? 'ring-2 ring-offset-1 ring-gray-400 scale-105'
-                      : 'opacity-60 hover:opacity-100'}`}>
+                    ${estado.color === col.value ? 'ring-2 ring-offset-1 ring-gray-400 scale-105' : 'opacity-60 hover:opacity-100'}`}>
                   <span className={`w-3 h-3 rounded-full ${col.bg.replace('-100', '-400')}`} />
                   {col.label}
                 </button>
@@ -322,6 +313,7 @@ const PanelEstado = ({
                     key={campo.id}
                     campo={campo}
                     protegido={estado.protegido}
+                    autoEdit={!campo.label || campo.label.trim() === ''}
                     onEditar={(ch) => onEditarCampo(estado.id, campo.id, ch)}
                     onEliminar={() => onEliminarCampo(estado.id, campo.id)}
                   />
@@ -347,7 +339,6 @@ const ModalNuevoEstado = ({ estadosExistentes, onCancelar, onConfirmar }) => {
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-4">
         <h3 className="text-lg font-bold text-gray-900">Nuevo estado personalizado</h3>
-
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Nombre del estado *</label>
           <input value={form.nombre} onChange={e => set('nombre', e.target.value)}
@@ -355,66 +346,49 @@ const ModalNuevoEstado = ({ estadosExistentes, onCancelar, onConfirmar }) => {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
           <p className="text-xs text-gray-400 mt-1">Se convertirá a MAYÚSCULAS_SIN_ESPACIOS</p>
         </div>
-
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-1">Descripción</label>
           <textarea value={form.descripcion} onChange={e => set('descripcion', e.target.value)}
             rows={2} placeholder="¿Qué ocurre en este estado?"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-200" />
         </div>
-
         <div>
           <label className="block text-xs font-semibold text-gray-500 mb-2">Color</label>
           <div className="flex flex-wrap gap-2">
             {COLORES_ESTADO.map(col => (
               <button key={col.value} onClick={() => set('color', col.value)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all
-                  ${form.color === col.value
-                    ? 'ring-2 ring-offset-1 ring-gray-400 scale-105'
-                    : 'opacity-60 hover:opacity-100'}`}>
+                  ${form.color === col.value ? 'ring-2 ring-offset-1 ring-gray-400 scale-105' : 'opacity-60 hover:opacity-100'}`}>
                 {col.label}
               </button>
             ))}
           </div>
         </div>
-
         <div className="flex gap-4">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.envia_email}
-              onChange={e => set('envia_email', e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded" />
+            <input type="checkbox" checked={form.envia_email} onChange={e => set('envia_email', e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
             <span className="text-sm text-gray-700">Envía email</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.requiere_confirmacion}
-              onChange={e => set('requiere_confirmacion', e.target.checked)}
-              className="w-4 h-4 text-green-600 rounded" />
+            <input type="checkbox" checked={form.requiere_confirmacion} onChange={e => set('requiere_confirmacion', e.target.checked)} className="w-4 h-4 text-green-600 rounded" />
             <span className="text-sm text-gray-700">Requiere confirmación</span>
           </label>
         </div>
-
         <div className="flex gap-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">SLA (días)</label>
-            <input type="number" min="0" value={form.sla_dias}
-              onChange={e => set('sla_dias', parseInt(e.target.value) || 0)}
+            <input type="number" min="0" value={form.sla_dias} onChange={e => set('sla_dias', parseInt(e.target.value) || 0)}
               className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Alerta (días)</label>
-            <input type="number" min="0" value={form.sla_alerta_dias}
-              onChange={e => set('sla_alerta_dias', parseInt(e.target.value) || 0)}
+            <input type="number" min="0" value={form.sla_alerta_dias} onChange={e => set('sla_alerta_dias', parseInt(e.target.value) || 0)}
               className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none" />
           </div>
         </div>
-
         <div className="flex gap-3 pt-2">
-          <button onClick={onCancelar}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm">
-            Cancelar
-          </button>
-          <button
-            disabled={!form.nombre.trim()}
+          <button onClick={onCancelar} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm">Cancelar</button>
+          <button disabled={!form.nombre.trim()}
             onClick={() => onConfirmar({ ...form, nombre: form.nombre.trim().toUpperCase().replace(/\s+/g, '_') })}
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium">
             Agregar estado
@@ -425,24 +399,15 @@ const ModalNuevoEstado = ({ estadosExistentes, onCancelar, onConfirmar }) => {
   );
 };
 
-// ── Google Chat Webhook Panel ─────────────────────────────
 const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
   const [editando, setEditando] = useState(false);
   const [draft,    setDraft]    = useState(webhook || '');
   const [probando, setProbando] = useState(false);
 
-  React.useEffect(() => {
-    setDraft(webhook || '');
-    setEditando(false);
-  }, [derechoKey, webhook]);
+  React.useEffect(() => { setDraft(webhook || ''); setEditando(false); }, [derechoKey, webhook]);
 
   const esValida = (url) => !url || url.startsWith('https://chat.googleapis.com/v1/spaces/');
-
-  const handleGuardar = () => {
-    if (!esValida(draft)) return;
-    onGuardar(draft);
-    setEditando(false);
-  };
+  const handleGuardar = () => { if (!esValida(draft)) return; onGuardar(draft); setEditando(false); };
 
   const handleProbar = async () => {
     if (!webhook) return;
@@ -450,20 +415,12 @@ const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
     try {
       const adapter = (await import('../adapters')).default;
       const result  = await adapter.probarGChat(webhook, derechoKey);
-      if (result.status === 'success') {
-        alert('✅ Mensaje de prueba enviado al espacio de Google Chat');
-      } else {
-        alert('❌ Error: ' + (result.message || 'Revisa la URL del webhook'));
-      }
-    } catch (e) {
-      alert('❌ Error de conexión: ' + e.message);
-    } finally {
-      setProbando(false);
-    }
+      alert(result.status === 'success' ? '✅ Mensaje de prueba enviado al espacio de Google Chat' : '❌ Error: ' + (result.message || 'Revisa la URL del webhook'));
+    } catch (e) { alert('❌ Error de conexión: ' + e.message); }
+    finally { setProbando(false); }
   };
 
   const tieneWebhook = !!webhook;
-
   return (
     <div className="bg-white border border-gray-200 rounded-2xl px-5 py-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -473,65 +430,43 @@ const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-800">Canal Google Chat</p>
-            <p className="text-xs text-gray-400">
-              {tieneWebhook
-                ? '✅ Webhook configurado — notificaciones activas en este espacio'
-                : 'Sin espacio configurado — pega el webhook del canal de Google Chat'}
-            </p>
+            <p className="text-xs text-gray-400">{tieneWebhook ? '✅ Webhook configurado' : 'Sin espacio configurado'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {tieneWebhook && !editando && (
             <button onClick={handleProbar} disabled={probando}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50 transition-colors">
-              {probando ? '⏳' : '🧪'} {probando ? 'Enviando...' : 'Probar'}
+              {probando ? '⏳ Enviando...' : '🧪 Probar'}
             </button>
           )}
           <button onClick={() => { setEditando(!editando); setDraft(webhook || ''); }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
-            {editando
-              ? <><X className="w-3.5 h-3.5" /> Cancelar</>
-              : <><Edit2 className="w-3.5 h-3.5" /> {tieneWebhook ? 'Editar' : 'Configurar'}</>
-            }
+            {editando ? <><X className="w-3.5 h-3.5" /> Cancelar</> : <><Edit2 className="w-3.5 h-3.5" /> {tieneWebhook ? 'Editar' : 'Configurar'}</>}
           </button>
         </div>
       </div>
-
       {tieneWebhook && !editando && (
         <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-          <code className="text-xs text-gray-500 truncate flex-1">
-            {webhook.replace('https://chat.googleapis.com/v1/spaces/', 'chat.googleapis.com/…/')}
-          </code>
+          <code className="text-xs text-gray-500 truncate flex-1">{webhook.replace('https://chat.googleapis.com/v1/spaces/', 'chat.googleapis.com/…/')}</code>
         </div>
       )}
-
       {editando && (
         <div className="space-y-2">
           <div className="space-y-1">
             <label className="text-xs font-medium text-gray-600">Webhook URL de Google Chat</label>
             <input type="url" value={draft} onChange={e => setDraft(e.target.value)}
               placeholder="https://chat.googleapis.com/v1/spaces/XXX/messages?key=..."
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
-                draft && !esValida(draft)
-                  ? 'border-red-300 focus:ring-red-200 bg-red-50'
-                  : 'border-gray-300 focus:ring-blue-200'
-              }`} />
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 transition-colors ${draft && !esValida(draft) ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-gray-300 focus:ring-blue-200'}`} />
             {draft && !esValida(draft) && (
-              <p className="text-xs text-red-500 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                La URL debe comenzar con https://chat.googleapis.com/v1/spaces/
-              </p>
+              <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />La URL debe comenzar con https://chat.googleapis.com/v1/spaces/</p>
             )}
           </div>
           <div className="flex gap-2 pt-1">
             <button onClick={() => { setDraft(''); onGuardar(''); setEditando(false); }}
-              className="px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors">
-              Limpiar
-            </button>
+              className="px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors">Limpiar</button>
             <button onClick={handleGuardar} disabled={!esValida(draft)}
-              className="flex-1 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">
-              Guardar webhook
-            </button>
+              className="flex-1 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">Guardar webhook</button>
           </div>
         </div>
       )}
@@ -539,18 +474,15 @@ const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
   );
 };
 
-// ── Componente principal ──────────────────────────────────
 const TabFlujos = ({ hook, derechoActivoExterno }) => {
   const {
     config, loading,
     toggleEstado, editarEstado, toggleProtegidoPorLey,
     moverEstado, agregarEstado, eliminarEstado, restaurarDerecho,
     agregarCampoTransicion, editarCampoTransicion, eliminarCampoTransicion,
-    toggleTransicion,
-    editarSLA,
+    toggleTransicion, editarSLA,
     agregarActor, editarActor, eliminarActor,
-    getEstadosOrdenados,
-    editarGChatWebhook,
+    getEstadosOrdenados, editarGChatWebhook,
   } = hook;
 
   const [derechoActivoInterno, setDerechoActivoInterno] = useState('ACCESO');
@@ -559,16 +491,14 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
   const [vista,      setVista]      = useState('lista');
   const [modalNuevo, setModalNuevo] = useState(false);
 
-  if (loading || !config) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="text-center text-gray-500">
-          <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
-          Cargando configuración de flujos...
-        </div>
+  if (loading || !config) return (
+    <div className="flex items-center justify-center py-16">
+      <div className="text-center text-gray-500">
+        <div className="animate-spin w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-3" />
+        Cargando configuración de flujos...
       </div>
-    );
-  }
+    </div>
+  );
 
   const derechos = Object.keys(DERECHOS_META_FLUJO);
   const meta     = DERECHOS_META_FLUJO[derechoActivo] || { nombre: derechoActivo, color: 'blue', icono: '📋', articulo: '' };
@@ -594,23 +524,18 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-
-        {/* Sidebar — oculto cuando viene prop externa */}
         {!derechoActivoExterno && (
           <div className="lg:col-span-1 space-y-1.5">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Derechos ARCOP</p>
             {derechos.map(key => {
-              const m    = DERECHOS_META_FLUJO[key];
-              const dc2  = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
-              const est  = config.derechos?.[key]?.estados || [];
+              const m   = DERECHOS_META_FLUJO[key];
+              const dc2 = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
+              const est = config.derechos?.[key]?.estados || [];
               const hook_url = config.derechos?.[key]?.google_chat_webhook;
               return (
-                <button key={key}
-                  onClick={() => { setDerechoActivo(key); setVista('lista'); }}
+                <button key={key} onClick={() => { setDerechoActivo(key); setVista('lista'); }}
                   className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
-                    derechoActivo === key
-                      ? `${dc2.sidebar} border-2`
-                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                    derechoActivo === key ? `${dc2.sidebar} border-2` : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-800">{m.icono} {m.nombre}</span>
@@ -628,38 +553,26 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
           </div>
         )}
 
-        {/* Panel principal */}
-        <div className={derechoActivoExterno ? 'lg:col-span-4' : 'lg:col-span-3'} style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
-
+        <div className={derechoActivoExterno ? 'lg:col-span-4' : 'lg:col-span-3'} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className={`bg-gradient-to-r ${dc.header} rounded-2xl px-5 py-4`}>
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-white text-lg">{meta.icono} Derecho de {meta.nombre}</h3>
-                <p className="text-sm text-white/75 mt-0.5">
-                  {estados.filter(e => e.activo !== false).length} estados activos
-                </p>
+                <p className="text-sm text-white/75 mt-0.5">{estados.filter(e => e.activo !== false).length} estados activos</p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex bg-white/20 rounded-xl p-1 gap-1">
                   <button onClick={() => setVista('lista')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      vista === 'lista' ? 'bg-white text-gray-800 shadow-sm' : 'text-white/80 hover:bg-white/10'
-                    }`}>
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${vista === 'lista' ? 'bg-white text-gray-800 shadow-sm' : 'text-white/80 hover:bg-white/10'}`}>
                     <Settings className="w-3.5 h-3.5" /> Editar
                   </button>
                   <button onClick={() => setVista('diagrama')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      vista === 'diagrama' ? 'bg-white text-gray-800 shadow-sm' : 'text-white/80 hover:bg-white/10'
-                    }`}>
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${vista === 'diagrama' ? 'bg-white text-gray-800 shadow-sm' : 'text-white/80 hover:bg-white/10'}`}>
                     <GitBranch className="w-3.5 h-3.5" /> Diagrama
                   </button>
                 </div>
                 {DERECHOS_META_FLUJO[derechoActivo] && (
-                  <button
-                    onClick={() => {
-                      if (window.confirm(`¿Restaurar flujo de ${meta.nombre} a los estados por defecto?`))
-                        restaurarDerecho(derechoActivo);
-                    }}
+                  <button onClick={() => { if (window.confirm(`¿Restaurar flujo de ${meta.nombre} a los estados por defecto?`)) restaurarDerecho(derechoActivo); }}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white/90 bg-white/20 border border-white/30 rounded-xl hover:bg-white/30">
                     <RotateCcw className="w-3.5 h-3.5" /> Restaurar defaults
                   </button>
@@ -674,18 +587,13 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
             onGuardar={(url) => editarGChatWebhook(derechoActivo, url)}
           />
 
-          {vista === 'diagrama' && (
-            <FlowDiagramEditor estados={estados} hook={hook} derechoKey={derechoActivo} />
-          )}
+          {vista === 'diagrama' && <FlowDiagramEditor estados={estados} hook={hook} derechoKey={derechoActivo} />}
 
           {vista === 'lista' && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-3 text-xs text-gray-500 bg-white rounded-xl border border-gray-200 px-4 py-2.5">
                 <span className="font-semibold text-gray-400 uppercase tracking-wider">Leyenda:</span>
-                <span className="flex items-center gap-1.5">
-                  <span className="text-blue-500 font-bold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">L</span>
-                  Obligatorio por ley
-                </span>
+                <span className="flex items-center gap-1.5"><span className="text-blue-500 font-bold text-xs border border-blue-200 bg-blue-50 px-1.5 py-0.5 rounded">L</span>Obligatorio por ley</span>
                 <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5 text-amber-500" /> Protegido</span>
                 <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-blue-400" /> Envía email</span>
                 <span className="flex items-center gap-1.5"><CheckSquare className="w-3.5 h-3.5 text-green-500" /> Requiere confirmación</span>
@@ -700,19 +608,19 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
                   todos={estados}
                   isFirst={idx === 0}
                   isLast={idx === estados.length - 1}
-                  onToggle={(id)               => toggleEstado(derechoActivo, id)}
-                  onEditar={(id, changes)      => editarEstado(derechoActivo, id, changes)}
-                  onToggleProtegido={(id)      => toggleProtegidoPorLey(derechoActivo, id)}
-                  onMover={(id, dir)           => moverEstado(derechoActivo, id, dir)}
-                  onEliminar={(id)             => eliminarEstado(derechoActivo, id)}
-                  onAgregarCampo={(id)         => agregarCampoTransicion(derechoActivo, id)}
-                  onEditarCampo={(eid,cid,ch)  => editarCampoTransicion(derechoActivo, eid, cid, ch)}
-                  onEliminarCampo={(eid,cid)   => eliminarCampoTransicion(derechoActivo, eid, cid)}
+                  onToggle={(id)              => toggleEstado(derechoActivo, id)}
+                  onEditar={(id, changes)     => editarEstado(derechoActivo, id, changes)}
+                  onToggleProtegido={(id)     => toggleProtegidoPorLey(derechoActivo, id)}
+                  onMover={(id, dir)          => moverEstado(derechoActivo, id, dir)}
+                  onEliminar={(id)            => eliminarEstado(derechoActivo, id)}
+                  onAgregarCampo={(id)        => agregarCampoTransicion(derechoActivo, id)}
+                  onEditarCampo={(eid,cid,ch) => editarCampoTransicion(derechoActivo, eid, cid, ch)}
+                  onEliminarCampo={(eid,cid)  => eliminarCampoTransicion(derechoActivo, eid, cid)}
                   onToggleTransicion={(eid,tid)=> toggleTransicion(derechoActivo, eid, tid)}
-                  onEditarSLA={(id, sla)       => editarSLA(derechoActivo, id, sla)}
-                  onAgregarActor={(id)         => agregarActor(derechoActivo, id)}
-                  onEditarActor={(eid,aid,ch)  => editarActor(derechoActivo, eid, aid, ch)}
-                  onEliminarActor={(eid,aid)   => eliminarActor(derechoActivo, eid, aid)}
+                  onEditarSLA={(id, sla)      => editarSLA(derechoActivo, id, sla)}
+                  onAgregarActor={(id)        => agregarActor(derechoActivo, id)}
+                  onEditarActor={(eid,aid,ch) => editarActor(derechoActivo, eid, aid, ch)}
+                  onEliminarActor={(eid,aid)  => eliminarActor(derechoActivo, eid, aid)}
                 />
               ))}
 

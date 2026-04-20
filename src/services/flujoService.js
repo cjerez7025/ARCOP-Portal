@@ -28,6 +28,7 @@ export const TIPOS_CAMPO_TRANSICION = [
   { value: 'select',    label: 'Selección de opciones',       placeholder: '' },
   { value: 'date',      label: 'Fecha',                       placeholder: '' },
   { value: 'checkbox',  label: 'Confirmación (checkbox)',     placeholder: '' },
+  { value: 'file',      label: 'Adjuntar archivo(s)',         placeholder: '' },
 ];
 
 // ── Estados base comunes a todos los derechos ─────────────
@@ -320,13 +321,13 @@ function buildConfigDefault() {
 }
 
 function normalizarEstado(e) {
-  // Garantiza que todos los campos nuevos existan aunque el estado
-  // haya sido guardado antes de que se agregaran estos campos
   if (!Array.isArray(e.transiciones_posibles)) e.transiciones_posibles = [];
   if (!Array.isArray(e.campos_transicion))     e.campos_transicion     = [];
   if (!Array.isArray(e.actores))               e.actores               = [];
   if (e.sla_dias        === undefined)         e.sla_dias              = 0;
   if (e.sla_alerta_dias === undefined)         e.sla_alerta_dias       = 0;
+  // Limpiar campos con label vacío (creados accidentalmente con botón Agregar)
+  e.campos_transicion = e.campos_transicion.filter(c => c.label && c.label.trim() !== '');
   return e;
 }
 

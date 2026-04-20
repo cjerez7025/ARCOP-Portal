@@ -62,7 +62,6 @@ const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, on
         {/* Contenido */}
         <div className="flex-1 min-w-0">
           {editando ? (
-            
             <div className="space-y-2">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de campo</label>
@@ -70,7 +69,7 @@ const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, on
                  className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                  {TIPOS_CAMPO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
-          </div>
+              </div>
               <input
                 value={draft.label}
                 onChange={e => setDraft(p => ({ ...p, label: e.target.value }))}
@@ -150,8 +149,16 @@ const FilaCampo = ({ campo, onToggle, onToggleObligatorio, onEditar, onMover, on
               {campo.activo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           )}
-          {campo.origen === 'custom' && (
-            <button onClick={() => onEliminar(campo.id)} title="Eliminar campo"
+          {/* FIX v2: eliminar disponible para custom Y para ley/sistema no protegidos */}
+          {!campo.protegido && (
+            <button
+              onClick={() => {
+                const msg = campo.origen === 'custom'
+                  ? `¿Eliminar el campo "${campo.label}"?`
+                  : `¿Eliminar el campo "${campo.label}"? Es un campo de origen ${campo.origen} — se puede restaurar con el botón Restaurar.`;
+                if (window.confirm(msg)) onEliminar(campo.id);
+              }}
+              title="Eliminar campo"
               className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
               <Trash2 className="w-4 h-4" />
             </button>
@@ -255,7 +262,6 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
   }
 
   const derechos      = Object.keys(DERECHOS_META);
-  // ── FIX: fallback para derechos custom no en DERECHOS_META ──
   const meta          = DERECHOS_META[derechoActivo] || { nombre: derechoActivo, color: 'blue', icono: '📋', articulo: '', descripcion: '' };
   const colores       = COLOR_MAP[meta.color] || COLOR_MAP['blue'];
   const derechoConfig = config.derechos?.[derechoActivo];
@@ -272,13 +278,13 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
         <p className="text-sm text-gray-500">
           Personalice los campos que se solicitan en cada derecho ARCOP. Los campos marcados como
           <span className="mx-1 font-medium text-yellow-700">protegidos por ley</span>
-          no pueden desactivarse.
+          no pueden desactivarse ni eliminarse.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
 
-        {/* Sidebar — oculto cuando viene prop externa */}
+        {/* Sidebar */}
         {!derechoActivoExterno && (
           <div className="lg:col-span-1 space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Derechos ARCOP</p>
@@ -399,7 +405,7 @@ const TabFormularios = ({ hook, derechoActivoExterno }) => {
           <div className="mt-3 flex items-start gap-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200">
             <AlertCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
             Los cambios se aplican al formulario público inmediatamente después de guardar.
-            Los campos de origen <span className="font-medium mx-0.5">Ley</span> no pueden eliminarse, solo desactivarse si no aplican a su organización.
+            Los campos <span className="font-medium mx-0.5">protegidos por ley</span> no pueden eliminarse. Los demás campos de ley eliminados se pueden recuperar con el botón <span className="font-medium mx-0.5">Restaurar</span>.
           </div>
         </div>
       </div>
