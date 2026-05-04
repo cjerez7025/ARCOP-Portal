@@ -16,7 +16,8 @@ import TabFormularios      from '../components/TabFormularios';
 import TabFlujos           from '../components/TabFlujos';
 import useFormularioConfig from '../hooks/useFormularioConfig';
 import useFlujoConfig      from '../hooks/useFlujoConfig';
-import TabDerechos from '../components/TabDerechos';
+import TabDerechos         from '../components/TabDerechos';
+import TabImportar         from '../components/TabImportar';
 
 // ── Helpers UI ────────────────────────────────────────────
 const Campo = ({ label, ayuda, obligatorio, children, fullWidth }) => (
@@ -162,7 +163,6 @@ const TabDPO = ({ config, onChange }) => (
       </Campo>
     </Seccion>
 
-    {/* Card preview */}
     <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Vista previa — tarjeta DPO en portal</p>
       <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
@@ -253,7 +253,6 @@ const TabBranding = ({ config, onChange }) => {
         )}
       </div>
 
-      {/* Preview del portal */}
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Vista previa — encabezado del portal</p>
         <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
@@ -311,7 +310,6 @@ const TabPlazos = ({ config, onChange }) => {
       </div>
 
       <div className="space-y-6">
-        {/* Días respuesta */}
         <div className="p-4 border border-gray-200 rounded-xl space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -335,7 +333,6 @@ const TabPlazos = ({ config, onChange }) => {
           </div>
         </div>
 
-        {/* Días alerta */}
         <div className="p-4 border border-gray-200 rounded-xl space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -352,7 +349,6 @@ const TabPlazos = ({ config, onChange }) => {
             className="w-full accent-orange-500" />
         </div>
 
-        {/* Días validación */}
         <div className="p-4 border border-gray-200 rounded-xl space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -369,7 +365,6 @@ const TabPlazos = ({ config, onChange }) => {
             className="w-full accent-purple-500" />
         </div>
 
-        {/* Zona horaria */}
         <div className="p-4 border border-gray-200 rounded-xl">
           <p className="text-sm font-semibold text-gray-800 mb-3">Zona horaria</p>
           <select value={config.timezone || 'America/Santiago'}
@@ -381,35 +376,6 @@ const TabPlazos = ({ config, onChange }) => {
             <option value="America/Argentina/Buenos_Aires">🇦🇷 America/Buenos_Aires (Argentina)</option>
             <option value="America/Mexico_City">🇲🇽 America/Mexico_City (México)</option>
           </select>
-        </div>
-      </div>
-
-      {/* Línea de tiempo visual */}
-      <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Línea de tiempo de una solicitud</p>
-        <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
-          <div className="flex items-end gap-1">
-            {[
-              { dia: 0,                   label: 'Solicitud',  color: '#2563eb' },
-              { dia: diasValid,           label: 'Validación', color: '#8B5CF6' },
-              { dia: diasResp - diasAlert,label: 'Alerta DPO', color: '#F97316' },
-              { dia: diasResp,            label: 'Límite',     color: diasResp > 15 ? '#EF4444' : '#10B981' },
-            ].map((punto, i, arr) => {
-              const pct = diasResp > 0 ? (punto.dia / diasResp) * 100 : 0;
-              return (
-                <div key={i} className="flex flex-col items-center" style={{ marginLeft: i > 0 ? `${pct - (arr[i-1].dia/diasResp*100)}%` : '0', flex: '0 0 auto' }}>
-                  <p className="text-xs text-gray-500 mb-1 whitespace-nowrap">{punto.label}</p>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                       style={{ background: punto.color }}>{punto.dia}</div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-3 h-2 bg-gray-200 rounded-full relative overflow-hidden">
-            <div className="absolute inset-y-0 left-0 rounded-full"
-                 style={{ width: `${Math.min((diasResp/30)*100, 100)}%`,
-                          background: `linear-gradient(to right, #2563eb, #8B5CF6, #F97316, ${diasResp > 15 ? '#EF4444' : '#10B981'})` }} />
-          </div>
         </div>
       </div>
     </div>
@@ -426,7 +392,6 @@ const TabAvanzado = ({ config, onRestaurar, onExportar }) => (
       </p>
     </div>
 
-    {/* Métricas del sistema */}
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
         <Database className="w-5 h-5 text-blue-600 mb-2" />
@@ -445,7 +410,6 @@ const TabAvanzado = ({ config, onRestaurar, onExportar }) => (
       </div>
     </div>
 
-    {/* Exportar */}
     <div className="border border-gray-200 rounded-xl p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -464,7 +428,6 @@ const TabAvanzado = ({ config, onRestaurar, onExportar }) => (
       </div>
     </div>
 
-    {/* Restaurar */}
     <div className="border border-amber-200 rounded-xl p-5 bg-amber-50">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -484,7 +447,6 @@ const TabAvanzado = ({ config, onRestaurar, onExportar }) => (
       </div>
     </div>
 
-    {/* Marco legal */}
     <div className="border border-blue-200 rounded-xl p-5 bg-blue-50">
       <h3 className="text-sm font-bold text-blue-800 flex items-center gap-2 mb-3">
         <Shield className="w-4 h-4" /> Marco legal de referencia
@@ -575,20 +537,22 @@ const Configuracion = () => {
     </div>
   );
 
-const tabs = [
-  { id: 'empresa',  nombre: 'Empresa',  icono: Building2 },
-  { id: 'dpo',      nombre: 'DPO',      icono: User      },
-  { id: 'branding', nombre: 'Branding', icono: Palette   },
-  { id: 'plazos',   nombre: 'Plazos',   icono: Clock     },
-  { id: 'derechos', nombre: 'Derechos', icono: Shield    },
-  { id: 'avanzado', nombre: 'Avanzado', icono: Settings  },
-];
+  const tabs = [
+    { id: 'empresa',  nombre: 'Empresa',  icono: Building2 },
+    { id: 'dpo',      nombre: 'DPO',      icono: User      },
+    { id: 'branding', nombre: 'Branding', icono: Palette   },
+    { id: 'plazos',   nombre: 'Plazos',   icono: Clock     },
+    { id: 'derechos', nombre: 'Derechos', icono: Shield    },
+    { id: 'importar', nombre: 'Importar', icono: Download  },
+    { id: 'avanzado', nombre: 'Avanzado', icono: Settings  },
+  ];
 
-const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
+  // tabs que usan el botón guardar del footer de configuración general
+  const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
   const tabActivaEsSimple = tabsSimples.includes(tabActiva);
-  const flujoDirty       = flujoHook?.dirty;
-  const formularioDirty  = formularioHook?.dirty;
-  const derechosDirty    = tabActiva === 'derechos' && (flujoDirty || formularioDirty);
+  const flujoDirty        = flujoHook?.dirty;
+  const formularioDirty   = formularioHook?.dirty;
+  const derechosDirty     = tabActiva === 'derechos' && (flujoDirty || formularioDirty);
 
   const handleGuardarDerechos = async () => {
     try {
@@ -598,6 +562,9 @@ const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
       toast.error('Error al guardar derechos: ' + (e.message || ''));
     }
   };
+
+  // ¿Hay algo que mostrar en el footer?
+  const mostrarFooter = tabActivaEsSimple || tabActiva === 'derechos';
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4">
@@ -627,7 +594,6 @@ const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
                         : 'border-transparent text-gray-600 hover:bg-gray-100'}`}>
                     <Icono className="w-4 h-4" />
                     {tab.nombre}
-
                   </button>
                 );
               })}
@@ -636,42 +602,48 @@ const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
 
           {/* Contenido */}
           <div className="p-8">
-            {tabActiva === 'empresa'     && <TabEmpresa   config={config} onChange={handleChange} />}
-            {tabActiva === 'dpo'         && <TabDPO       config={config} onChange={handleChange} />}
-            {tabActiva === 'branding'    && <TabBranding  config={config} onChange={handleChange} />}
-            {tabActiva === 'plazos'      && <TabPlazos    config={config} onChange={handleChange} />}
-            {tabActiva === 'avanzado'    && <TabAvanzado  config={config} onRestaurar={handleRestaurar} onExportar={handleExportar} />}
-            {tabActiva === 'derechos'    && <TabDerechos  formularioHook={formularioHook} flujoHook={flujoHook} />}
+            {tabActiva === 'empresa'  && <TabEmpresa  config={config} onChange={handleChange} />}
+            {tabActiva === 'dpo'      && <TabDPO      config={config} onChange={handleChange} />}
+            {tabActiva === 'branding' && <TabBranding config={config} onChange={handleChange} />}
+            {tabActiva === 'plazos'   && <TabPlazos   config={config} onChange={handleChange} />}
+            {tabActiva === 'avanzado' && <TabAvanzado config={config} onRestaurar={handleRestaurar} onExportar={handleExportar} />}
+            {tabActiva === 'derechos' && <TabDerechos formularioHook={formularioHook} flujoHook={flujoHook} />}
+            {tabActiva === 'importar' && <TabImportar />}  {/* ← MMPA-119 */}
           </div>
 
-          {/* Footer */}
-          {/* Footer */}
-          <div className="border-t border-gray-200 px-8 py-5 bg-gray-50 flex justify-between items-center">
-            <div className="text-sm text-yellow-600">
-              {((cambiosPendientes && tabActivaEsSimple) || derechosDirty) && (
-                <span className="flex items-center gap-1"><AlertCircle className="w-4 h-4" />Cambios sin guardar</span>
-              )}
-            </div>
+          {/* Footer — solo se muestra en tabs que tienen acción de guardar */}
+          {mostrarFooter && (
+            <div className="border-t border-gray-200 px-8 py-5 bg-gray-50 flex justify-between items-center">
+              <div className="text-sm text-yellow-600">
+                {((cambiosPendientes && tabActivaEsSimple) || derechosDirty) && (
+                  <span className="flex items-center gap-1">
+                    <AlertCircle className="w-4 h-4" />Cambios sin guardar
+                  </span>
+                )}
+              </div>
 
-            <div>
-              {tabActivaEsSimple && (
-                <button onClick={handleGuardar} disabled={guardando || !cambiosPendientes}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
-                  {guardando ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</>
-                             : <><Save className="w-4 h-4" />Guardar cambios</>}
-                </button>
-              )}
-              {tabActiva === 'derechos' && (
-                <button onClick={handleGuardarDerechos}
-                  disabled={flujoHook?.guardando || formularioHook?.guardando || !derechosDirty}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
-                  {(flujoHook?.guardando || formularioHook?.guardando)
-                    ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</>
-                    : <><Save className="w-4 h-4" />Guardar cambios</>}
-                </button>
-              )}
+              <div>
+                {tabActivaEsSimple && (
+                  <button onClick={handleGuardar} disabled={guardando || !cambiosPendientes}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
+                    {guardando
+                      ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</>
+                      : <><Save className="w-4 h-4" />Guardar cambios</>}
+                  </button>
+                )}
+                {tabActiva === 'derechos' && (
+                  <button onClick={handleGuardarDerechos}
+                    disabled={flujoHook?.guardando || formularioHook?.guardando || !derechosDirty}
+                    className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
+                    {(flujoHook?.guardando || formularioHook?.guardando)
+                      ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</>
+                      : <><Save className="w-4 h-4" />Guardar cambios</>}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
         </div>
       </div>
     </div>

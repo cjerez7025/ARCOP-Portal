@@ -39,12 +39,13 @@ function _ccDpo(solicitud, asunto, html, config) {
   const resend = new Resend(process.env.RESEND_API_KEY);
   const FROM   = `${process.env.RESEND_FROM_NAME || 'Portal ARCOP'} <${process.env.RESEND_FROM || 'admin@aligndata.cl'}>`;
 
-  resend.emails.send({
+resend.emails.send({
     from:    FROM,
     to:      destinos,
     subject: asunto,
     html,
-  }).catch(e => console.error('[solicitudes] Fallo CC DPO:', e.message));
+  }).then(r => console.log('[_ccDpo] OK:', JSON.stringify(r)))
+    .catch(e => console.error('[solicitudes] Fallo CC DPO:', e.message, JSON.stringify(e)));
 }
 
 // ── Helper: generar número correlativo ARC-YYYY-NNNNN ─────
@@ -489,7 +490,52 @@ router.post('/:id/descarga', async (req, res, next) => {
     next(e);
   }
 });
+// ─────────────────────────────────────────────────────────
+// POST /api/solicitudes/info-token  (público)
+// Retorna solicitudId y número a partir del token,
+// sin validarlo ni marcarlo como usado.
+// Usado por ValidarIdentidad.jsx para el flujo VAL.
+// ─────────────────────────────────────────────────────────
+router.post('/info-token', async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'token requerido' });
 
+    const tokenSnap = await db.collection('tokens').doc(token).get();
+    if (!tokenSnap.exists) {
+      return res.status(404).json({ error: 'Token inválido o expirado' });
+    }
+
+    const tokenData = tokenSnap.data();
+
+    // Verificar expiración
+    if (tokenData.usado) {
+      return res.status(410).json({ error: 'Este link ya fue utilizado' });
+    }
+
+    if (tokenData.expiraAt) {
+      const expira = tokenData.expiraAt.toDate
+        ? tokenData.expiraAt.toDate()
+        : new Date(tokenData.expiraAt);
+      if (new Date() > expira) {
+        return res.status(410).json({ error: 'Este link ha expirado. Solicita uno nuevo.' });
+      }
+    }
+
+    const solSnap = await db.collection('solicitudes').doc(tokenData.solicitudId).get();
+    const numero  = solSnap.exists ? solSnap.data().numero_solicitud : null;
+
+    res.json({
+      status: 'success',
+      data: {
+        solicitudId:       tokenData.solicitudId,
+        numero_solicitud:  numero,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
 // ─────────────────────────────────────────────────────────
 // POST /api/solicitudes/:id/desistir  (público — titular)
 // ─────────────────────────────────────────────────────────

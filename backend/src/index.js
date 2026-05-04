@@ -23,7 +23,11 @@ const derechosRoutes = require('./routes/derechos');
 const uploadRouter = require('./routes/upload');
 // ── Seguridad ─────────────────────────────────────────────
 app.use(helmet());
+const validacionRouter   = require('./routes/validacion');
+const rutContactosRouter = require('./routes/rutContactos');
 
+app.use('/api/validacion',    validacionRouter);
+app.use('/api/rut-contactos', rutContactosRouter);
 // ── CORS ──────────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .split(',').map(o => o.trim());
