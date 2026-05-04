@@ -1,10 +1,8 @@
 // ============================================================
-// src/routes/solicitudes.js — v1.4
-// CAMBIOS respecto a v1.3:
-//   - Eliminada notificación Google Chat al crear solicitud
-//   - GChat solo notifica cuando hay asignado_a (cambio estado)
-//   - GChat siempre notifica en RESUELTA (usa responsable previo)
-//   - No notifica en validar/:token (PENDIENTE → VALIDADA)
+// backend/src/routes/solicitudes.js — v1.5
+// CAMBIOS respecto a v1.4:
+//   - Agregado POST /info-token (MMPA-120) — debe ir ANTES de /:id
+//   - Subido limit body a 10mb en index.js para carga masiva
 // ============================================================
 'use strict';
 
@@ -21,13 +19,13 @@ const {
 
 const router = express.Router();
 
-// ── Helper: obtener config del sistema (sin caché) ────────
+// ── Helper: obtener config del sistema ────────────────────
 async function _getConfig() {
   const snap = await db.collection('config').doc('sistema').get();
   return snap.exists ? snap.data() : {};
 }
 
-// ── Helper: enviar CC al DPO (fire-and-forget) ────────────
+// ── Helper: CC al DPO (fire-and-forget) ──────────────────
 function _ccDpo(solicitud, asunto, html, config) {
   const dpoEmail = (config && config.dpo_email) || process.env.DPO_EMAIL || '';
   const ccEmail  = (config && config.email_cc)  || '';
@@ -39,16 +37,12 @@ function _ccDpo(solicitud, asunto, html, config) {
   const resend = new Resend(process.env.RESEND_API_KEY);
   const FROM   = `${process.env.RESEND_FROM_NAME || 'Portal ARCOP'} <${process.env.RESEND_FROM || 'admin@aligndata.cl'}>`;
 
-resend.emails.send({
-    from:    FROM,
-    to:      destinos,
-    subject: asunto,
-    html,
-  }).then(r => console.log('[_ccDpo] OK:', JSON.stringify(r)))
+  resend.emails.send({ from: FROM, to: destinos, subject: asunto, html })
+    .then(r => console.log('[_ccDpo] OK:', JSON.stringify(r)))
     .catch(e => console.error('[solicitudes] Fallo CC DPO:', e.message, JSON.stringify(e)));
 }
 
-// ── Helper: generar número correlativo ARC-YYYY-NNNNN ─────
+// ── Helper: número correlativo ARC-YYYY-NNNNN ────────────
 async function _generarNumero() {
   const year = new Date().getFullYear();
   const ref  = db.collection('config').doc(`counter_${year}`);
@@ -61,7 +55,7 @@ async function _generarNumero() {
   return `ARC-${year}-${String(next).padStart(5, '0')}`;
 }
 
-// ── Helper: calcular fecha límite (15 días hábiles CL) ────
+// ── Helper: fecha límite (15 días hábiles CL) ─────────────
 const FERIADOS_CL_2026 = new Set([
   '2026-01-01','2026-04-03','2026-04-04','2026-05-01',
   '2026-05-21','2026-06-29','2026-07-16','2026-08-15',
@@ -81,9 +75,9 @@ function _calcularFechaLimite(diasHabiles = 15) {
   return fecha.toISOString();
 }
 
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 // POST /api/solicitudes
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 router.post('/', async (req, res, next) => {
   try {
     const data = req.body;
@@ -141,11 +135,9 @@ router.post('/', async (req, res, next) => {
 
     const config = await _getConfig();
 
-    // Email recepción al titular
     emailService.enviarRecepcion({ ...solicitud, id: ref.id }, config)
       .catch(e => console.error('[solicitudes] Fallo email recepcion:', e.message));
 
-    // CC al DPO por email (sin Google Chat — se notifica al asignar responsable)
     _ccDpo(
       { ...solicitud, id: ref.id },
       `[ARCOP] Nueva solicitud ${numero} — ${solicitud.tipo_derecho}`,
@@ -171,9 +163,54 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
-// POST /api/solicitudes/validar/:token
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
+// POST /api/solicitudes/info-token  (público)
+// ⚠️  DEBE IR ANTES DE CUALQUIER RUTA CON /:id
+//     Express interpreta 'info-token' como :id si va después
+// ═════════════════════════════════════════════════════════
+router.post('/info-token', async (req, res, next) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'token requerido' });
+
+    const tokenSnap = await db.collection('tokens').doc(token).get();
+    if (!tokenSnap.exists) {
+      return res.status(404).json({ error: 'Token inválido o expirado' });
+    }
+
+    const tokenData = tokenSnap.data();
+
+    if (tokenData.usado) {
+      return res.status(410).json({ error: 'Este link ya fue utilizado' });
+    }
+
+    // Verificar expiración — el campo puede llamarse expiresAt o expiraAt
+    const expiraRaw = tokenData.expiresAt || tokenData.expiraAt;
+    if (expiraRaw) {
+      const expira = expiraRaw.toDate ? expiraRaw.toDate() : new Date(expiraRaw);
+      if (new Date() > expira) {
+        return res.status(410).json({ error: 'Este link ha expirado. Solicita uno nuevo.' });
+      }
+    }
+
+    const solSnap = await db.collection('solicitudes').doc(tokenData.solicitudId).get();
+    const numero  = solSnap.exists ? solSnap.data().numero_solicitud : null;
+
+    res.json({
+      status: 'success',
+      data: {
+        solicitudId:      tokenData.solicitudId,
+        numero_solicitud: numero,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ═════════════════════════════════════════════════════════
+// POST /api/solicitudes/validar/:token  (público)
+// ═════════════════════════════════════════════════════════
 router.post('/validar/:token', async (req, res, next) => {
   try {
     const { token } = req.params;
@@ -183,8 +220,13 @@ router.post('/validar/:token', async (req, res, next) => {
 
     const tokenData = tokenSnap.data();
     if (tokenData.usado) return res.status(409).json({ error: 'Token ya fue utilizado' });
-    if (tokenData.expiresAt && new Date(tokenData.expiresAt) < new Date()) {
-      return res.status(410).json({ error: 'Token expirado. Solicita uno nuevo.' });
+
+    const expiraRaw = tokenData.expiresAt || tokenData.expiraAt;
+    if (expiraRaw) {
+      const expira = expiraRaw.toDate ? expiraRaw.toDate() : new Date(expiraRaw);
+      if (new Date() > expira) {
+        return res.status(410).json({ error: 'Token expirado. Solicita uno nuevo.' });
+      }
     }
 
     const { solicitudId } = tokenData;
@@ -220,8 +262,6 @@ router.post('/validar/:token', async (req, res, next) => {
     emailService.enviarCambioEstado(solicitud, 'VALIDADA', config)
       .catch(e => console.error('[solicitudes] Fallo email VALIDADA:', e.message));
 
-    // No se notifica a Google Chat — se notifica al asignar responsable
-
     res.json({
       status:   'success',
       mensaje:  'Identidad validada correctamente',
@@ -232,9 +272,9 @@ router.post('/validar/:token', async (req, res, next) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 // GET /api/solicitudes/numero/:numero  (público)
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 router.get('/numero/:numero', async (req, res, next) => {
   try {
     const snap = await db.collection('solicitudes')
@@ -266,9 +306,9 @@ router.get('/numero/:numero', async (req, res, next) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 // GET /api/solicitudes  (DPO)
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 router.get('/', requireAuth, async (req, res, next) => {
   try {
     let q = db.collection('solicitudes');
@@ -299,21 +339,15 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 // PUT /api/solicitudes/:id/estado  (DPO)
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 router.put('/:id/estado', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
     const {
-      estado,
-      comentario,
-      notas_dpo,
-      asignado_a,
-      asignado_email,
-      asignado_en,
-      fecha_termino_sla,
-      fecha_entrada_estado,
+      estado, comentario, notas_dpo, asignado_a, asignado_email,
+      asignado_en, fecha_termino_sla, fecha_entrada_estado,
     } = req.body;
 
     if (!estado) return res.status(400).json({ error: 'Campo estado requerido' });
@@ -322,9 +356,7 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
     const snap = await ref.get();
     if (!snap.exists) return res.status(404).json({ error: 'Solicitud no encontrada' });
 
-    const prev = snap.data();
-
-    // Construir update dinámico (no escribir campos vacíos)
+    const prev   = snap.data();
     const update = {
       estado,
       comentario_interno: comentario || '',
@@ -360,16 +392,15 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
         `<p style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
           La solicitud <strong>${prev.numero_solicitud}</strong> de <strong>${prev.nombre_completo}</strong>
           cambio de estado <strong>${prev.estado}</strong> &rarr; <strong>${estado}</strong>.
-          ${asignado_a ? `<br>Asignado a: <strong>${asignado_a}</strong>${asignado_email ? ` &lt;${asignado_email}&gt;` : ''}` : ''}
+          ${asignado_a ? `<br>Asignado a: <strong>${asignado_a}</strong>` : ''}
           ${comentario ? `<br>Comentario: ${comentario}` : ''}
         </p>`,
         config
       );
     }
 
-    // Notificación Google Chat — SOLO cuando hay responsable asignado
     if (asignado_a) {
-     gchat.notificarCambioEstado({
+      gchat.notificarCambioEstado({
         numero:          prev.numero_solicitud,
         tipo:            prev.tipo_derecho,
         nombreTitular:   prev.nombre_completo,
@@ -379,7 +410,8 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
         asignadoEmail:   asignado_email || '',
         fechaTerminoSLA: fecha_termino_sla || prev.fecha_limite,
         archivos:        prev.documentacion_archivos || [],
-      }).catch(e => console.error('[solicitudes] Fallo GChat cambio estado:', e.message));    }
+      }).catch(e => console.error('[solicitudes] Fallo GChat cambio estado:', e.message));
+    }
 
     res.json({ status: 'success', id, estado });
   } catch (e) {
@@ -387,9 +419,9 @@ router.put('/:id/estado', requireAuth, async (req, res, next) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 // PUT /api/solicitudes/:id/resolver  (DPO)
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
 router.put('/:id/resolver', requireAuth, async (req, res, next) => {
   try {
     const { id }                         = req.params;
@@ -436,18 +468,17 @@ router.put('/:id/resolver', requireAuth, async (req, res, next) => {
       config
     );
 
-    // Notificación Google Chat — resuelta (usa responsable previo si existe)
     gchat.notificarCambioEstado({
-        numero:          prev.numero_solicitud,
-        tipo:            prev.tipo_derecho,
-        nombreTitular:   prev.nombre_completo,
-        estadoAnterior:  prev.estado,
-        estadoNuevo:     'RESUELTA',
-        asignadoA:       prev.asignado_a    || (req.user.email || req.user.uid),
-        asignadoEmail:   prev.asignado_email || '',
-        fechaTerminoSLA: prev.fecha_termino_sla || prev.fecha_limite,
-        archivos:        prev.documentacion_archivos || [],
-      }).catch(e => console.error('[solicitudes] Fallo GChat RESUELTA:', e.message));
+      numero:          prev.numero_solicitud,
+      tipo:            prev.tipo_derecho,
+      nombreTitular:   prev.nombre_completo,
+      estadoAnterior:  prev.estado,
+      estadoNuevo:     'RESUELTA',
+      asignadoA:       prev.asignado_a    || (req.user.email || req.user.uid),
+      asignadoEmail:   prev.asignado_email || '',
+      fechaTerminoSLA: prev.fecha_termino_sla || prev.fecha_limite,
+      archivos:        prev.documentacion_archivos || [],
+    }).catch(e => console.error('[solicitudes] Fallo GChat RESUELTA:', e.message));
 
     res.json({ status: 'success', id, estado: 'RESUELTA' });
   } catch (e) {
@@ -455,9 +486,9 @@ router.put('/:id/resolver', requireAuth, async (req, res, next) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
-// POST /api/solicitudes/:id/descarga  (público — titular)
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
+// POST /api/solicitudes/:id/descarga  (público)
+// ═════════════════════════════════════════════════════════
 router.post('/:id/descarga', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -490,55 +521,10 @@ router.post('/:id/descarga', async (req, res, next) => {
     next(e);
   }
 });
-// ─────────────────────────────────────────────────────────
-// POST /api/solicitudes/info-token  (público)
-// Retorna solicitudId y número a partir del token,
-// sin validarlo ni marcarlo como usado.
-// Usado por ValidarIdentidad.jsx para el flujo VAL.
-// ─────────────────────────────────────────────────────────
-router.post('/info-token', async (req, res, next) => {
-  try {
-    const { token } = req.body;
-    if (!token) return res.status(400).json({ error: 'token requerido' });
 
-    const tokenSnap = await db.collection('tokens').doc(token).get();
-    if (!tokenSnap.exists) {
-      return res.status(404).json({ error: 'Token inválido o expirado' });
-    }
-
-    const tokenData = tokenSnap.data();
-
-    // Verificar expiración
-    if (tokenData.usado) {
-      return res.status(410).json({ error: 'Este link ya fue utilizado' });
-    }
-
-    if (tokenData.expiraAt) {
-      const expira = tokenData.expiraAt.toDate
-        ? tokenData.expiraAt.toDate()
-        : new Date(tokenData.expiraAt);
-      if (new Date() > expira) {
-        return res.status(410).json({ error: 'Este link ha expirado. Solicita uno nuevo.' });
-      }
-    }
-
-    const solSnap = await db.collection('solicitudes').doc(tokenData.solicitudId).get();
-    const numero  = solSnap.exists ? solSnap.data().numero_solicitud : null;
-
-    res.json({
-      status: 'success',
-      data: {
-        solicitudId:       tokenData.solicitudId,
-        numero_solicitud:  numero,
-      },
-    });
-  } catch (e) {
-    next(e);
-  }
-});
-// ─────────────────────────────────────────────────────────
-// POST /api/solicitudes/:id/desistir  (público — titular)
-// ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════
+// POST /api/solicitudes/:id/desistir  (público)
+// ═════════════════════════════════════════════════════════
 router.post('/:id/desistir', async (req, res, next) => {
   try {
     const { id }     = req.params;
@@ -555,10 +541,10 @@ router.post('/:id/desistir', async (req, res, next) => {
     }
 
     await ref.update({
-      estado:          'DESISTIDA',
+      estado:               'DESISTIDA',
       motivo_desistimiento: motivo || 'Sin motivo indicado',
       fecha_desistimiento:  new Date().toISOString(),
-      updatedAt:       FieldValue.serverTimestamp(),
+      updatedAt:            FieldValue.serverTimestamp(),
     });
 
     await ref.collection('historial').add({
@@ -571,7 +557,6 @@ router.post('/:id/desistir', async (req, res, next) => {
 
     const config = await _getConfig();
 
-    // Notificar al DPO
     _ccDpo(
       prev,
       `[ARCOP] ${prev.numero_solicitud} — Titular desistió`,
@@ -589,4 +574,5 @@ router.post('/:id/desistir', async (req, res, next) => {
     next(e);
   }
 });
+
 module.exports = router;

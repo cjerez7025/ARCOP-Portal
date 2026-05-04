@@ -1,6 +1,5 @@
 // ============================================================
 // src/index.js — Servidor Express para Cloud Run
-// Puerto: process.env.PORT (Cloud Run lo inyecta, default 8080)
 // ============================================================
 'use strict';
 
@@ -10,24 +9,23 @@ const helmet    = require('helmet');
 const cors      = require('cors');
 const rateLimit = require('express-rate-limit');
 
+// ── Routers ───────────────────────────────────────────────
 const solicitudesRouter  = require('./routes/solicitudes');
 const configRouter       = require('./routes/config');
 const healthRouter       = require('./routes/health');
 const estadisticasRouter = require('./routes/estadisticas');
+const derechosRoutes     = require('./routes/derechos');
+const uploadRouter       = require('./routes/upload');
+const validacionRouter   = require('./routes/validacion');
+const rutContactosRouter = require('./routes/rutContactos');
 
 const app  = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 8080;
 
-const derechosRoutes = require('./routes/derechos');
-const uploadRouter = require('./routes/upload');
 // ── Seguridad ─────────────────────────────────────────────
 app.use(helmet());
-const validacionRouter   = require('./routes/validacion');
-const rutContactosRouter = require('./routes/rutContactos');
 
-app.use('/api/validacion',    validacionRouter);
-app.use('/api/rut-contactos', rutContactosRouter);
 // ── CORS ──────────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
   .split(',').map(o => o.trim());
@@ -41,7 +39,8 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json({ limit: '1mb' }));
+// ── Body parser ───────────────────────────────────────────
+app.use(express.json({ limit: '10mb' })); // 10mb para carga masiva rut_contactos
 
 // ── Rate limiting global ──────────────────────────────────
 app.use(rateLimit({
@@ -57,8 +56,11 @@ app.use('/api/health',        healthRouter);
 app.use('/api/solicitudes',   solicitudesRouter);
 app.use('/api/estadisticas',  estadisticasRouter);
 app.use('/api/config',        configRouter);
-app.use('/api/derechos', derechosRoutes);
-app.use('/api/upload', uploadRouter);
+app.use('/api/derechos',      derechosRoutes);
+app.use('/api/upload',        uploadRouter);
+app.use('/api/validacion',    validacionRouter);
+app.use('/api/rut-contactos', rutContactosRouter);
+
 // ── Error handler global ──────────────────────────────────
 app.use((err, req, res, _next) => {
   console.error('[ERROR]', err.message);
