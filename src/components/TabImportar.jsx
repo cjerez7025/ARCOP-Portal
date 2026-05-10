@@ -121,14 +121,16 @@ const validarFila = (fila) => {
 };
 
 // ── Enviar al backend en chunks ───────────────────────────
-const enviarAlBackend = async (registros, onProgreso) => {
+// reemplazar=true → el primer chunk le indica al backend que borre todo antes de insertar
+const enviarAlBackend = async (registros, onProgreso, reemplazar = true) => {
   const token = await getToken();
   if (!token) throw new Error('No autenticado. Inicia sesión como DPO.');
 
   let totalEscritos = 0;
 
   for (let i = 0; i < registros.length; i += CHUNK_SIZE) {
-    const chunk = registros.slice(i, i + CHUNK_SIZE);
+    const chunk       = registros.slice(i, i + CHUNK_SIZE);
+    const esPrimerChunk = i === 0;
 
     const res = await fetch(`${API_URL}/api/rut-contactos/importar`, {
       method:  'POST',
@@ -136,7 +138,10 @@ const enviarAlBackend = async (registros, onProgreso) => {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ registros: chunk }),
+      body: JSON.stringify({
+        registros,
+        reemplazar: esPrimerChunk && reemplazar,
+      }),
     });
 
     if (!res.ok) {
@@ -185,6 +190,7 @@ const TabImportar = () => {
   const [totalImportados, setTotalImportados] = useState(null);
   const [verRechazadas, setVerRechazadas]     = useState(false);
   const [tieneRegistros, setTieneRegistros]   = useState(null);
+  const [reemplazar, setReemplazar]           = useState(true);
 
   useEffect(() => {
     verificarColeccion().then(setTieneRegistros);
@@ -247,7 +253,7 @@ const TabImportar = () => {
     }));
 
     try {
-      const escritos = await enviarAlBackend(registros, setProgreso);
+      const escritos = await enviarAlBackend(registros, setProgreso, reemplazar);
       setTotalImportados(escritos);
       setTieneRegistros(true);
       setFase('done');
@@ -400,16 +406,29 @@ const TabImportar = () => {
             </div>
           )}
 
-          <div className="flex items-start gap-2 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-xs text-blue-700">
-            <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            Los RUTs ya existentes en Firebase serán actualizados (upsert). Los datos de la API empresa tienen prioridad sobre esta carga.
+          {/* Toggle reemplazar / agregar */}
+          <div
+            onClick={() => setReemplazar(v => !v)}
+            className={`flex items-start gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors select-none ${reemplazar ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-100'}`}
+          >
+            <div className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded border-2 flex items-center justify-center transition-colors ${reemplazar ? 'bg-orange-500 border-orange-500' : 'border-gray-300 bg-white'}`}>
+              {reemplazar && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 10 10"><path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </div>
+            <div>
+              <p className={`text-xs font-semibold ${reemplazar ? 'text-orange-700' : 'text-blue-700'}`}>
+                {reemplazar ? 'Reemplazar todo — borra los registros actuales e inserta los nuevos' : 'Agregar / actualizar — mantiene registros existentes y agrega los nuevos'}
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {reemplazar ? 'Útil para cargar una nueva versión completa del archivo.' : 'Útil para añadir contactos sin perder los anteriores.'}
+              </p>
+            </div>
           </div>
 
           <div className="flex gap-3">
             <button onClick={reiniciar} className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-xl text-sm hover:bg-gray-50 transition-colors">Cancelar</button>
             <button onClick={confirmarImportacion} disabled={validas.length === 0}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold disabled:opacity-50 hover:bg-blue-700 transition-colors">
-              <Upload className="w-4 h-4" />Importar {validas.length.toLocaleString()} registros válidos
+              className={`flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-white rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors ${reemplazar ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+              <Upload className="w-4 h-4" />{reemplazar ? 'Reemplazar' : 'Importar'} {validas.length.toLocaleString()} registros válidos
             </button>
           </div>
         </div>

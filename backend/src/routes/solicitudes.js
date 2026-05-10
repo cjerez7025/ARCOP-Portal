@@ -82,10 +82,20 @@ router.post('/', async (req, res, next) => {
   try {
     const data = req.body;
 
-    const requeridos = ['nombre_completo', 'rut', 'email', 'tipo_derecho'];
+    // email es opcional cuando el canal de validación ya lo cubre
+    const canalCubreEmail = data.canal_validacion === 'email';
+    const requeridos = ['nombre_completo', 'rut', 'tipo_derecho'];
+    if (!canalCubreEmail) requeridos.push('email');
     const faltantes  = requeridos.filter(k => !data[k]);
     if (faltantes.length) {
       return res.status(400).json({ error: `Campos requeridos: ${faltantes.join(', ')}` });
+    }
+
+    // Si el canal cubre el email, recuperar el real desde rut_contactos
+    let emailFinal = data.email ? data.email.toLowerCase() : null;
+    if (canalCubreEmail && !emailFinal) {
+      const snap = await db.collection('rut_contactos').doc(data.rut).get();
+      emailFinal = snap.exists ? snap.data().email || null : null;
     }
 
     const numero = await _generarNumero();
@@ -94,7 +104,7 @@ router.post('/', async (req, res, next) => {
     const solicitud = {
       nombre_completo:    data.nombre_completo,
       rut:                data.rut,
-      email:              data.email.toLowerCase(),
+      email:              emailFinal,
       telefono:           data.telefono || null,
       tipo_derecho:       data.tipo_derecho,
       numero_solicitud:   numero,

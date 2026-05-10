@@ -79,7 +79,13 @@ const ValidarIdentidad = () => {
         return;
       }
 
-      // Si solo hay un canal, seleccionarlo automáticamente
+      // Canal ya confirmado en el formulario → enviar link directamente sin preguntar
+      if (datos.canal_validacion) {
+        await enviarLinkDirecto(solicitudId, datos.canal_validacion);
+        return;
+      }
+
+      // Si solo hay un canal disponible, seleccionarlo automáticamente
       if (datos.canales_disponibles.length === 1) {
         setCanal(datos.canales_disponibles[0]);
       }
@@ -105,6 +111,21 @@ const ValidarIdentidad = () => {
 
   const noReconozco = async () => {
     await derivarAsistido(solicitud?.id, contacto);
+  };
+
+  // ── Envío automático cuando el canal ya fue confirmado en el form ──
+  const enviarLinkDirecto = async (solicitudId, canalElegido) => {
+    setCanal(canalElegido);
+    setEnviando(true);
+    try {
+      await _post('/api/validacion/enviar-link', { solicitudId, canal: canalElegido });
+      setPaso('enviado');
+    } catch (e) {
+      setError(e.message || 'Error al enviar el link');
+      setPaso('error');
+    } finally {
+      setEnviando(false);
+    }
   };
 
   // ── Paso 3: enviar link por canal elegido ─────────────────

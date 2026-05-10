@@ -37,6 +37,36 @@ async function _getSolicitud(solicitudId) {
 }
 
 // ═════════════════════════════════════════════════════════
+// GET /api/validacion/contacto-por-rut?rut=12.345.678-5
+// Usado por PasoValidacionContacto al rellenar el formulario
+// Retorna datos anonimizados sin exponer info real
+// Público (sin auth) — el titular aún no tiene sesión
+// ═════════════════════════════════════════════════════════
+router.get('/contacto-por-rut', async (req, res, next) => {
+  try {
+    const { rut } = req.query;
+    if (!rut) return err(res, 'Parámetro "rut" es requerido');
+
+    const config   = await _getConfig();
+    const contacto = await obtenerContactoAnonimizado(rut, config);
+
+    if (!contacto.encontrado) {
+      return err(res, 'No se encontraron datos de contacto para el RUT indicado', 404);
+    }
+
+    return ok(res, {
+      email_anon:    contacto.email_anon,
+      telefono_anon: contacto.telefono_anon,
+      fuente:        contacto.fuente,
+    });
+
+  } catch (e) {
+    console.error('[validacion] /contacto-por-rut error:', e.message);
+    next(e);
+  }
+});
+
+// ═════════════════════════════════════════════════════════
 // POST /api/validacion/contacto
 // Recibe: { solicitudId }
 // Retorna: datos anonimizados + canales disponibles
@@ -69,6 +99,7 @@ router.post('/contacto', async (req, res, next) => {
       email_anon:          contacto.email_anon,
       telefono_anon:       contacto.telefono_anon,
       canales_disponibles: contacto.canales_disponibles,
+      canal_validacion:    solicitud.canal_validacion || null,
     });
 
   } catch (e) {

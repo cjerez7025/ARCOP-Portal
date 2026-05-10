@@ -10,8 +10,25 @@ import { toast } from 'react-toastify';
 import useFormularioConfig from '../hooks/useFormularioConfig';
 import CampoRenderer from './CampoRenderer';
 import OnboardingTour from './OnboardingTour';
+import PasoValidacionContacto from './PasoValidacionContacto';
 import adapter from '../adapters';
 import { crearSolicitud } from '../services/googleSheetsService';
+
+const validarRutMod11 = (rut) => {
+  if (!rut) return false;
+  const clean = String(rut).replace(/[.\-\s]/g, '').toUpperCase();
+  if (clean.length < 2 || !/^\d+[0-9K]$/.test(clean)) return false;
+  const body = clean.slice(0, -1);
+  const dv   = clean.slice(-1);
+  let sum = 0, mul = 2;
+  for (let i = body.length - 1; i >= 0; i--) {
+    sum += parseInt(body[i]) * mul;
+    mul = mul === 7 ? 2 : mul + 1;
+  }
+  const r = 11 - (sum % 11);
+  const expected = r === 11 ? '0' : r === 10 ? 'K' : String(r);
+  return dv === expected;
+};
 
 const generarToken        = () => Math.random().toString(36).substr(2) + Math.random().toString(36).substr(2);
 const calcularFechaLimite = () => {
@@ -158,6 +175,14 @@ const CardsGrid = ({ derechos, onSeleccionar }) => {
     </div>
   );
 };
+
+// ── Nota canal confirmado ─────────────────────────────────
+const NotaCanalConfirmado = ({ icon, texto }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'rgba(16,185,129,0.07)', borderRadius: '10px', border: '1px solid rgba(16,185,129,0.15)', marginTop: '12px' }}>
+    <span style={{ fontSize: '14px', flexShrink: 0 }}>{icon}</span>
+    <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{texto}</p>
+  </div>
+);
 
 // ── Grid dinámico de campos ────────────────────────────────
 const getGridColumn = (campo) => {
@@ -333,6 +358,10 @@ const FormularioSolicitud = () => {
   const [loadingDerechos,  setLoadingDerechos]  = useState(true);
   const [preview,          setPreview]          = useState(false);
   const [datosPreview,     setDatosPreview]     = useState(null);
+  const [rutValidado,      setRutValidado]      = useState(null);
+  const [canalValidacion,  setCanalValidacion]  = useState(null);
+  const [derivadoAsistido, setDerivadoAsistido] = useState(false);
+  const [contactoAnon,     setContactoAnon]     = useState(null);
 
   useEffect(() => {
     adapter.getDerechos().then(result => {
@@ -345,10 +374,40 @@ const FormularioSolicitud = () => {
     defaultValues: { alcance_acceso: 'TODOS', formato_preferido: 'PDF', categorias: [], acepta_terminos: false },
   });
 
+  const rutWatched = watch('rut');
+  useEffect(() => {
+    if (validarRutMod11(rutWatched)) {
+      setRutValidado(rutWatched);
+    } else {
+      setRutValidado(null);
+      setCanalValidacion(null);
+      setDerivadoAsistido(false);
+      setContactoAnon(null);
+    }
+  }, [rutWatched]);
+
+  // Cuando el canal queda confirmado, silencia la validación del campo oculto
+  // poniéndole el valor anonimizado. Cuando se limpia, borra el campo.
+  useEffect(() => {
+    if (canalValidacion === 'email') {
+      setValue('email', contactoAnon?.email_anon || 'canal_email', { shouldValidate: false });
+    } else if (canalValidacion === 'whatsapp') {
+      setValue('telefono', contactoAnon?.telefono_anon || 'canal_whatsapp', { shouldValidate: false });
+    } else {
+      // Canal limpiado (usuario hizo "Cambiar") → restaurar campos vacíos
+      setValue('email',    '', { shouldValidate: false });
+      setValue('telefono', '', { shouldValidate: false });
+    }
+  }, [canalValidacion, contactoAnon, setValue]);
+
   const handleSeleccionar = (derecho) => {
     setTipoSeleccionado(derecho);
     setPreview(false);
     setDatosPreview(null);
+    setRutValidado(null);
+    setCanalValidacion(null);
+    setDerivadoAsistido(false);
+    setContactoAnon(null);
     reset({ alcance_acceso: 'TODOS', formato_preferido: 'PDF', categorias: [], acepta_terminos: false });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -370,9 +429,16 @@ const FormularioSolicitud = () => {
       delete datosLimpios.documentacion;
       delete datosLimpios.acepta_terminos;
 
+      // Si el canal de validación cubre email o teléfono, el backend usará
+      // el dato real desde rut_contactos — no enviamos el valor centinela.
+      if (canalValidacion === 'email')    delete datosLimpios.email;
+      if (canalValidacion === 'whatsapp') delete datosLimpios.telefono;
+
       const solicitudData = {
         ...datosLimpios,
-        tipo_derecho: tipoSeleccionado.id,
+        tipo_derecho:        tipoSeleccionado.id,
+        canal_validacion:    canalValidacion,
+        derivacion_asistida: derivadoAsistido,
       };
 
       const result = await crearSolicitud(solicitudData);
@@ -535,7 +601,32 @@ const FormularioSolicitud = () => {
             {identidad.length > 0 && (
               <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
                 <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Tus datos</h3>
-                <CamposGrid campos={identidad} register={register} watch={watch} setValue={setValue} errors={errors} />
+                <CamposGrid
+                  campos={identidad.filter(c => {
+                    if (canalValidacion === 'email'    && c.id === 'email')    return false;
+                    if (canalValidacion === 'whatsapp' && c.id === 'telefono') return false;
+                    return true;
+                  })}
+                  register={register} watch={watch} setValue={setValue} errors={errors}
+                />
+                {canalValidacion === 'email' && (
+                  <NotaCanalConfirmado icon="✉️" texto="La respuesta a tu solicitud se enviará al correo registrado en nuestros sistemas." />
+                )}
+                {canalValidacion === 'whatsapp' && (
+                  <NotaCanalConfirmado icon="💬" texto="La respuesta a tu solicitud se enviará al teléfono registrado en nuestros sistemas." />
+                )}
+                {rutValidado && (
+                  <PasoValidacionContacto
+                    rut={rutValidado}
+                    color={color}
+                    onConfirmar={(datos) => {
+                      if (!datos) { setCanalValidacion(null); setContactoAnon(null); return; }
+                      setCanalValidacion(datos.canal);
+                      setContactoAnon({ email_anon: datos.email_anon, telefono_anon: datos.telefono_anon });
+                    }}
+                    onDerivado={() => setDerivadoAsistido(true)}
+                  />
+                )}
               </div>
             )}
             {especificos.length > 0 && (

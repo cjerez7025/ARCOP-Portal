@@ -3,7 +3,8 @@
 // MMPA-119 — Endpoint para carga masiva tabla rut_contactos
 //
 // POST /api/rut-contactos/importar
-//   - Body: { registros: [{ rut, email, telefono? }] }
+//   - Body: { registros: [{ rut, email, telefono? }], reemplazar?: boolean }
+//   - reemplazar=true → borra toda la colección antes de insertar
 //   - Auth: requireAuth (DPO o admin)
 //   - Escribe en Firestore via Admin SDK (sin restricciones de rules)
 // ============================================================
@@ -14,17 +15,32 @@ const { db }           = require('../services/firebase');
 const { FieldValue }   = require('firebase-admin/firestore');
 const { requireAuth }  = require('../middleware/auth');
 
-const router    = express.Router();
+const router     = express.Router();
 const BATCH_SIZE = 400; // Firestore max 500 ops/batch — margen de seguridad
 
 // ── Helpers ───────────────────────────────────────────────
 const ok  = (res, data)          => res.json({ status: 'success', data });
 const err = (res, msg, code=400) => res.status(code).json({ status: 'error', error: msg });
 
+// Elimina todos los documentos de rut_contactos en páginas de BATCH_SIZE
+async function limpiarColeccion() {
+  let eliminados = 0;
+  while (true) {
+    const snap = await db.collection('rut_contactos').limit(BATCH_SIZE).get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    snap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    eliminados += snap.docs.length;
+  }
+  console.log(`[rutContactos] Colección limpiada: ${eliminados} documentos eliminados`);
+  return eliminados;
+}
+
 // ── POST /api/rut-contactos/importar ─────────────────────
 router.post('/importar', requireAuth, async (req, res, next) => {
   try {
-    const { registros } = req.body;
+    const { registros, reemplazar = false } = req.body;
 
     if (!Array.isArray(registros) || registros.length === 0) {
       return err(res, 'Se requiere un array "registros" con al menos un elemento.');
@@ -32,6 +48,12 @@ router.post('/importar', requireAuth, async (req, res, next) => {
 
     if (registros.length > 10_000) {
       return err(res, `Máximo 10.000 registros por carga. Se recibieron ${registros.length}.`);
+    }
+
+    // Si reemplazar=true, borrar toda la colección antes de insertar
+    let eliminados = 0;
+    if (reemplazar) {
+      eliminados = await limpiarColeccion();
     }
 
     let escritos  = 0;
@@ -68,12 +90,13 @@ router.post('/importar', requireAuth, async (req, res, next) => {
       await batch.commit();
     }
 
-    console.log(`[rutContactos] Importación completada: ${escritos} escritos, ${omitidos} omitidos`);
+    console.log(`[rutContactos] Importación completada: ${escritos} escritos, ${omitidos} omitidos${reemplazar ? `, ${eliminados} eliminados previos` : ''}`);
 
     return ok(res, {
       escritos,
       omitidos,
-      errores: errores.slice(0, 50), // max 50 errores en respuesta
+      eliminados,
+      errores: errores.slice(0, 50),
       total:   registros.length,
     });
 
