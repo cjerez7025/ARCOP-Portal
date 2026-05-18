@@ -7,3 +7,5 @@ DPO_EMAIL: carlos.jerez@aligndata.cl
 
 FRONTEND_URL: https://aligndata-arcop-portal-38081.web.app
 FIREBASE_STORAGE_BUCKET: "aligndata-arcop.firebasestorage.app"
+RECAPTCHA_SECRET_KEY: "6LeZfeYsAAAAAJJrcAtwenh2vR7-jR4gicqCd-Gf"
+RECAPTCHA_SITE_KEY: "6LeZfeYsAAAAACOrIvshwfYbse2UOCVtHKsF0lyc"

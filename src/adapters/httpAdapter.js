@@ -132,6 +132,12 @@ uploadDocumentacion: async (solicitudId, archivos) => {
   confirmarDescarga: async (id) =>
     _fetch(`/api/solicitudes/${id}/descarga`, { method: 'POST' }),
 
+  rechazarSolicitud: async (id, causal, nota) =>
+    _fetch(`/api/solicitudes/${id}/rechazar`, {
+      method: 'POST',
+      body: JSON.stringify({ causal, nota }),
+    }, true),
+
   // ── Estadísticas ────────────────────────────────────────
   getEstadisticas: async () =>
     _fetch('/api/estadisticas', {}, true),

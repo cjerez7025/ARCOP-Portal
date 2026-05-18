@@ -370,6 +370,16 @@ const FormularioSolicitud = () => {
     }).catch(() => setLoadingDerechos(false));
   }, []);
 
+  useEffect(() => {
+    const siteKey = process.env.REACT_APP_RECAPTCHA_SITE_KEY;
+    if (!siteKey || document.getElementById('recaptcha-v3-script')) return;
+    const script = document.createElement('script');
+    script.id    = 'recaptcha-v3-script';
+    script.src   = `https://www.google.com/recaptcha/enterprise.js?render=${siteKey}`;
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
+
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
     defaultValues: { alcance_acceso: 'TODOS', formato_preferido: 'PDF', categorias: [], acepta_terminos: false },
   });
@@ -434,11 +444,23 @@ const FormularioSolicitud = () => {
       if (canalValidacion === 'email')    delete datosLimpios.email;
       if (canalValidacion === 'whatsapp') delete datosLimpios.telefono;
 
+      let recaptchaToken = null;
+      const siteKey = process.env.REACT_APP_RECAPTCHA_SITE_KEY;
+      if (siteKey && window.grecaptcha?.enterprise) {
+        try {
+          await new Promise(resolve => window.grecaptcha.enterprise.ready(resolve));
+          recaptchaToken = await window.grecaptcha.enterprise.execute(siteKey, { action: 'submit_solicitud' });
+        } catch (rcErr) {
+          console.warn('⚠️ reCAPTCHA token no disponible:', rcErr.message);
+        }
+      }
+
       const solicitudData = {
         ...datosLimpios,
         tipo_derecho:        tipoSeleccionado.id,
         canal_validacion:    canalValidacion,
         derivacion_asistida: derivadoAsistido,
+        ...(recaptchaToken && { recaptcha_token: recaptchaToken }),
       };
 
       const result = await crearSolicitud(solicitudData);

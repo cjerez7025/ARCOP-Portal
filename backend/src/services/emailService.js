@@ -254,6 +254,50 @@ function _tplNuevaSolicitudDPO(solicitud, config) {
   `);
 }
 
+function _tplRechazo(solicitud, causal, nota, config) {
+  const mensajesCausal = {
+    'Solicitud improcedente':    'Tu solicitud fue declarada improcedente. Según la normativa vigente (Ley 21.719), la solicitud no puede ser procesada en los términos planteados.',
+    'Identidad no verificable':  'No fue posible verificar tu identidad con los medios disponibles. Para proteger tus datos y los de terceros, no es posible procesar solicitudes sin confirmar la identidad del solicitante.',
+    'Solicitud duplicada':       'Tu solicitud es un duplicado de otra solicitud activa o ya procesada anteriormente para el mismo derecho ejercido.',
+    'Desistimiento del titular': 'Has desistido de tu solicitud a petición propia. Si deseas ejercer este derecho en el futuro, puedes presentar una nueva solicitud.',
+  };
+
+  const descripcionCausal = mensajesCausal[causal] || causal;
+
+  return _wrap(`
+    ${_header('Solicitud Rechazada', 'Portal ARCOP - Ley 21.719', '#DC2626')}
+    <tr><td style="padding:30px 40px;">
+      <p style="margin:0 0 14px;font-size:15px;color:#111827;font-family:Arial,sans-serif;">
+        Estimado/a <strong>${solicitud.nombre_completo}</strong>,
+      </p>
+      <p style="margin:0 0 18px;font-size:14px;color:#374151;font-family:Arial,sans-serif;line-height:1.6;">
+        Lamentamos informarte que tu solicitud ha sido rechazada por la siguiente razon:
+      </p>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+        <tr><td style="background:#FEF2F2;border-left:4px solid #DC2626;padding:14px 18px;border-radius:0 6px 6px 0;">
+          <p style="margin:0 0 4px;font-size:11px;font-weight:bold;color:#991B1B;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.05em;">Causal de rechazo</p>
+          <p style="margin:0 0 8px;font-size:14px;font-weight:bold;color:#7F1D1D;font-family:Arial,sans-serif;">${causal}</p>
+          <p style="margin:0;font-size:13px;color:#991B1B;font-family:Arial,sans-serif;line-height:1.55;">${descripcionCausal}</p>
+        </td></tr>
+      </table>
+      ${nota ? `
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+        <tr><td style="background:#F9FAFB;border:1px solid #E5E7EB;padding:14px 18px;border-radius:6px;">
+          <p style="margin:0 0 6px;font-size:11px;font-weight:bold;color:#374151;font-family:Arial,sans-serif;text-transform:uppercase;letter-spacing:0.05em;">Nota explicativa del DPO</p>
+          <p style="margin:0;font-size:13px;color:#374151;font-family:Arial,sans-serif;line-height:1.55;">${nota}</p>
+        </td></tr>
+      </table>` : ''}
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:18px 0;">
+        ${_fila('Numero solicitud', solicitud.numero_solicitud)}
+        ${_fila('Derecho',          solicitud.tipo_derecho || '—')}
+        ${_fila('Estado final',     'Rechazada')}
+      </table>
+      ${_alerta('Si consideras que esta decision es incorrecta, puedes contactar directamente al Delegado de Proteccion de Datos (DPO) respondiendo este correo.', 'warning')}
+    </td></tr>
+    ${_footer(config)}
+  `);
+}
+
 // ─────────────────────────────────────────────────────────
 // API PÚBLICA
 // ─────────────────────────────────────────────────────────
@@ -319,4 +363,14 @@ async function enviarDatosListos(solicitud, urlDescarga, formato, config) {
   });
 }
 
-module.exports = { enviarRecepcion, enviarCambioEstado, enviarDatosListos };
+async function enviarRechazo(solicitud, causal, nota, config) {
+  return resend.emails.send({
+    from:     `${FROM_NAME} <${FROM_EMAIL}>`,
+    to:       [solicitud.email],
+    subject:  `Portal ARCOP - Solicitud rechazada #${solicitud.numero_solicitud}`,
+    html:     _tplRechazo(solicitud, causal, nota, config),
+    reply_to: (config && config.dpo_email) || DPO_EMAIL || undefined,
+  });
+}
+
+module.exports = { enviarRecepcion, enviarCambioEstado, enviarDatosListos, enviarRechazo };

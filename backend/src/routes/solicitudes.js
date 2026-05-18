@@ -8,6 +8,7 @@
 
 const express       = require('express');
 const crypto        = require('crypto');
+const https         = require('https');
 const { db }        = require('../services/firebase');
 const emailService  = require('../services/emailService');
 const gchat         = require('../services/googleChatService');
@@ -18,6 +19,64 @@ const {
 } = require('firebase-admin/firestore');
 
 const router = express.Router();
+
+// ── reCAPTCHA v3 ──────────────────────────────────────────
+async function _verificarRecaptchaV3(token) {
+  const secret   = process.env.RECAPTCHA_SECRET_KEY;
+  const postData = `secret=${encodeURIComponent(secret)}&response=${encodeURIComponent(token)}`;
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'www.google.com',
+        path:     '/recaptcha/api/siteverify',
+        method:   'POST',
+        headers:  {
+          'Content-Type':   'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(postData),
+        },
+      },
+      (res) => {
+        let body = '';
+        res.on('data', chunk => (body += chunk));
+        res.on('end', () => { try { resolve(JSON.parse(body)); } catch (e) { reject(e); } });
+      }
+    );
+    req.on('error', reject);
+    req.write(postData);
+    req.end();
+  });
+}
+
+async function middlewareRecaptcha(req, res, next) {
+  const secret  = process.env.RECAPTCHA_SECRET_KEY;
+  const enabled = process.env.RECAPTCHA_ENABLED === 'true' || process.env.NODE_ENV === 'production';
+  if (!secret || !enabled) return next();
+
+  const { recaptcha_token } = req.body;
+  if (!recaptcha_token) {
+    return res.status(400).json({ error: 'Token de verificación requerido' });
+  }
+
+  try {
+    const result = await Promise.race([
+      _verificarRecaptchaV3(recaptcha_token),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+    ]);
+
+    console.log(`[recaptcha] success=${result.success} score=${result.score}`);
+    if (!result.success || result.score < 0.5) {
+      return res.status(400).json({ error: 'Verificación de seguridad no superada' });
+    }
+    next();
+  } catch (err) {
+    if (err.message === 'timeout') {
+      console.warn('[recaptcha] Timeout en verificación, permitiendo solicitud');
+    } else {
+      console.warn('[recaptcha] Error en verificación:', err.message);
+    }
+    next();
+  }
+}
 
 // ── Helper: obtener config del sistema ────────────────────
 async function _getConfig() {
@@ -78,7 +137,7 @@ function _calcularFechaLimite(diasHabiles = 15) {
 // ═════════════════════════════════════════════════════════
 // POST /api/solicitudes
 // ═════════════════════════════════════════════════════════
-router.post('/', async (req, res, next) => {
+router.post('/', middlewareRecaptcha, async (req, res, next) => {
   try {
     const data = req.body;
 
@@ -580,6 +639,87 @@ router.post('/:id/desistir', async (req, res, next) => {
     );
 
     res.json({ status: 'success', id, estado: 'DESISTIDA' });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ═════════════════════════════════════════════════════════
+// POST /api/solicitudes/:id/rechazar  (DPO)
+// ═════════════════════════════════════════════════════════
+router.post('/:id/rechazar', requireDPO, async (req, res, next) => {
+  try {
+    const { id }           = req.params;
+    const { causal, nota } = req.body;
+
+    const CAUSALES_VALIDAS = [
+      'Solicitud improcedente',
+      'Identidad no verificable',
+      'Solicitud duplicada',
+      'Desistimiento del titular',
+    ];
+
+    if (!causal || !CAUSALES_VALIDAS.includes(causal)) {
+      return res.status(400).json({ error: `Causal inválida. Opciones: ${CAUSALES_VALIDAS.join(', ')}` });
+    }
+    if (!nota || nota.trim().length < 20) {
+      return res.status(400).json({ error: 'La nota explicativa es obligatoria y debe tener al menos 20 caracteres' });
+    }
+
+    const ref  = db.collection('solicitudes').doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const prev = snap.data();
+
+    const ESTADOS_FINALES = ['CERRADA', 'DESCARGA_CONFIRMADA', 'WITHDRAWN', 'DESISTIDA', 'REJECTED'];
+    if (ESTADOS_FINALES.includes(prev.estado)) {
+      return res.status(409).json({ error: `No es posible rechazar una solicitud en estado ${prev.estado}` });
+    }
+
+    const nuevoEstado = causal === 'Desistimiento del titular' ? 'WITHDRAWN' : 'REJECTED';
+
+    await ref.update({
+      estado:         nuevoEstado,
+      causal_rechazo: causal,
+      nota_rechazo:   nota.trim(),
+      fecha_rechazo:  FieldValue.serverTimestamp(),
+      rechazado_por:  req.user.email || req.user.uid,
+      updatedAt:      FieldValue.serverTimestamp(),
+    });
+
+    await ref.collection('historial').add({
+      estado_anterior: prev.estado,
+      estado_nuevo:    nuevoEstado,
+      comentario:      `Rechazada por DPO. Causal: ${causal}. Nota: ${nota.trim()}`,
+      actor:           req.user.email || req.user.uid,
+      causal,
+      nota:            nota.trim(),
+      timestamp:       FieldValue.serverTimestamp(),
+    });
+
+    const config = await _getConfig();
+
+    if (prev.email) {
+      emailService.enviarRechazo({ ...prev, id }, causal, nota.trim(), config)
+        .catch(e => console.error('[solicitudes] Fallo email rechazo:', e.message));
+    }
+
+    _ccDpo(
+      prev,
+      `[DPO] ${prev.numero_solicitud} RECHAZADA — ${causal}`,
+      `<p style="font-family:Arial,sans-serif;font-size:14px;color:#111827;">
+        La solicitud <strong>${prev.numero_solicitud}</strong> de <strong>${prev.nombre_completo}</strong>
+        fue <strong>rechazada</strong> por el DPO.<br><br>
+        <strong>Causal:</strong> ${causal}<br>
+        <strong>Nota:</strong> ${nota.trim()}<br>
+        <strong>Estado final:</strong> ${nuevoEstado}<br>
+        <strong>Actor:</strong> ${req.user.email || req.user.uid}
+      </p>`,
+      config
+    );
+
+    res.json({ status: 'success', id, estado: nuevoEstado, causal });
   } catch (e) {
     next(e);
   }

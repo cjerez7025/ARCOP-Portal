@@ -6,23 +6,99 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, Filter, Loader, X, CheckCircle, Clock, User, AlertTriangle, Link, AlignLeft, ToggleLeft, ChevronDown } from 'lucide-react';
-import { obtenerTodasSolicitudes, actualizarSolicitud, marcarComoResuelta } from '../services/dpoService';
+import { Search, Filter, Loader, X, CheckCircle, Clock, User, AlertTriangle, Link, AlignLeft, ToggleLeft, ChevronDown, Upload, ListChecks, XCircle } from 'lucide-react';
+import { obtenerTodasSolicitudes, actualizarSolicitud, marcarComoResuelta, rechazarSolicitud } from '../services/dpoService';
 import SolicitudesTable from '../components/SolicitudesTable';
 import { ESTADOS, ESTADO_LABELS } from '../utils/constants';
 import { toast } from 'react-toastify';
 import { obtenerFlujoConfig, buildConfigDefault } from '../services/flujoService';
 
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+
 // ── Render de un campo de transición ─────────────────────
-const CampoTransicion = ({ campo, value, onChange }) => {
+const CampoTransicion = ({ campo, value, onChange, solicitudId }) => {
   const base = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white';
+
+  const [modoUrl,      setModoUrl]      = useState('url');   // 'url' | 'archivo'
+  const [subiendo,     setSubiendo]     = useState(false);
+  const [archivoNombre, setArchivoNombre] = useState('');
 
   switch (campo.tipo) {
     case 'url':
       return (
-        <input type="url" value={value || ''} onChange={e => onChange(campo.id, e.target.value)}
-          placeholder={campo.placeholder || 'https://...'}
-          className={base} />
+        <div className="space-y-2">
+          <div className="flex gap-1 p-0.5 bg-gray-100 rounded-lg w-fit">
+            <button type="button"
+              onClick={() => setModoUrl('url')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                modoUrl === 'url' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              Ingresar URL
+            </button>
+            <button type="button"
+              onClick={() => setModoUrl('archivo')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                modoUrl === 'archivo' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+              }`}>
+              Subir desde disco
+            </button>
+          </div>
+
+          {modoUrl === 'url' ? (
+            <input type="url" value={value || ''} onChange={e => onChange(campo.id, e.target.value)}
+              placeholder={campo.placeholder || 'https://...'}
+              className={base} />
+          ) : (
+            <div>
+              {archivoNombre ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-green-300 rounded-lg bg-green-50">
+                  <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                  <span className="text-sm text-green-800 flex-1 truncate">{archivoNombre}</span>
+                  <button type="button"
+                    onClick={() => { setArchivoNombre(''); onChange(campo.id, ''); }}
+                    className="text-xs text-gray-400 hover:text-gray-600 flex-shrink-0">
+                    Cambiar
+                  </button>
+                </div>
+              ) : (
+                <label className={`block cursor-pointer ${subiendo ? 'pointer-events-none opacity-60' : ''}`}>
+                  <div className="flex items-center gap-2 px-3 py-2.5 text-sm border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 bg-gray-50 hover:bg-blue-50 transition-all">
+                    {subiendo
+                      ? <><Loader className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" /><span className="text-gray-500">Subiendo...</span></>
+                      : <><Upload className="w-4 h-4 text-gray-400 flex-shrink-0" /><span className="text-gray-400">Haz clic para seleccionar un archivo</span></>
+                    }
+                  </div>
+                  <input type="file" className="hidden"
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    disabled={subiendo}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setSubiendo(true);
+                      try {
+                        const fd = new FormData();
+                        fd.append('archivos', file);
+                        fd.append('solicitudId', solicitudId || 'sin-id');
+                        const res  = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: fd });
+                        const json = await res.json();
+                        if (!res.ok) throw new Error(json.error || 'Error al subir');
+                        const subido = json.data[0];
+                        setArchivoNombre(subido.nombre);
+                        onChange(campo.id, subido.url);
+                      } catch (err) {
+                        alert(err.message || 'Error al subir el archivo');
+                      } finally {
+                        setSubiendo(false);
+                        e.target.value = '';
+                      }
+                    }}
+                  />
+                </label>
+              )}
+              <p className="text-xs text-gray-400 mt-1">PDF, JPG, PNG, DOC, DOCX — máx. 5 MB</p>
+            </div>
+          )}
+        </div>
       );
     case 'textarea':
       return (
@@ -39,6 +115,32 @@ const CampoTransicion = ({ campo, value, onChange }) => {
           ))}
         </select>
       );
+    case 'multiselect': {
+      const seleccionados = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const toggle = (op) => {
+        const nuevo = seleccionados.includes(op)
+          ? seleccionados.filter(s => s !== op)
+          : [...seleccionados, op];
+        onChange(campo.id, nuevo.join(', '));
+      };
+      return (
+        <div className="flex flex-wrap gap-2">
+          {(campo.opciones || []).map(op => {
+            const activo = seleccionados.includes(op);
+            return (
+              <button key={op} type="button" onClick={() => toggle(op)}
+                className={`px-3 py-1.5 text-sm rounded-lg border-2 font-medium transition-all ${
+                  activo
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-700'
+                }`}>
+                {op}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
     case 'checkbox':
       return (
         <label className="flex items-start gap-2 cursor-pointer">
@@ -58,10 +160,11 @@ const CampoTransicion = ({ campo, value, onChange }) => {
 
 // ── Icono por tipo de campo ───────────────────────────────
 const iconoCampo = (tipo) => {
-  if (tipo === 'url')      return <Link className="w-3.5 h-3.5" />;
-  if (tipo === 'textarea') return <AlignLeft className="w-3.5 h-3.5" />;
-  if (tipo === 'checkbox') return <ToggleLeft className="w-3.5 h-3.5" />;
-  if (tipo === 'select')   return <ChevronDown className="w-3.5 h-3.5" />;
+  if (tipo === 'url')         return <Link className="w-3.5 h-3.5" />;
+  if (tipo === 'textarea')    return <AlignLeft className="w-3.5 h-3.5" />;
+  if (tipo === 'checkbox')    return <ToggleLeft className="w-3.5 h-3.5" />;
+  if (tipo === 'select')      return <ChevronDown className="w-3.5 h-3.5" />;
+  if (tipo === 'multiselect') return <ListChecks className="w-3.5 h-3.5" />;
   return null;
 };
 
@@ -88,6 +191,10 @@ const PanelDPO = () => {
   const [modalResuelta,       setModalResuelta]       = useState(null);
   const [urlDescarga,         setUrlDescarga]         = useState('');
   const [formatoEntregado,    setFormatoEntregado]    = useState('PDF');
+
+  const [modalRechazar,       setModalRechazar]       = useState(null);
+  const [causalRechazo,       setCausalRechazo]       = useState('');
+  const [notaRechazo,         setNotaRechazo]         = useState('');
 
   // ── Inicialización ─────────────────────────────────────
   useEffect(() => {
@@ -363,6 +470,37 @@ const PanelDPO = () => {
     }
   };
 
+  const ESTADOS_FINALES_RECHAZO = new Set(['CERRADA', 'DESCARGA_CONFIRMADA', 'WITHDRAWN', 'DESISTIDA', 'REJECTED']);
+
+  const handleAbrirRechazar = (s) => {
+    setModalRechazar(s);
+    setCausalRechazo('');
+    setNotaRechazo('');
+  };
+
+  const handleConfirmarRechazo = async () => {
+    if (!causalRechazo) { toast.error('Selecciona una causal'); return; }
+    if (notaRechazo.trim().length < 20) { toast.error('La nota debe tener al menos 20 caracteres'); return; }
+    try {
+      setProcesando(true);
+      const id = getSolicitudId(modalRechazar);
+      if (!id) { toast.error('No se pudo obtener el ID'); return; }
+      const result = await rechazarSolicitud(id, causalRechazo, notaRechazo.trim());
+      if (result.status === 'success') {
+        toast.success('Solicitud rechazada y email enviado al titular');
+        setModalRechazar(null);
+        setModalDetalle(null);
+        await cargarDatos();
+      } else {
+        toast.error(result.message || 'Error al rechazar');
+      }
+    } catch (e) {
+      toast.error('Error: ' + e.message);
+    } finally {
+      setProcesando(false);
+    }
+  };
+
   const handleAbrirMarcarResuelta = (s) => {
     setModalResuelta(s);
     setUrlDescarga('');
@@ -560,15 +698,26 @@ const PanelDPO = () => {
               </div>
             )}
 
-            <div className="flex gap-3 mt-6 justify-end">
-              <button onClick={() => { handleCerrarDetalle(); handleAbrirCambiarEstado(modalDetalle); }}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm">
-                Cambiar Estado
-              </button>
-              <button onClick={handleCerrarDetalle}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">
-                Cerrar
-              </button>
+            <div className="flex gap-3 mt-6 justify-between">
+              <div>
+                {!ESTADOS_FINALES_RECHAZO.has(getFieldValue(modalDetalle, 'estado')) && (
+                  <button onClick={() => { handleCerrarDetalle(); handleAbrirRechazar(modalDetalle); }}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium text-sm">
+                    <XCircle className="w-4 h-4" />
+                    Rechazar solicitud
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => { handleCerrarDetalle(); handleAbrirCambiarEstado(modalDetalle); }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm">
+                  Cambiar Estado
+                </button>
+                <button onClick={handleCerrarDetalle}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium text-sm">
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -744,6 +893,7 @@ const PanelDPO = () => {
                           campo={campo}
                           value={valoresCampos[campo.id]}
                           onChange={handleCampoTransicion}
+                          solicitudId={modalCambiarEstado?.id}
                         />
                       </div>
                     );
@@ -832,6 +982,87 @@ const PanelDPO = () => {
           </div>
         );
       })()}
+
+      {/* ══════════════════════════════════════════════════
+          MODAL RECHAZAR SOLICITUD
+      ══════════════════════════════════════════════════ */}
+      {modalRechazar && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Rechazar solicitud</h3>
+                <p className="text-sm text-gray-500">{getFieldValue(modalRechazar, 'numero_solicitud')} — {getFieldValue(modalRechazar, 'nombre_completo')}</p>
+              </div>
+            </div>
+
+            <div className="mb-4 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              Esta acción es irreversible. El estado quedará bloqueado y se enviará un email al titular.
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  Causal de rechazo <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={causalRechazo}
+                  onChange={e => setCausalRechazo(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-400 focus:outline-none bg-white">
+                  <option value="">— Selecciona una causal —</option>
+                  <option value="Solicitud improcedente">Solicitud improcedente</option>
+                  <option value="Identidad no verificable">Identidad no verificable</option>
+                  <option value="Solicitud duplicada">Solicitud duplicada</option>
+                  <option value="Desistimiento del titular">Desistimiento del titular</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                  Nota explicativa <span className="text-red-500">*</span>
+                  <span className="ml-1 font-normal text-gray-400">(mínimo 20 caracteres)</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={notaRechazo}
+                  onChange={e => setNotaRechazo(e.target.value)}
+                  placeholder="Explica el motivo del rechazo con detalle suficiente para el titular..."
+                  className={`w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:outline-none resize-none ${
+                    notaRechazo.length > 0 && notaRechazo.trim().length < 20
+                      ? 'border-red-400 focus:ring-red-300'
+                      : 'border-gray-300 focus:ring-red-400'
+                  }`}
+                />
+                <p className={`text-xs mt-1 ${
+                  notaRechazo.trim().length >= 20 ? 'text-green-600' : 'text-gray-400'
+                }`}>
+                  {notaRechazo.trim().length} / 20 caracteres mínimos
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => setModalRechazar(null)}
+                disabled={procesando}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm font-medium">
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarRechazo}
+                disabled={procesando || !causalRechazo || notaRechazo.trim().length < 20}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 text-sm font-medium">
+                <XCircle className="w-4 h-4" />
+                {procesando ? 'Rechazando...' : 'Confirmar rechazo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════
           MODAL MARCAR RESUELTA

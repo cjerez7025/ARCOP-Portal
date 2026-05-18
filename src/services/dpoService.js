@@ -74,6 +74,17 @@ export const actualizarSolicitud = async (id, updates) => {
   }
 };
 
+// ── Rechazar solicitud ────────────────────────────────────
+export const rechazarSolicitud = async (id, causal, nota) => {
+  try {
+    if (!id) return { status: 'error', message: 'ID de solicitud requerido' };
+    return await adapter.rechazarSolicitud(id, causal, nota);
+  } catch (error) {
+    console.error('❌ Error en rechazarSolicitud:', error);
+    return { status: 'error', message: error.message };
+  }
+};
+
 // ── Marcar como resuelta ──────────────────────────────────
 export const marcarComoResuelta = async (id, urlDescarga, formatoEntregado) => {
   try {
