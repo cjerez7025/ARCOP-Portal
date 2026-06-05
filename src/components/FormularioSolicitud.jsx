@@ -112,7 +112,13 @@ const DerechoCard = ({ derecho, onSeleccionar, index }) => {
       style={{ display: 'block', width: '100%', height: '100%', minHeight: 120, textAlign: 'left', padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', background: 'none', border: 'none' }}
     >
       {artNum && (
-        <span style={{ position: 'absolute', right: -8, bottom: -20, fontSize: 120, fontWeight: 700, color: color + '10', lineHeight: 1, pointerEvents: 'none', userSelect: 'none' }}>
+        <span style={{
+          position: 'absolute', right: -8, bottom: -20, fontSize: 120, fontWeight: 700, lineHeight: 1,
+          pointerEvents: 'none', userSelect: 'none',
+          background: 'linear-gradient(135deg, #0A2463 0%, #1D4ED8 50%, #0EA5E9 100%)',
+          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text', opacity: 0.12,
+        }}>
           {artNum}
         </span>
       )}
