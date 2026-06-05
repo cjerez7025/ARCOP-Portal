@@ -1,26 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ==================================================
-   PORTAL ARCOP - ESTILOS GLOBALES
-   Tema claro por defecto para DPO/Configuración.
-   Tema oscuro SOLO en .arcop-portal-publico
-   ================================================== */
+/* ======================================================
+   PORTAL ARCOP — SISTEMA CORPORATIVO ELEGANTE
+   Inspirado en Salesforce Lightning / SAP Fiori
+   ====================================================== */
 
-* {
-  box-sizing: border-box;
+*, *::before, *::after { box-sizing: border-box; }
+* { -webkit-font-smoothing: antialiased; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #F3F4F6;
+  color: #111827;
   margin: 0;
   padding: 0;
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #f9fafb; /* ← CLARO por defecto, igual que antes */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 700;
 }
 
 code {
@@ -28,14 +30,14 @@ code {
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 10px; }
-::-webkit-scrollbar-track { background: #f1f1f1; }
-::-webkit-scrollbar-thumb { background: #888; border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #F3F4F6; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
 
 /* Focus */
 a:focus, button:focus, input:focus, select:focus, textarea:focus {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid #2563EB;
   outline-offset: 2px;
 }
 
@@ -44,82 +46,296 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
 }
 
 .animate-spin    { animation: spin 1s linear infinite; }
-.fade-in         { animation: fadeIn 0.3s ease-in; }
-.animate-fade-up { animation: fadeUp 0.4s cubic-bezier(.22,.68,0,1.2) both; }
-.animate-fade-in { animation: fadeIn 0.3s ease both; }
+.animate-fade-up { animation: fadeUp 0.35s cubic-bezier(.22,.68,0,1.2) both; }
+.animate-fade-in { animation: fadeIn 0.25s ease both; }
 
-/* Stagger delays para cards */
+/* Stagger delays */
 .stagger-1 { animation-delay: 0.05s; }
 .stagger-2 { animation-delay: 0.10s; }
 .stagger-3 { animation-delay: 0.15s; }
 .stagger-4 { animation-delay: 0.20s; }
 .stagger-5 { animation-delay: 0.25s; }
 
-/* ══════════════════════════════════════════════════
-   TEMA OSCURO — SOLO dentro de .arcop-portal-publico
-   Aplicado en FormularioSolicitud mediante un wrapper
-   ══════════════════════════════════════════════════ */
-
-/* Variables dark (scoped) */
-.arcop-portal-publico {
-  --font-display: 'DM Serif Display', Georgia, serif;
-  --font-body:    'DM Sans', system-ui, sans-serif;
-  --bg-base:      #0E0E17;
-  --bg-surface:   #141420;
-  --bg-elevated:  #1A1A2E;
-  --bg-overlay:   #1E1E30;
-  --border-subtle: rgba(255,255,255,0.07);
-  --border-medium: rgba(255,255,255,0.12);
-  --text-primary:   #F0F0F5;
-  --text-secondary: #9090A8;
-  --text-muted:     #5A5A72;
-
-  background-color: var(--bg-base);
-  font-family: var(--font-body);
+/* ── Layouts base ── */
+.portal-layout {
+  background-color: #F3F4F6;
   min-height: 100vh;
 }
 
-/* Scrollbar dark dentro del portal público */
-.arcop-portal-publico ::-webkit-scrollbar-track { background: var(--bg-base); }
-.arcop-portal-publico ::-webkit-scrollbar-thumb { background: var(--bg-overlay); border-radius: 3px; }
+.dpo-layout {
+  background-color: #F3F4F6;
+  min-height: 100vh;
+}
 
-/* ── Input dark (solo dentro del portal público) ── */
+/* ── Card corporativa ── */
+.corp-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(10,36,99,0.08), 0 1px 2px rgba(10,36,99,0.05);
+}
+
+/* Card con hover */
+.corp-card-hover {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(10,36,99,0.08);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+.corp-card-hover:hover {
+  border-color: #2563EB;
+  box-shadow: 0 4px 12px rgba(29,78,216,0.12);
+  transform: translateY(-2px);
+}
+.corp-card-hover.selected {
+  border-color: #1D4ED8;
+  border-width: 2px;
+  box-shadow: 0 4px 12px rgba(29,78,216,0.20);
+  background: #EFF6FF;
+}
+
+/* ── Botones ── */
+.btn-primary {
+  background: #1D4ED8;
+  color: white;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 2px 4px rgba(29,78,216,0.25);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.btn-primary:hover:not(:disabled) {
+  background: #1E40AF;
+  box-shadow: 0 4px 8px rgba(29,78,216,0.30);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-secondary {
+  background: white;
+  color: #1D4ED8;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: 1.5px solid #1D4ED8;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.875rem;
+}
+.btn-secondary:hover { background: #EFF6FF; }
+
+.btn-ghost {
+  background: transparent;
+  color: #6B7280;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #E5E7EB;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.875rem;
+}
+.btn-ghost:hover { background: #F9FAFB; color: #374151; }
+
+.btn-danger {
+  background: #DC2626;
+  color: white;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  box-shadow: 0 2px 4px rgba(220,38,38,0.25);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.875rem;
+}
+.btn-danger:hover:not(:disabled) { background: #B91C1C; }
+.btn-danger:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── Input corporativo ── */
+.corp-input {
+  width: 100%;
+  background: white;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  color: #111827;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+}
+.corp-input:focus {
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+}
+.corp-input::placeholder { color: #9CA3AF; }
+.corp-input.error { border-color: #EF4444; }
+.corp-input.error:focus { box-shadow: 0 0 0 3px rgba(239,68,68,0.12); }
+
+/* ── Badges de estado ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.badge-pending { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+.badge-active  { background: #DBEAFE; color: #1E40AF; border-color: #BFDBFE; }
+.badge-process { background: #EDE9FE; color: #5B21B6; border-color: #DDD6FE; }
+.badge-done    { background: #D1FAE5; color: #065F46; border-color: #A7F3D0; }
+.badge-closed  { background: #F3F4F6; color: #374151; border-color: #E5E7EB; }
+.badge-error   { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
+
+/* ── Navbar corporativa ── */
+.corp-navbar {
+  background: #0A2463;
+  box-shadow: 0 4px 16px rgba(10,36,99,0.20);
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 50;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+}
+
+/* ── Tabla corporativa ── */
+.corp-table { width: 100%; border-collapse: collapse; }
+.corp-table thead tr {
+  background: #F9FAFB;
+  border-bottom: 2px solid #E5E7EB;
+}
+.corp-table thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.corp-table tbody tr {
+  border-bottom: 1px solid #F3F4F6;
+  transition: background 0.1s;
+}
+.corp-table tbody tr:hover { background: #F0F7FF; }
+.corp-table tbody td {
+  padding: 14px 16px;
+  font-size: 0.875rem;
+  color: #374151;
+  vertical-align: middle;
+}
+
+/* ── Compatibilidad backward — evita errores en componentes no rediseñados ── */
+.page-wrapper {
+  background-color: #F3F4F6;
+  min-height: 100vh;
+}
+.glass-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(10,36,99,0.08);
+}
+.glass-card-dark {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+}
+
+/* Portal público — mantiene compatibilidad con FormularioSolicitud */
+.arcop-portal-publico {
+  background-color: #F3F4F6;
+  min-height: 100vh;
+}
+.arcop-portal-publico .glass-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(10,36,99,0.08);
+}
 .arcop-portal-publico .arcop-input-dark {
   width: 100%;
   padding: 10px 14px;
-  background: rgba(28, 28, 40, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  color: #F0F0F5;
+  background: #ffffff;
+  border: 1.5px solid #E5E7EB;
+  border-radius: 8px;
+  color: #111827;
   font-size: 14px;
-  font-family: var(--font-body);
+  font-family: 'Inter', sans-serif;
   outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
-.arcop-portal-publico .arcop-input-dark::placeholder {
-  color: #4A4A62;
-}
+.arcop-portal-publico .arcop-input-dark::placeholder { color: #9CA3AF; }
 .arcop-portal-publico .arcop-input-dark:focus {
-  border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
 }
-
-/* Select dark — flecha personalizada */
 .arcop-portal-publico select.arcop-input-dark {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A5A72' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 14px center;
-  background-color: rgba(28, 28, 40, 0.8);
+  background-color: #ffffff;
   padding-right: 40px;
 }
+
+/* Clases de diseño previo para retrocompatibilidad */
+.portal-bg { background-color: #F3F4F6; min-height: 100vh; }
+.surface-card { background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; box-shadow: 0 1px 3px rgba(10,36,99,0.08); }
+.btn-brand { background: #1D4ED8; color: white; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; padding: 10px 20px; border-radius: 8px; font-size: 0.875rem; transition: background 0.15s; }
+.btn-brand:hover:not(:disabled) { background: #1E40AF; }
+.btn-brand:disabled { opacity: 0.55; cursor: not-allowed; }
+.input-light { width: 100%; padding: 10px 14px; background: white; border: 1.5px solid #E5E7EB; border-radius: 8px; color: #111827; font-size: 14px; font-family: 'Inter', sans-serif; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+.input-light::placeholder { color: #9CA3AF; }
+.input-light:focus { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+.input-dark { width: 100%; padding: 10px 14px; background: white; border: 1.5px solid #E5E7EB; border-radius: 8px; color: #111827; font-size: 14px; outline: none; transition: border-color 0.15s; }
+.input-dark:focus { border-color: #2563EB; }
+.orb { display: none; }
+.orb-brand, .orb-cyan, .orb-violet { display: none; }

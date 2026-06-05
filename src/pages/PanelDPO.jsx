@@ -527,66 +527,91 @@ const PanelDPO = () => {
     }
   };
 
-  // ── Loading ────────────────────────────────────────────
+  // ── Loading — skeleton ────────────────────────────────
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3 text-slate-400">
-        <Loader className="w-8 h-8 animate-spin" />
-        <span className="text-sm font-medium">Cargando solicitudes...</span>
+    <div className="dpo-layout" style={{ padding: '32px 24px' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
+          <div>
+            <div style={{ height: 10, width: 60, background: '#E5E7EB', borderRadius: 4, marginBottom: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+            <div style={{ height: 28, width: 160, background: '#E5E7EB', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
+          </div>
+        </div>
+        <div className="corp-card" style={{ padding: 16, marginBottom: 24 }}>
+          <div style={{ height: 36, background: '#F3F4F6', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+        </div>
+        <div className="corp-card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #E5E7EB', display: 'flex', gap: 24 }}>
+            {['60px', '120px', '80px', '140px', '80px', '80px', '80px'].map((w, i) => (
+              <div key={i} style={{ height: 12, width: w, background: '#F3F4F6', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+            ))}
+          </div>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '16px 20px', borderBottom: '1px solid #F9FAFB' }}>
+              <div style={{ height: 16, width: 24, background: '#F3F4F6', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 16, width: 120, background: '#F3F4F6', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 16, width: 80, background: '#F3F4F6', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 22, width: 80, background: '#EFF6FF', borderRadius: 20, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 16, width: 100, background: '#F3F4F6', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 32, width: 60, background: '#F3F4F6', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 
   // ── Render ─────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="dpo-layout" style={{ padding: '32px 24px' }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} className="sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold tracking-widest uppercase text-indigo-500 mb-1">Zona DPO</p>
-            <h1 className="text-2xl font-bold text-slate-900">Solicitudes</h1>
-            <p className="text-sm text-slate-400 mt-0.5">
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#1D4ED8', marginBottom: 4 }}>Zona DPO</p>
+            <h1 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 24, fontWeight: 800, color: '#111827', margin: 0 }}>Solicitudes</h1>
+            <p style={{ fontSize: 13, color: '#6B7280', marginTop: 4 }}>
               {solicitudesFiltradas.length} de {solicitudes.length} solicitudes
             </p>
           </div>
-          <button onClick={cargarDatos}
-            className="flex items-center gap-1.5 text-sm text-slate-500 border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
+          <button onClick={cargarDatos} className="btn-ghost" style={{ alignSelf: 'flex-start', padding: '6px 14px', minHeight: 'auto', fontSize: 13 }}>
             Actualizar
           </button>
         </div>
 
         {/* Filtros */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Buscar por nombre, RUT, email o número..."
-              value={filtros.busqueda}
-              onChange={e => setFiltros(prev => ({ ...prev, busqueda: e.target.value }))}
-              className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-300" />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select value={filtros.estado}
-              onChange={e => { setFiltros(prev => ({ ...prev, estado: e.target.value })); setFiltroEspecial(null); }}
-              className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white">
-              <option value="">Todos los estados</option>
-              {Object.entries(ESTADO_LABELS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
-            </select>
-            {(filtros.estado || filtros.busqueda || filtroEspecial) && (
-              <button onClick={() => { setFiltros({ estado: '', busqueda: '' }); setFiltroEspecial(null); }}
-                className="flex items-center gap-1 text-xs text-rose-500 border border-rose-200 px-2.5 py-1.5 rounded-lg hover:bg-rose-50">
-                <X className="w-3 h-3" /> Limpiar
-              </button>
-            )}
+        <div className="corp-card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+              <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#9CA3AF' }} />
+              <input type="text" placeholder="Buscar por nombre, RUT, email o número..."
+                value={filtros.busqueda}
+                onChange={e => setFiltros(prev => ({ ...prev, busqueda: e.target.value }))}
+                className="corp-input" style={{ paddingLeft: 40 }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Filter style={{ width: 16, height: 16, color: '#9CA3AF', flexShrink: 0 }} />
+              <select value={filtros.estado}
+                onChange={e => { setFiltros(prev => ({ ...prev, estado: e.target.value })); setFiltroEspecial(null); }}
+                className="corp-input" style={{ width: 'auto' }}>
+                <option value="">Todos los estados</option>
+                {Object.entries(ESTADO_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+              {(filtros.estado || filtros.busqueda || filtroEspecial) && (
+                <button onClick={() => { setFiltros({ estado: '', busqueda: '' }); setFiltroEspecial(null); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#DC2626', border: '1px solid rgba(220,38,38,0.3)', padding: '6px 10px', borderRadius: 6, background: 'none', cursor: 'pointer' }}>
+                  <X style={{ width: 12, height: 12 }} /> Limpiar
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Tabla */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="corp-card" style={{ overflow: 'hidden' }}>
           <SolicitudesTable
             solicitudes={solicitudesFiltradas}
             onVerDetalle={handleVerDetalle}
@@ -601,7 +626,7 @@ const PanelDPO = () => {
           MODAL DETALLE
       ══════════════════════════════════════════════════ */}
       {modalDetalle && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,36,99,0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
           <div className="bg-white rounded-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-start mb-6">
               <h3 className="text-xl font-bold text-gray-900">Detalle de Solicitud</h3>
@@ -646,9 +671,9 @@ const PanelDPO = () => {
             )}
 
             {getFieldValue(modalDetalle, 'asignado_a') && (
-              <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center gap-2">
-                <User className="w-4 h-4 text-indigo-600" />
-                <span className="text-sm font-medium text-indigo-700">
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+                <User className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">
                   Asignado a: {getFieldValue(modalDetalle, 'asignado_a')}
                 </span>
               </div>
@@ -689,7 +714,7 @@ const PanelDPO = () => {
                         </div>
                       </div>
                       <a href={arch.url} target="_blank" rel="noopener noreferrer" download={arch.nombre}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 flex-shrink-0">
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 flex-shrink-0">
                         ⬇ Descargar
                       </a>
                     </div>
@@ -710,7 +735,7 @@ const PanelDPO = () => {
               </div>
               <div className="flex gap-3">
                 <button onClick={() => { handleCerrarDetalle(); handleAbrirCambiarEstado(modalDetalle); }}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium text-sm">
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm">
                   Cambiar Estado
                 </button>
                 <button onClick={handleCerrarDetalle}
@@ -760,7 +785,7 @@ const PanelDPO = () => {
         const hayCampos     = camposDestino.length > 0;
 
         return (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,36,99,0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
             <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
 
               <h3 className="text-xl font-bold text-gray-900 mb-1">Cambiar Estado</h3>
@@ -902,11 +927,11 @@ const PanelDPO = () => {
               )}
 
               {nuevoEstado && nuevoEstado !== estadoActualId && (hayActores || (defDestinoRender?.sla_dias > 0)) && (
-                <div className="border border-indigo-200 rounded-xl p-4 bg-indigo-50 mb-4">
+                <div className="border border-blue-200 rounded-xl p-4 bg-blue-50 mb-4">
                   <div className="flex items-center gap-2 mb-3">
-                    <User className="w-4 h-4 text-indigo-600" />
-                    <h4 className="text-sm font-semibold text-indigo-800">Responsable de la actividad</h4>
-                    {!hayActores && <span className="text-xs text-indigo-400">(opcional)</span>}
+                    <User className="w-4 h-4 text-blue-600" />
+                    <h4 className="text-sm font-semibold text-blue-800">Responsable de la actividad</h4>
+                    {!hayActores && <span className="text-xs text-blue-400">(opcional)</span>}
                   </div>
 
                   {hayActores ? (
@@ -915,10 +940,10 @@ const PanelDPO = () => {
                         <label key={i}
                           className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
                             actorSeleccionado?.email === actor.email
-                              ? 'border-indigo-500 bg-white'
+                              ? 'border-blue-500 bg-white'
                               : 'border-transparent bg-white/60 hover:bg-white'
                           }`}>
-                          <input type="radio" name="actor" className="w-4 h-4 accent-indigo-600"
+                          <input type="radio" name="actor" className="w-4 h-4 accent-blue-600"
                             checked={actorSeleccionado?.email === actor.email}
                             onChange={() => { setActorSeleccionado(actor); setActorLibre(''); }} />
                           <div className="flex-1">
@@ -926,30 +951,30 @@ const PanelDPO = () => {
                             <p className="text-xs text-gray-500">{actor.email}</p>
                           </div>
                           {actor.rol && (
-                            <span className="text-xs text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded-full">
+                            <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
                               {actor.rol}
                             </span>
                           )}
                         </label>
                       ))}
                       <label className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        !actorSeleccionado && !!actorLibre ? 'border-indigo-500 bg-white' : 'border-transparent bg-white/60 hover:bg-white'
+                        !actorSeleccionado && !!actorLibre ? 'border-blue-500 bg-white' : 'border-transparent bg-white/60 hover:bg-white'
                       }`}>
-                        <input type="radio" name="actor" className="w-4 h-4 accent-indigo-600"
+                        <input type="radio" name="actor" className="w-4 h-4 accent-blue-600"
                           checked={!actorSeleccionado && !!actorLibre}
                           onChange={() => setActorSeleccionado(null)} />
                         <input type="text" placeholder="Otro responsable..."
                           value={actorLibre}
                           onClick={() => setActorSeleccionado(null)}
                           onChange={e => { setActorLibre(e.target.value); setActorSeleccionado(null); }}
-                          className="flex-1 text-sm border-b border-gray-300 focus:border-indigo-500 focus:outline-none bg-transparent py-0.5" />
+                          className="flex-1 text-sm border-b border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent py-0.5" />
                       </label>
                     </div>
                   ) : (
                     <input type="text" placeholder="Nombre del responsable (opcional)"
                       value={actorLibre}
                       onChange={e => setActorLibre(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-indigo-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-400 focus:outline-none" />
+                      className="w-full px-3 py-2 text-sm border border-blue-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-400 focus:outline-none" />
                   )}
                 </div>
               )}
@@ -987,7 +1012,7 @@ const PanelDPO = () => {
           MODAL RECHAZAR SOLICITUD
       ══════════════════════════════════════════════════ */}
       {modalRechazar && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,36,99,0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
           <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-5">
               <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
@@ -1068,7 +1093,7 @@ const PanelDPO = () => {
           MODAL MARCAR RESUELTA
       ══════════════════════════════════════════════════ */}
       {modalResuelta && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,36,99,0.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
           <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-2xl">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Marcar como Resuelta</h3>
             <div className="space-y-4 mb-6">

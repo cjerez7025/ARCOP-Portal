@@ -5,12 +5,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Send, CheckCircle, Loader, AlertCircle, ChevronLeft, ArrowRight, Lock, Eye, Edit2 } from 'lucide-react';
+import { Send, CheckCircle, Loader, AlertCircle, ChevronLeft, ArrowRight, Lock, Eye, Edit2, Shield } from 'lucide-react';
 import { toast } from 'react-toastify';
 import useFormularioConfig from '../hooks/useFormularioConfig';
 import CampoRenderer from './CampoRenderer';
 import OnboardingTour from './OnboardingTour';
 import PasoValidacionContacto from './PasoValidacionContacto';
+import AvisoPrivacidad from './AvisoPrivacidad';
 import adapter from '../adapters';
 import { crearSolicitud } from '../services/googleSheetsService';
 
@@ -103,56 +104,34 @@ const buildCfg = (derecho) => {
 
 // ── DerechoCard ───────────────────────────────────────────
 const DerechoCard = ({ derecho, onSeleccionar, index }) => {
-  const [hovered, setHovered] = useState(false);
-  const { color, colorDim, glow, gradient, artNum, Icon } = buildCfg(derecho);
-
+  const { color, artNum, Icon } = buildCfg(derecho);
   return (
     <button
       onClick={() => onSeleccionar(derecho)}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className={`animate-fade-up stagger-${(index % 4) + 1}`}
-      style={{
-        display: 'block', width: '100%', height: '100%', minHeight: '120px', textAlign: 'left',
-        background:   hovered ? gradient : 'rgba(22,22,31,0.8)',
-        border:       `1px solid ${hovered ? color + '40' : 'rgba(255,255,255,0.08)'}`,
-        borderRadius: '16px', padding: '24px', cursor: 'pointer',
-        transition:   'all 0.2s cubic-bezier(.22,.68,0,1.1)',
-        transform:    hovered ? 'translateY(-2px)' : 'translateY(0)',
-        boxShadow:    hovered ? `0 8px 32px ${glow}, 0 0 0 1px ${color}20` : '0 1px 3px rgba(0,0,0,0.4)',
-        position: 'relative', overflow: 'hidden',
-      }}
+      className={`corp-card-hover animate-fade-up stagger-${(index % 4) + 1}`}
+      style={{ display: 'block', width: '100%', height: '100%', minHeight: 120, textAlign: 'left', padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', background: 'none', border: 'none' }}
     >
       {artNum && (
-        <span style={{ position: 'absolute', right: '-8px', bottom: '-20px', fontSize: '120px', fontFamily: 'var(--font-display)', fontWeight: 400, color: hovered ? color + '14' : 'rgba(255,255,255,0.04)', lineHeight: 1, pointerEvents: 'none', userSelect: 'none', transition: 'color 0.3s' }}>
+        <span style={{ position: 'absolute', right: -8, bottom: -20, fontSize: 120, fontWeight: 700, color: color + '10', lineHeight: 1, pointerEvents: 'none', userSelect: 'none' }}>
           {artNum}
         </span>
       )}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px', position: 'relative' }}>
-        <div style={{ flexShrink: 0, width: '44px', height: '44px', borderRadius: '12px', background: hovered ? color + '22' : colorDim, border: `1px solid ${hovered ? color + '50' : color + '25'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}>
-          {Icon
-            ? <Icon size={20} color={hovered ? color : color + 'BB'} />
-            : <span style={{ fontSize: '18px', lineHeight: 1 }}>{derecho.icono || '📋'}</span>
-          }
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, position: 'relative' }}>
+        <div style={{ flexShrink: 0, width: 44, height: 44, borderRadius: 12, background: color + '15', border: `1px solid ${color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {Icon ? <Icon size={20} color={color} /> : <span style={{ fontSize: 18 }}>{derecho.icono || '📋'}</span>}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: hovered ? '#F0F0F5' : '#C8C8D8', transition: 'color 0.2s' }}>
-              Derecho de {derecho.nombre}
-            </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#111827' }}>Derecho de {derecho.nombre}</h3>
             {derecho.articulo && (
-              <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: hovered ? color : color + '80', whiteSpace: 'nowrap', marginLeft: '8px' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color, whiteSpace: 'nowrap', marginLeft: 8 }}>
                 {derecho.articulo}
               </span>
             )}
           </div>
-          <p style={{ margin: 0, fontSize: '13px', color: hovered ? '#9090A8' : '#5A5A72', lineHeight: 1.5 }}>
-            {derecho.descripcion}
-          </p>
+          <p style={{ margin: 0, fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>{derecho.descripcion}</p>
         </div>
-        <div style={{ flexShrink: 0, opacity: hovered ? 1 : 0, transform: hovered ? 'translateX(0)' : 'translateX(-4px)', transition: 'all 0.2s', color }}>
-          <ArrowRight size={16} />
-        </div>
+        <ArrowRight size={16} style={{ flexShrink: 0, color: '#9CA3AF' }} />
       </div>
     </button>
   );
@@ -245,15 +224,15 @@ const FilePreviewItem = ({ file }) => {
     }
   }, [file, esImagen]);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', width: '100px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 100 }}>
       {esImagen && url
-        ? <img src={url} alt={file.name} style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} />
-        : <div style={{ width: '100px', height: '100px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '28px' }}>📄</span>
-            <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{file.name.split('.').pop()}</span>
+        ? <img src={url} alt={file.name} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid #E5E7EB' }} />
+        : <div style={{ width: 100, height: 100, borderRadius: 8, border: '1px solid #E5E7EB', background: '#F9FAFB', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{ fontSize: 28 }}>📄</span>
+            <span style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase' }}>{file.name.split('.').pop()}</span>
           </div>
       }
-      <span style={{ fontSize: '10px', color: 'var(--text-muted)', textAlign: 'center', wordBreak: 'break-all', maxWidth: '100px', lineHeight: 1.3 }}>{file.name}</span>
+      <span style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center', wordBreak: 'break-all', maxWidth: 100, lineHeight: 1.3 }}>{file.name}</span>
     </div>
   );
 };
@@ -275,33 +254,31 @@ const PasoPreview = ({ data, identidad, especificos, tipoSeleccionado, onConfirm
   const filasArchivos = todasFilas.filter(f => f.esArchivo && f.archivos.length > 0);
 
   return (
-    <div className="animate-fade-up" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="animate-fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header preview */}
-      <div style={{ background: color + '10', border: `1px solid ${color}30`, borderRadius: '16px', padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: color + '20', border: `1px solid ${color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div style={{ background: color + '10', border: `1px solid ${color}30`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: color + '15', border: `1px solid ${color}30`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Eye size={18} color={color} />
         </div>
         <div>
-          <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Revisa tu solicitud</p>
-          <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Confirma que los datos sean correctos antes de enviar.
-          </p>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Revisa tu solicitud</p>
+          <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginTop: 2 }}>Confirma que los datos sean correctos antes de enviar.</p>
         </div>
       </div>
 
       {/* Tabla de datos */}
-      <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <div className="corp-card" style={{ overflow: 'hidden' }}>
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 8 }}>
           {Icon && <Icon size={14} color={color} />}
-          <span style={{ fontSize: '12px', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Derecho de {tipoSeleccionado.nombre}
           </span>
         </div>
-        <div style={{ padding: '8px 0' }}>
+        <div>
           {filasTexto.map(({ label, valor }, i) => (
-            <div key={i} style={{ display: 'flex', gap: '16px', padding: '10px 20px', borderBottom: i < filasTexto.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none' }}>
-              <span style={{ flexShrink: 0, width: '160px', fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
-              <span style={{ flex: 1, fontSize: '13px', color: '#E0E0F0', wordBreak: 'break-word' }}>{valor}</span>
+            <div key={i} style={{ display: 'flex', gap: 16, padding: '10px 20px', borderBottom: i < filasTexto.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
+              <span style={{ flexShrink: 0, width: 160, fontSize: 12, color: '#9CA3AF', fontWeight: 500 }}>{label}</span>
+              <span style={{ flex: 1, fontSize: 13, color: '#374151', wordBreak: 'break-word' }}>{valor}</span>
             </div>
           ))}
         </div>
@@ -309,37 +286,30 @@ const PasoPreview = ({ data, identidad, especificos, tipoSeleccionado, onConfirm
 
       {/* Preview archivos adjuntos */}
       {filasArchivos.map(({ label, archivos }, i) => (
-        <div key={i} style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', overflow: 'hidden' }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+        <div key={i} className="corp-card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #E5E7EB' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
           </div>
-          <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             {archivos.map((file, j) => <FilePreviewItem key={j} file={file} />)}
           </div>
         </div>
       ))}
 
       {/* Aviso legal */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-        <Lock size={13} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: '1px' }} />
-        <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', background: '#F9FAFB', borderRadius: 10, border: '1px solid #E5E7EB' }}>
+        <Lock size={13} color="#9CA3AF" style={{ flexShrink: 0, marginTop: 1 }} />
+        <p style={{ margin: 0, fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
           Al confirmar, declaras que los datos son verídicos y autorizas su uso para el procesamiento conforme a la Ley 21.719.
         </p>
       </div>
 
       {/* Botones */}
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <button
-          onClick={onEditar}
-          style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '13px 20px', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '12px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s' }}
-        >
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button onClick={onEditar} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
           <Edit2 size={15} /> Editar datos
         </button>
-        <button
-          onClick={onConfirmar}
-          disabled={loading}
-          style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '13px 24px', background: loading ? color + '80' : color, color: '#fff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', transition: 'all 0.2s' }}
-        >
+        <button onClick={onConfirmar} disabled={loading} className="btn-primary" style={{ flex: 2, justifyContent: 'center' }}>
           {loading ? <><Loader size={16} style={{ animation: 'spin 1s linear infinite' }} /> Enviando...</> : <><Send size={16} /> Confirmar y enviar</>}
         </button>
       </div>
@@ -362,6 +332,8 @@ const FormularioSolicitud = () => {
   const [canalValidacion,  setCanalValidacion]  = useState(null);
   const [derivadoAsistido, setDerivadoAsistido] = useState(false);
   const [contactoAnon,     setContactoAnon]     = useState(null);
+  const [verAviso,         setVerAviso]         = useState(false);
+  const [portalColor,      setPortalColor]      = useState('#1d4ed8');
 
   useEffect(() => {
     adapter.getDerechos().then(result => {
@@ -375,9 +347,19 @@ const FormularioSolicitud = () => {
     if (!siteKey || document.getElementById('recaptcha-v3-script')) return;
     const script = document.createElement('script');
     script.id    = 'recaptcha-v3-script';
-    script.src   = `https://www.google.com/recaptcha/enterprise.js?render=${siteKey}`;
+    script.src   = `https://www.google.com/recaptcha/api.js?render=${siteKey}`;
     script.async = true;
     document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+    fetch(`${API_URL}/api/config`)
+      .then(r => r.ok ? r.json() : null)
+      .then(body => {
+        if (body?.data?.portal_color) setPortalColor(body.data.portal_color);
+      })
+      .catch(() => {});
   }, []);
 
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm({
@@ -446,10 +428,10 @@ const FormularioSolicitud = () => {
 
       let recaptchaToken = null;
       const siteKey = process.env.REACT_APP_RECAPTCHA_SITE_KEY;
-      if (siteKey && window.grecaptcha?.enterprise) {
+      if (siteKey && window.grecaptcha) {
         try {
-          await new Promise(resolve => window.grecaptcha.enterprise.ready(resolve));
-          recaptchaToken = await window.grecaptcha.enterprise.execute(siteKey, { action: 'submit_solicitud' });
+          await new Promise(resolve => window.grecaptcha.ready(resolve));
+          recaptchaToken = await window.grecaptcha.execute(siteKey, { action: 'submit_solicitud' });
         } catch (rcErr) {
           console.warn('⚠️ reCAPTCHA token no disponible:', rcErr.message);
         }
@@ -501,27 +483,27 @@ const FormularioSolicitud = () => {
 
   // ── Pantalla de éxito ──────────────────────────────────────
   if (success && solicitudCreada) {
-    const cfg = buildCfg(tipoSeleccionado);
+    const cfg = buildCfg(portalColor ? { ...tipoSeleccionado, color: portalColor } : tipoSeleccionado);
     return (
-      <div className="arcop-portal-publico" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem' }}>
-        <div className="animate-fade-up" style={{ width: '100%', maxWidth: '440px', background: 'var(--bg-surface)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.08)', padding: '40px', textAlign: 'center' }}>
-          <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            <CheckCircle size={26} color="#10B981" strokeWidth={2} />
+      <div className="portal-layout" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', minHeight: '60vh' }}>
+        <div className="corp-card animate-fade-up" style={{ width: '100%', maxWidth: 440, padding: 40, textAlign: 'center' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#D1FAE5', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <CheckCircle size={26} color="#059669" strokeWidth={2} />
           </div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '26px', color: '#F0F0F5', marginBottom: '8px' }}>Solicitud registrada</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '28px' }}>
+          <h2 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 26, fontWeight: 800, color: '#111827', marginBottom: 8, marginTop: 0 }}>Solicitud registrada</h2>
+          <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 28 }}>
             Tu solicitud de <strong style={{ color: cfg.color }}>{tipoSeleccionado.nombre}</strong> fue recibida correctamente.
           </p>
           {solicitudCreada.numero_solicitud && (
-            <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '16px', marginBottom: '24px' }}>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Número de caso</p>
-              <p style={{ fontSize: '22px', fontWeight: 700, color: '#F0F0F5', fontFamily: 'var(--font-display)' }}>{solicitudCreada.numero_solicitud}</p>
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+              <p style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 4px' }}>Número de caso</p>
+              <p style={{ fontSize: 22, fontWeight: 700, color: '#1D4ED8', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', margin: 0 }}>{solicitudCreada.numero_solicitud}</p>
             </div>
           )}
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '28px' }}>
-            Revisa tu email para confirmar tu identidad. El plazo legal de respuesta es de <strong style={{ color: '#F0F0F5' }}>15 días hábiles</strong>.
+          <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 28 }}>
+            Revisa tu email para confirmar tu identidad. El plazo legal de respuesta es de <strong style={{ color: '#1D4ED8' }}>15 días hábiles</strong>.
           </p>
-          <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); setPreview(false); setDatosPreview(null); }} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--text-secondary)', borderRadius: '10px', padding: '10px 20px', cursor: 'pointer', fontSize: '13px' }}>
+          <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); setPreview(false); setDatosPreview(null); }} className="btn-ghost">
             Nueva solicitud
           </button>
         </div>
@@ -532,31 +514,38 @@ const FormularioSolicitud = () => {
   // ── Selección de derecho ───────────────────────────────────
   if (!tipoSeleccionado) {
     return (
-      <div className="arcop-portal-publico" style={{ padding: '2rem 1rem 4rem' }}>
+      <div className="portal-layout">
         <OnboardingTour />
-        <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-          <div className="animate-fade-up" style={{ textAlign: 'center', marginBottom: '40px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.25)', borderRadius: '20px', padding: '4px 14px', marginBottom: '16px' }}>
-              <Lock size={11} color="#60A5FA" />
-              <span style={{ fontSize: '11px', fontWeight: 700, color: '#60A5FA', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Portal ARCOP · Ley 21.719</span>
+        {/* Hero gradient */}
+        <div style={{ background: 'linear-gradient(160deg, #0A2463 0%, #1D4ED8 60%, #0EA5E9 100%)', padding: '64px 24px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.20)', borderRadius: 20, padding: '4px 14px', marginBottom: 20 }}>
+              <Shield size={12} color="white" />
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'white', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Ley 21.719 · Protección de Datos</span>
             </div>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 5vw, 42px)', fontWeight: 400, color: '#F0F0F5', marginBottom: '12px', lineHeight: 1.1 }}>
-              Ejerce tus<br /><em style={{ fontStyle: 'italic', color: '#60A5FA' }}>Derechos</em> ARCOP
+            <h1 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 'clamp(24px, 4vw, 36px)', fontWeight: 800, color: 'white', marginBottom: 12, lineHeight: 1.2, letterSpacing: '-0.02em' }}>
+              Ejerce tus derechos sobre tus datos
             </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', maxWidth: '480px', margin: '0 auto' }}>
-              Selecciona el derecho que deseas ejercer conforme a la Ley 21.719 de Protección de Datos Personales.
+            <p style={{ color: 'rgba(255,255,255,0.80)', fontSize: 15, maxWidth: 440, margin: '0 auto', lineHeight: 1.5 }}>
+              Conforme a la Ley 21.719 de Protección de Datos Personales de Chile.
             </p>
           </div>
+        </div>
 
+        {/* Cards */}
+        <div style={{ maxWidth: 760, margin: '-32px auto 0', padding: '0 24px 64px', position: 'relative', zIndex: 2 }}>
           {loadingDerechos || loadingConfig
-            ? <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}><Loader size={24} style={{ animation: 'spin 1s linear infinite' }} /></div>
+            ? <div className="corp-card" style={{ padding: 60, textAlign: 'center' }}><Loader size={24} style={{ animation: 'spin 1s linear infinite', color: '#1D4ED8' }} /></div>
             : derechos.length === 0
-              ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px', fontSize: '14px' }}>No hay derechos habilitados actualmente.</div>
+              ? <div className="corp-card" style={{ textAlign: 'center', color: '#6B7280', padding: 40, fontSize: 14 }}>No hay derechos habilitados actualmente.</div>
               : <CardsGrid derechos={derechos} onSeleccionar={handleSeleccionar} />
           }
-
-          <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '32px', fontSize: '12px', color: 'var(--text-muted)' }}>
-            <Lock size={11} /> Datos protegidos conforme a la Ley 21.719 — Chile
+          <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 32, fontSize: 12, color: '#9CA3AF' }}>
+            <Lock size={11} color="#9CA3AF" /> Datos protegidos conforme a la Ley 21.719 — Chile{' '}
+            <button type="button" onClick={() => setVerAviso(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#1D4ED8', textDecoration: 'underline', padding: 0 }}>
+              Aviso de privacidad
+            </button>
           </div>
         </div>
       </div>
@@ -564,45 +553,45 @@ const FormularioSolicitud = () => {
   }
 
   // ── Formulario dinámico + Preview ─────────────────────────
-  const { color, gradient, Icon } = buildCfg(tipoSeleccionado);
+  const { color, gradient, Icon } = buildCfg(portalColor ? { ...tipoSeleccionado, color: portalColor } : tipoSeleccionado);
   const _campos     = getCamposParaFormulario(tipoSeleccionado.id);
   const identidad   = _campos?.identidad   || [];
   const especificos = _campos?.especificos || [];
 
   return (
-    <div className="arcop-portal-publico" style={{ padding: '2rem 1rem 4rem' }}>
-      <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        <button onClick={() => { if (preview) { setPreview(false); } else { setTipoSeleccionado(null); } }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px', padding: 0 }}>
+    <div className="portal-layout" style={{ padding: '32px 24px 64px' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        <button onClick={() => { if (preview) { setPreview(false); } else { setTipoSeleccionado(null); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6B7280', marginBottom: 24, padding: 0 }}>
           <ChevronLeft size={15} /> {preview ? 'Volver al formulario' : 'Cambiar tipo de solicitud'}
         </button>
 
-        <div className="animate-fade-up" style={{ marginBottom: '28px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: color + '15', border: `1px solid ${color}30`, borderRadius: '20px', padding: '4px 12px 4px 8px', marginBottom: '14px' }}>
+        <div className="animate-fade-up" style={{ marginBottom: 28 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: color + '10', border: `1px solid ${color}25`, borderRadius: 20, padding: '4px 12px 4px 8px', marginBottom: 14 }}>
             {Icon && <Icon size={14} color={color} />}
-            <span style={{ fontSize: '11px', fontWeight: 700, color, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
               Derecho de {tipoSeleccionado.nombre}{tipoSeleccionado.articulo ? ` · ${tipoSeleccionado.articulo}` : ''}
             </span>
           </div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '28px', color: '#F0F0F5', marginBottom: '6px' }}>
+          <h2 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 28, fontWeight: 800, color: '#111827', marginBottom: 6, marginTop: 0 }}>
             {preview ? 'Confirma tu solicitud' : 'Tu solicitud'}
           </h2>
-          {!preview && <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{tipoSeleccionado.descripcion}</p>}
+          {!preview && <p style={{ color: '#6B7280', fontSize: 13, margin: 0 }}>{tipoSeleccionado.descripcion}</p>}
         </div>
 
         {/* Indicador de pasos */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28 }}>
           {['Completar datos', 'Revisar', 'Enviar'].map((paso, i) => {
             const activo = preview ? i === 1 : i === 0;
             const completado = preview ? i === 0 : false;
             return (
               <React.Fragment key={paso}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <div style={{ width: '22px', height: '22px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, background: completado ? '#10B981' : activo ? color : 'rgba(255,255,255,0.08)', color: completado || activo ? '#fff' : 'var(--text-muted)', border: `1px solid ${completado ? '#10B981' : activo ? color : 'rgba(255,255,255,0.12)'}`, transition: 'all 0.3s' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, background: completado ? '#10B981' : activo ? color : '#E5E7EB', color: completado || activo ? '#fff' : '#9CA3AF', border: `1px solid ${completado ? '#10B981' : activo ? color : '#E5E7EB'}`, transition: 'all 0.3s' }}>
                     {completado ? '✓' : i + 1}
                   </div>
-                  <span style={{ fontSize: '12px', color: activo ? '#F0F0F5' : 'var(--text-muted)', fontWeight: activo ? 600 : 400 }}>{paso}</span>
+                  <span style={{ fontSize: 12, color: activo ? '#111827' : '#9CA3AF', fontWeight: activo ? 600 : 400 }}>{paso}</span>
                 </div>
-                {i < 2 && <div style={{ flex: 1, height: '1px', background: completado ? '#10B98140' : 'rgba(255,255,255,0.08)' }} />}
+                {i < 2 && <div style={{ flex: 1, height: 1, background: completado ? '#10B98140' : '#E5E7EB' }} />}
               </React.Fragment>
             );
           })}
@@ -619,10 +608,10 @@ const FormularioSolicitud = () => {
             loading={loading}
           />
         ) : (
-          <form onSubmit={handleSubmit(onSubmitForm)} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <form onSubmit={handleSubmit(onSubmitForm)} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {identidad.length > 0 && (
-              <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Tus datos</h3>
+              <div className="corp-card" style={{ padding: 24 }}>
+                <h3 style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, marginTop: 0 }}>Tus datos</h3>
                 <CamposGrid
                   campos={identidad.filter(c => {
                     if (canalValidacion === 'email'    && c.id === 'email')    return false;
@@ -652,26 +641,32 @@ const FormularioSolicitud = () => {
               </div>
             )}
             {especificos.length > 0 && (
-              <div style={{ background: 'var(--bg-surface)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.06)', padding: '24px' }}>
-                <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>Detalles de tu solicitud</h3>
+              <div className="corp-card" style={{ padding: 24 }}>
+                <h3 style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, marginTop: 0 }}>Detalles de tu solicitud</h3>
                 <CamposGrid campos={especificos} register={register} watch={watch} setValue={setValue} errors={errors} />
               </div>
             )}
 
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <input type="checkbox" id="acepta_terminos" {...register('acepta_terminos', { required: true })} style={{ marginTop: '2px', accentColor: color }} />
-              <label htmlFor="acepta_terminos" style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5, cursor: 'pointer' }}>
+            <div className="corp-card" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 16 }}>
+              <input type="checkbox" id="acepta_terminos" {...register('acepta_terminos', { required: true })} style={{ marginTop: 2, accentColor: color }} />
+              <label htmlFor="acepta_terminos" style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, cursor: 'pointer' }}>
                 Declaro que los datos entregados son verídicos y autorizo su uso para el procesamiento de esta solicitud conforme a la Ley 21.719.
               </label>
             </div>
-            {errors.acepta_terminos && <p style={{ fontSize: '12px', color: '#EF4444', marginTop: '-16px' }}>Debes aceptar para continuar.</p>}
+            {errors.acepta_terminos && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -16 }}>
+                <AlertCircle size={13} color="#EF4444" style={{ flexShrink: 0 }} />
+                <p style={{ fontSize: 12, color: '#EF4444', margin: 0 }}>Debes aceptar para continuar.</p>
+              </div>
+            )}
 
-            <button type="submit" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '14px 24px', background: color, color: '#fff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
+            <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }}>
               <Eye size={16} /> Revisar solicitud
             </button>
           </form>
         )}
       </div>
+      {verAviso && <AvisoPrivacidad onCerrar={() => setVerAviso(false)} />}
     </div>
   );
 };
