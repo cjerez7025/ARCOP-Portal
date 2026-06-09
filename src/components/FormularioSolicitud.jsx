@@ -104,12 +104,27 @@ const buildCfg = (derecho) => {
 
 // ── DerechoCard ───────────────────────────────────────────
 const DerechoCard = ({ derecho, onSeleccionar, index }) => {
+  const [hovered, setHovered] = useState(false);
   const { color, artNum, Icon } = buildCfg(derecho);
   return (
     <button
       onClick={() => onSeleccionar(derecho)}
-      className={`corp-card-hover animate-fade-up stagger-${(index % 4) + 1}`}
-      style={{ display: 'block', width: '100%', height: '100%', minHeight: 120, textAlign: 'left', padding: 20, cursor: 'pointer', position: 'relative', overflow: 'hidden', background: 'none', border: 'none' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={`animate-fade-up stagger-${(index % 4) + 1}`}
+      style={{
+        display: 'block', width: '100%', height: '100%', minHeight: 120,
+        textAlign: 'left', padding: 20, cursor: 'pointer',
+        position: 'relative', overflow: 'hidden',
+        background: hovered ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+        border: hovered ? '2px solid rgba(99,102,241,0.6)' : '1.5px solid rgba(255,255,255,0.10)',
+        borderRadius: 12,
+        boxShadow: hovered
+          ? '0 8px 28px rgba(99,102,241,0.22), 0 0 0 1px rgba(99,102,241,0.3)'
+          : 'none',
+        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
+        transition: 'all 0.2s cubic-bezier(.22,.68,0,1.1)',
+      }}
     >
       {artNum && (
         <span style={{
@@ -128,16 +143,16 @@ const DerechoCard = ({ derecho, onSeleccionar, index }) => {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#111827' }}>Derecho de {derecho.nombre}</h3>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'rgba(255,255,255,0.92)' }}>Derecho de {derecho.nombre}</h3>
             {derecho.articulo && (
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color, whiteSpace: 'nowrap', marginLeft: 8 }}>
                 {derecho.articulo}
               </span>
             )}
           </div>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280', lineHeight: 1.5 }}>{derecho.descripcion}</p>
+          <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>{derecho.descripcion}</p>
         </div>
-        <ArrowRight size={16} style={{ flexShrink: 0, color: '#9CA3AF' }} />
+        <ArrowRight size={16} style={{ flexShrink: 0, color: hovered ? '#A5B4FC' : 'rgba(255,255,255,0.30)', transition: 'color 0.2s' }} />
       </div>
     </button>
   );
@@ -232,13 +247,13 @@ const FilePreviewItem = ({ file }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 100 }}>
       {esImagen && url
-        ? <img src={url} alt={file.name} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid #E5E7EB' }} />
-        : <div style={{ width: 100, height: 100, borderRadius: 8, border: '1px solid #E5E7EB', background: '#F9FAFB', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        ? <img src={url} alt={file.name} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)' }} />
+        : <div style={{ width: 100, height: 100, borderRadius: 8, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <span style={{ fontSize: 28 }}>📄</span>
-            <span style={{ fontSize: 10, color: '#9CA3AF', textTransform: 'uppercase' }}>{file.name.split('.').pop()}</span>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' }}>{file.name.split('.').pop()}</span>
           </div>
       }
-      <span style={{ fontSize: 10, color: '#9CA3AF', textAlign: 'center', wordBreak: 'break-all', maxWidth: 100, lineHeight: 1.3 }}>{file.name}</span>
+      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textAlign: 'center', wordBreak: 'break-all', maxWidth: 100, lineHeight: 1.3 }}>{file.name}</span>
     </div>
   );
 };
@@ -268,13 +283,13 @@ const PasoPreview = ({ data, identidad, especificos, tipoSeleccionado, onConfirm
         </div>
         <div>
           <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Revisa tu solicitud</p>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280', marginTop: 2 }}>Confirma que los datos sean correctos antes de enviar.</p>
+          <p style={{ margin: 0, fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>Confirma que los datos sean correctos antes de enviar.</p>
         </div>
       </div>
 
       {/* Tabla de datos */}
       <div className="corp-card" style={{ overflow: 'hidden' }}>
-        <div style={{ padding: '12px 20px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
           {Icon && <Icon size={14} color={color} />}
           <span style={{ fontSize: 12, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             Derecho de {tipoSeleccionado.nombre}
@@ -282,9 +297,9 @@ const PasoPreview = ({ data, identidad, especificos, tipoSeleccionado, onConfirm
         </div>
         <div>
           {filasTexto.map(({ label, valor }, i) => (
-            <div key={i} style={{ display: 'flex', gap: 16, padding: '10px 20px', borderBottom: i < filasTexto.length - 1 ? '1px solid #F3F4F6' : 'none' }}>
-              <span style={{ flexShrink: 0, width: 160, fontSize: 12, color: '#9CA3AF', fontWeight: 500 }}>{label}</span>
-              <span style={{ flex: 1, fontSize: 13, color: '#374151', wordBreak: 'break-word' }}>{valor}</span>
+            <div key={i} style={{ display: 'flex', gap: 16, padding: '10px 20px', borderBottom: i < filasTexto.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+              <span style={{ flexShrink: 0, width: 160, fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 500 }}>{label}</span>
+              <span style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.85)', wordBreak: 'break-word' }}>{valor}</span>
             </div>
           ))}
         </div>
@@ -293,8 +308,8 @@ const PasoPreview = ({ data, identidad, especificos, tipoSeleccionado, onConfirm
       {/* Preview archivos adjuntos */}
       {filasArchivos.map(({ label, archivos }, i) => (
         <div key={i} className="corp-card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid #E5E7EB' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
           </div>
           <div style={{ padding: '16px 20px', display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             {archivos.map((file, j) => <FilePreviewItem key={j} file={file} />)}
@@ -303,9 +318,9 @@ const PasoPreview = ({ data, identidad, especificos, tipoSeleccionado, onConfirm
       ))}
 
       {/* Aviso legal */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', background: '#F9FAFB', borderRadius: 10, border: '1px solid #E5E7EB' }}>
-        <Lock size={13} color="#9CA3AF" style={{ flexShrink: 0, marginTop: 1 }} />
-        <p style={{ margin: 0, fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', background: 'rgba(255,255,255,0.04)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+        <Lock size={13} color="rgba(255,255,255,0.35)" style={{ flexShrink: 0, marginTop: 1 }} />
+        <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
           Al confirmar, declaras que los datos son verídicos y autorizas su uso para el procesamiento conforme a la Ley 21.719.
         </p>
       </div>
@@ -493,21 +508,21 @@ const FormularioSolicitud = () => {
     return (
       <div className="portal-layout" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem 1rem', minHeight: '60vh' }}>
         <div className="corp-card animate-fade-up" style={{ width: '100%', maxWidth: 440, padding: 40, textAlign: 'center' }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#D1FAE5', border: '1px solid #A7F3D0', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-            <CheckCircle size={26} color="#059669" strokeWidth={2} />
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+            <CheckCircle size={26} color="#10B981" strokeWidth={2} />
           </div>
-          <h2 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 26, fontWeight: 800, color: '#111827', marginBottom: 8, marginTop: 0 }}>Solicitud registrada</h2>
-          <p style={{ color: '#6B7280', fontSize: 14, marginBottom: 28 }}>
+          <h2 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 26, fontWeight: 800, color: 'white', marginBottom: 8, marginTop: 0 }}>Solicitud registrada</h2>
+          <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 14, marginBottom: 28 }}>
             Tu solicitud de <strong style={{ color: cfg.color }}>{tipoSeleccionado.nombre}</strong> fue recibida correctamente.
           </p>
           {solicitudCreada.numero_solicitud && (
-            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 12, padding: 16, marginBottom: 24 }}>
-              <p style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 4px' }}>Número de caso</p>
-              <p style={{ fontSize: 22, fontWeight: 700, color: '#1D4ED8', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', margin: 0 }}>{solicitudCreada.numero_solicitud}</p>
+            <div style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 4px' }}>Número de caso</p>
+              <p style={{ fontSize: 22, fontWeight: 700, color: '#A5B4FC', fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', margin: 0 }}>{solicitudCreada.numero_solicitud}</p>
             </div>
           )}
-          <p style={{ fontSize: 13, color: '#6B7280', marginBottom: 28 }}>
-            Revisa tu email para confirmar tu identidad. El plazo legal de respuesta es de <strong style={{ color: '#1D4ED8' }}>15 días hábiles</strong>.
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 28 }}>
+            Revisa tu email para confirmar tu identidad. El plazo legal de respuesta es de <strong style={{ color: '#A5B4FC' }}>15 días hábiles</strong>.
           </p>
           <button onClick={() => { setSuccess(false); setSolicitudCreada(null); setTipoSeleccionado(null); setPreview(false); setDatosPreview(null); }} className="btn-ghost">
             Nueva solicitud
@@ -523,7 +538,7 @@ const FormularioSolicitud = () => {
       <div className="portal-layout">
         <OnboardingTour />
         {/* Hero gradient */}
-        <div style={{ background: 'linear-gradient(160deg, #0A2463 0%, #1D4ED8 60%, #0EA5E9 100%)', padding: '64px 24px 80px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ background: 'linear-gradient(160deg, #0A2463 0%, #1D4ED8 60%, #0EA5E9 100%)', padding: '56px 24px 48px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
           <div style={{ position: 'relative', zIndex: 1 }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.20)', borderRadius: 20, padding: '4px 14px', marginBottom: 20 }}>
@@ -540,16 +555,16 @@ const FormularioSolicitud = () => {
         </div>
 
         {/* Cards */}
-        <div style={{ maxWidth: 760, margin: '-32px auto 0', padding: '0 24px 64px', position: 'relative', zIndex: 2 }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', padding: '32px 24px 64px' }}>
           {loadingDerechos || loadingConfig
-            ? <div className="corp-card" style={{ padding: 60, textAlign: 'center' }}><Loader size={24} style={{ animation: 'spin 1s linear infinite', color: '#1D4ED8' }} /></div>
+            ? <div className="corp-card" style={{ padding: 60, textAlign: 'center' }}><Loader size={24} style={{ animation: 'spin 1s linear infinite', color: '#6366F1' }} /></div>
             : derechos.length === 0
-              ? <div className="corp-card" style={{ textAlign: 'center', color: '#6B7280', padding: 40, fontSize: 14 }}>No hay derechos habilitados actualmente.</div>
+              ? <div className="corp-card" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', padding: 40, fontSize: 14 }}>No hay derechos habilitados actualmente.</div>
               : <CardsGrid derechos={derechos} onSeleccionar={handleSeleccionar} />
           }
-          <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 32, fontSize: 12, color: '#9CA3AF' }}>
-            <Lock size={11} color="#9CA3AF" /> Datos protegidos conforme a la Ley 21.719 — Chile{' '}
-            <button type="button" onClick={() => setVerAviso(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#1D4ED8', textDecoration: 'underline', padding: 0 }}>
+          <div className="animate-fade-up stagger-5" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 32, fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>
+            <Lock size={11} color="rgba(255,255,255,0.35)" /> Datos protegidos conforme a la Ley 21.719 — Chile{' '}
+            <button type="button" onClick={() => setVerAviso(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#A5B4FC', textDecoration: 'underline', padding: 0 }}>
               Aviso de privacidad
             </button>
           </div>
@@ -567,7 +582,7 @@ const FormularioSolicitud = () => {
   return (
     <div className="portal-layout" style={{ padding: '32px 24px 64px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
-        <button onClick={() => { if (preview) { setPreview(false); } else { setTipoSeleccionado(null); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6B7280', marginBottom: 24, padding: 0 }}>
+        <button onClick={() => { if (preview) { setPreview(false); } else { setTipoSeleccionado(null); } }} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 24, padding: 0 }}>
           <ChevronLeft size={15} /> {preview ? 'Volver al formulario' : 'Cambiar tipo de solicitud'}
         </button>
 
@@ -578,10 +593,10 @@ const FormularioSolicitud = () => {
               Derecho de {tipoSeleccionado.nombre}{tipoSeleccionado.articulo ? ` · ${tipoSeleccionado.articulo}` : ''}
             </span>
           </div>
-          <h2 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 28, fontWeight: 800, color: '#111827', marginBottom: 6, marginTop: 0 }}>
+          <h2 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 28, fontWeight: 800, color: 'white', marginBottom: 6, marginTop: 0 }}>
             {preview ? 'Confirma tu solicitud' : 'Tu solicitud'}
           </h2>
-          {!preview && <p style={{ color: '#6B7280', fontSize: 13, margin: 0 }}>{tipoSeleccionado.descripcion}</p>}
+          {!preview && <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13, margin: 0 }}>{tipoSeleccionado.descripcion}</p>}
         </div>
 
         {/* Indicador de pasos */}
@@ -592,12 +607,12 @@ const FormularioSolicitud = () => {
             return (
               <React.Fragment key={paso}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, background: completado ? '#10B981' : activo ? color : '#E5E7EB', color: completado || activo ? '#fff' : '#9CA3AF', border: `1px solid ${completado ? '#10B981' : activo ? color : '#E5E7EB'}`, transition: 'all 0.3s' }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, background: completado ? '#10B981' : activo ? color : 'rgba(255,255,255,0.12)', color: completado || activo ? '#fff' : 'rgba(255,255,255,0.35)', border: `1px solid ${completado ? '#10B981' : activo ? color : 'rgba(255,255,255,0.12)'}`, transition: 'all 0.3s' }}>
                     {completado ? '✓' : i + 1}
                   </div>
-                  <span style={{ fontSize: 12, color: activo ? '#111827' : '#9CA3AF', fontWeight: activo ? 600 : 400 }}>{paso}</span>
+                  <span style={{ fontSize: 12, color: activo ? 'white' : 'rgba(255,255,255,0.45)', fontWeight: activo ? 600 : 400 }}>{paso}</span>
                 </div>
-                {i < 2 && <div style={{ flex: 1, height: 1, background: completado ? '#10B98140' : '#E5E7EB' }} />}
+                {i < 2 && <div style={{ flex: 1, height: 1, background: completado ? 'rgba(16,185,129,0.4)' : 'rgba(255,255,255,0.10)' }} />}
               </React.Fragment>
             );
           })}
@@ -617,7 +632,7 @@ const FormularioSolicitud = () => {
           <form onSubmit={handleSubmit(onSubmitForm)} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {identidad.length > 0 && (
               <div className="corp-card" style={{ padding: 24 }}>
-                <h3 style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, marginTop: 0 }}>Tus datos</h3>
+                <h3 style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, marginTop: 0 }}>Tus datos</h3>
                 <CamposGrid
                   campos={identidad.filter(c => {
                     if (canalValidacion === 'email'    && c.id === 'email')    return false;
@@ -648,14 +663,14 @@ const FormularioSolicitud = () => {
             )}
             {especificos.length > 0 && (
               <div className="corp-card" style={{ padding: 24 }}>
-                <h3 style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, marginTop: 0 }}>Detalles de tu solicitud</h3>
+                <h3 style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 16, marginTop: 0 }}>Detalles de tu solicitud</h3>
                 <CamposGrid campos={especificos} register={register} watch={watch} setValue={setValue} errors={errors} />
               </div>
             )}
 
             <div className="corp-card" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: 16 }}>
               <input type="checkbox" id="acepta_terminos" {...register('acepta_terminos', { required: true })} style={{ marginTop: 2, accentColor: color }} />
-              <label htmlFor="acepta_terminos" style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, cursor: 'pointer' }}>
+              <label htmlFor="acepta_terminos" style={{ fontSize: 12, color: 'rgba(255,255,255,0.70)', lineHeight: 1.5, cursor: 'pointer' }}>
                 Declaro que los datos entregados son verídicos y autorizo su uso para el procesamiento de esta solicitud conforme a la Ley 21.719.
               </label>
             </div>

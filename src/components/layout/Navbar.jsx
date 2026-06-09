@@ -264,7 +264,7 @@ const Navbar = () => {
 
       {/* Mobile menu */}
       {open && (
-        <div className="md:hidden" style={{ position: 'fixed', top: 64, left: 0, right: 0, zIndex: 49, background: '#0A2463', borderTop: '1px solid rgba(255,255,255,0.10)', padding: '12px 16px', boxShadow: '0 8px 24px rgba(10,36,99,0.3)' }}>
+        <div className="md:hidden" style={{ position: 'fixed', top: 64, left: 0, right: 0, zIndex: 49, background: 'rgba(13,17,23,0.97)', borderTop: '1px solid rgba(255,255,255,0.08)', padding: '12px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', backdropFilter: 'blur(16px)' }}>
           {NAV_PUBLIC.map(({ to, label, icon: Icon }) => (
             <Link key={to} to={to} onClick={() => setOpen(false)} style={{
               display: 'flex', alignItems: 'center', gap: 10,

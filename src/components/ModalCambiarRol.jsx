@@ -42,11 +42,11 @@ export default function ModalCambiarRol({ usuario, onClose, onActualizado }) {
     <div
       ref={overlayRef}
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
-      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(10,36,99,0.45)', backdropFilter: 'blur(4px)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
     >
       <div className="corp-card w-full max-w-md animate-fade-up" style={{ overflow: 'hidden' }}>
         {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg, #0A2463 0%, #1D4ED8 100%)', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <UserCog style={{ width: 18, height: 18, color: 'white' }} />
@@ -62,16 +62,16 @@ export default function ModalCambiarRol({ usuario, onClose, onActualizado }) {
 
         <form onSubmit={handleSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
               Usuario
             </label>
-            <div style={{ padding: '10px 14px', background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 8 }}>
-              <p style={{ fontSize: 14, fontWeight: 500, color: '#111827', margin: 0 }}>{usuario.nombre || '—'}</p>
-              <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{usuario.email}</p>
+            <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8 }}>
+              <p style={{ fontSize: 14, fontWeight: 500, color: 'white', margin: 0 }}>{usuario.nombre || '—'}</p>
+              <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>{usuario.email}</p>
             </div>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 6 }}>Nuevo rol</label>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>Nuevo rol</label>
             <select value={rol} onChange={e => setRol(e.target.value)} className="corp-input">
               {ROLES.map(r => (
                 <option key={r.value} value={r.value}>{r.label}</option>
@@ -79,7 +79,7 @@ export default function ModalCambiarRol({ usuario, onClose, onActualizado }) {
             </select>
           </div>
 
-          <div style={{ display: 'flex', gap: 12, borderTop: '1px solid #E5E7EB', paddingTop: 16 }}>
+          <div style={{ display: 'flex', gap: 12, borderTop: '1px solid rgba(255,255,255,0.10)', paddingTop: 16 }}>
             <button type="button" onClick={onClose} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
               Cancelar
             </button>

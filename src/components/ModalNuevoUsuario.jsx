@@ -63,11 +63,11 @@ export default function ModalNuevoUsuario({ onClose, onCreado }) {
     <div
       ref={overlayRef}
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
-      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(10,36,99,0.45)', backdropFilter: 'blur(4px)' }}
+      style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
     >
       <div className="corp-card w-full max-w-md animate-fade-up" style={{ overflow: 'hidden' }}>
         {/* Header */}
-        <div style={{ background: 'linear-gradient(135deg, #0A2463 0%, #1D4ED8 100%)', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)', padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <UserPlus style={{ width: 18, height: 18, color: 'white' }} />
@@ -83,7 +83,7 @@ export default function ModalNuevoUsuario({ onClose, onCreado }) {
 
         <form onSubmit={handleSubmit} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }} noValidate>
           <div>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>
               Nombre completo <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input type="text" value={form.nombre} onChange={e => setField('nombre', e.target.value)}
@@ -91,7 +91,7 @@ export default function ModalNuevoUsuario({ onClose, onCreado }) {
             {errors.nombre && <p style={{ fontSize: 12, color: '#EF4444', marginTop: 4 }}>{errors.nombre}</p>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>
               Correo electrónico <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <input type="email" value={form.email} onChange={e => setField('email', e.target.value)}
@@ -99,7 +99,7 @@ export default function ModalNuevoUsuario({ onClose, onCreado }) {
             {errors.email && <p style={{ fontSize: 12, color: '#EF4444', marginTop: 4 }}>{errors.email}</p>}
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>
               Rol <span style={{ color: '#EF4444' }}>*</span>
             </label>
             <select value={form.rol} onChange={e => setField('rol', e.target.value)}
@@ -112,7 +112,7 @@ export default function ModalNuevoUsuario({ onClose, onCreado }) {
             {errors.rol && <p style={{ fontSize: 12, color: '#EF4444', marginTop: 4 }}>{errors.rol}</p>}
           </div>
 
-          <div style={{ display: 'flex', gap: 12, borderTop: '1px solid #E5E7EB', paddingTop: 16 }}>
+          <div style={{ display: 'flex', gap: 12, borderTop: '1px solid rgba(255,255,255,0.10)', paddingTop: 16 }}>
             <button type="button" onClick={onClose} className="btn-ghost" style={{ flex: 1, justifyContent: 'center' }}>
               Cancelar
             </button>
