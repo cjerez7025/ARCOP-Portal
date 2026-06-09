@@ -104,22 +104,31 @@ const Seguimiento = () => {
   const ESTADOS_FINALES = ['CERRADA', 'DESCARGA_CONFIRMADA', 'DESISTIDA'];
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="portal-bg flex items-center justify-center">
       <div className="text-center">
-        <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-        <p className="text-gray-600">Cargando seguimiento...</p>
+        <Loader className="w-12 h-12 animate-spin mx-auto mb-4" style={{ color: 'var(--color-primario, #818cf8)' }} />
+        <p className="text-slate-300">Cargando seguimiento...</p>
       </div>
     </div>
   );
 
   if (error) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-        <AlertCircle className="w-16 h-16 text-red-600 mx-auto mb-4" />
+    <div className="portal-bg flex items-center justify-center p-4">
+      <div className="glass-card rounded-2xl p-8 max-w-md w-full text-center">
+        <svg className="mx-auto mb-6" width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="12" y="8" width="40" height="52" rx="4" fill="#F3F4F6" stroke="#D1D5DB" strokeWidth="2"/>
+          <line x1="20" y1="22" x2="44" y2="22" stroke="#D1D5DB" strokeWidth="2" strokeLinecap="round"/>
+          <line x1="20" y1="30" x2="44" y2="30" stroke="#D1D5DB" strokeWidth="2" strokeLinecap="round"/>
+          <line x1="20" y1="38" x2="36" y2="38" stroke="#D1D5DB" strokeWidth="2" strokeLinecap="round"/>
+          <circle cx="56" cy="52" r="16" fill="#eff6ff" stroke="#bfdbfe" strokeWidth="2"/>
+          <circle cx="62" cy="58" r="5" fill="none" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round"/>
+          <line x1="65.5" y1="61.5" x2="69" y2="65" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round"/>
+          <circle cx="56" cy="52" r="7" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Solicitud no encontrada</h2>
-        <p className="text-gray-600 mb-6">{error}</p>
-        <a href="/#/" className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-          Volver al inicio
+        <p className="text-gray-500 text-sm mb-6">{error}</p>
+        <a href="/#/" className="btn-brand inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-sm">
+          Volver al formulario
         </a>
       </div>
     </div>
@@ -128,6 +137,26 @@ const Seguimiento = () => {
   const info           = ESTADOS_INFO[solicitud.estado] || ESTADOS_INFO['PENDIENTE'];
   const Icon           = info.icon;
   const stepActual     = PASOS.findIndex(p => p.key === solicitud.estado);
+
+  const calcTiempoRestante = (fechaLimite) => {
+    if (!fechaLimite) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const limite = new Date(fechaLimite);
+    limite.setHours(0, 0, 0, 0);
+    let diasHabiles = 0;
+    const cursor = new Date(hoy);
+    if (limite <= hoy) return { texto: 'Plazo vencido', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', vencido: true };
+    while (cursor < limite) {
+      cursor.setDate(cursor.getDate() + 1);
+      if (cursor.getDay() !== 0 && cursor.getDay() !== 6) diasHabiles++;
+    }
+    if (diasHabiles < 3)  return { texto: `Vence en ${diasHabiles} día${diasHabiles !== 1 ? 's' : ''}`, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', vencido: false };
+    if (diasHabiles <= 5) return { texto: `Faltan ${diasHabiles} días hábiles`, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', vencido: false };
+    return { texto: `Faltan ${diasHabiles} días hábiles`, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200', vencido: false };
+  };
+
+  const tiempoRestante = !ESTADOS_FINALES.includes(solicitud.estado) ? calcTiempoRestante(solicitud.fecha_limite) : null;
   const urlDescarga    = solicitud.url_descarga || solicitud.url_datos;
   const esResuelta     = ['RESUELTA', 'DESCARGA_CONFIRMADA'].includes(solicitud.estado);
   const puedeDescargar = esResuelta && !!urlDescarga;
@@ -135,14 +164,14 @@ const Seguimiento = () => {
   const puedeDesistir  = !ESTADOS_FINALES.includes(solicitud.estado);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="portal-bg py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-5">
 
         {/* Título */}
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Seguimiento de Solicitud</h1>
-          <p className="text-gray-500 mt-1">
-            Número: <span className="font-mono font-semibold text-blue-600">{numero}</span>
+          <h1 className="text-2xl font-bold text-white">Seguimiento de Solicitud</h1>
+          <p className="text-slate-300 mt-1">
+            Número: <span className="font-mono font-semibold" style={{ color: 'var(--color-primario, #818cf8)' }}>{numero}</span>
           </p>
         </div>
 
@@ -160,9 +189,17 @@ const Seguimiento = () => {
           </div>
         </div>
 
+        {/* Tiempo restante */}
+        {tiempoRestante && (
+          <div className={`rounded-xl border px-4 py-3 flex items-center gap-3 ${tiempoRestante.bg} ${tiempoRestante.border}`}>
+            <span className={`text-sm font-semibold ${tiempoRestante.color}`}>{tiempoRestante.texto}</span>
+            {tiempoRestante.vencido && <span className="text-xs text-red-500 font-medium">— Se requiere atención inmediata</span>}
+          </div>
+        )}
+
         {/* Barra de progreso — oculta si desistida */}
         {solicitud.estado !== 'DESISTIDA' && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="glass-card rounded-2xl p-5">
             <div className="flex items-start">
               {PASOS.map((paso, i) => {
                 const completado = i <= stepActual;
@@ -171,16 +208,17 @@ const Seguimiento = () => {
                   <React.Fragment key={paso.key}>
                     <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: 0 }}>
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                        esActual   ? 'bg-blue-600 text-white ring-4 ring-blue-100' :
+                        esActual   ? 'bg-brand-600 text-white ring-4 ring-brand-100 animate-pulse' :
                         completado ? 'bg-green-500 text-white' :
-                                     'bg-gray-200 text-gray-400'}`}>
+                                     'bg-gray-200 text-gray-400'}`}
+                        style={esActual ? { backgroundColor: 'var(--color-primario, #4f46e5)', boxShadow: '0 0 0 4px rgba(79,70,229,0.2)' } : {}}>
                         {completado && !esActual ? '✓' : i + 1}
                       </div>
                       <p className={`text-xs mt-1 text-center leading-tight px-0.5 ${completado ? 'text-gray-700 font-medium' : 'text-gray-400'}`}
                          style={{ fontSize: '10px', maxWidth: '48px' }}>
                         {paso.label}
                       </p>
-                      {esActual && <p className="text-blue-600 mt-0.5" style={{ fontSize: '9px' }}>▲ actual</p>}
+                      {esActual && <p style={{ color: 'var(--color-primario, #818cf8)', marginTop: '2px', fontSize: '9px' }}>▲ actual</p>}
                     </div>
                     {i < PASOS.length - 1 && (
                       <div className={`flex-1 h-1 mt-3.5 mx-1 rounded-full ${i < stepActual ? 'bg-green-400' : 'bg-gray-200'}`} />
@@ -250,7 +288,7 @@ const Seguimiento = () => {
 
         {/* Desistida — info motivo */}
         {solicitud.estado === 'DESISTIDA' && (
-          <div className="bg-white rounded-2xl border border-rose-100 shadow-sm p-5">
+          <div className="glass-card rounded-2xl border border-rose-100 p-5">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Motivo del desistimiento</p>
             <p className="text-sm text-gray-700">{solicitud.motivo_desistimiento || 'No indicado'}</p>
             {solicitud.fecha_desistimiento && (
@@ -260,8 +298,8 @@ const Seguimiento = () => {
         )}
 
         {/* Detalle */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Detalle</h3>
+        <div className="glass-card rounded-2xl p-5">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3" style={{ fontFamily: "'DM Sans', Inter, system-ui, sans-serif" }}>Detalle</h3>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {[
               ['Tipo',          solicitud.tipo_derecho || solicitud.tipo || 'ACCESO'],
@@ -279,7 +317,7 @@ const Seguimiento = () => {
 
         {/* Botón desistir */}
         {puedeDesistir && (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className="glass-card rounded-2xl p-5">
             <p className="text-xs text-gray-400 mb-3">¿Ya no necesitas esta solicitud?</p>
             <button
               onClick={() => setModalDesistir(true)}

@@ -5,7 +5,8 @@
 //   - Envuelve todas las rutas /dpo/* en ProtectedRoute
 //   - ProtectedRoute redirige a /login si no hay sesión Firebase
 // ============================================================
-import React from 'react';
+import React, { useEffect } from 'react';
+import { cargarBranding } from './services/brandingService';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -25,12 +26,21 @@ import Seguimiento         from './pages/Seguimiento';
 import LoginDPO            from './pages/LoginDPO';
 
 // Páginas DPO (protegidas)
-import PanelDPO      from './pages/PanelDPO';
-import Dashboard     from './pages/Dashboard';
-import Reportes      from './pages/Reportes';
-import Configuracion from './pages/Configuracion';
-import BuscarSolicitud     from './pages/BuscarSolicitud'; 
+import PanelDPO        from './pages/PanelDPO';
+import Dashboard       from './pages/Dashboard';
+import Reportes        from './pages/Reportes';
+import Configuracion   from './pages/Configuracion';
+import BuscarSolicitud from './pages/BuscarSolicitud';
+import GestionUsuarios    from './pages/GestionUsuarios';
+import DetalleSolicitud  from './pages/DetalleSolicitud';
+
+// Páginas de roles internos
+import PanelLegal    from './pages/PanelLegal';
+import PanelOperador from './pages/PanelOperador';
+import PanelAuditor  from './pages/PanelAuditor';
 function App() {
+  useEffect(() => { cargarBranding(); }, []);
+
   return (
     <AuthProvider>
       <Router>
@@ -55,6 +65,23 @@ function App() {
             } />
             <Route path="/dpo/configuracion" element={
               <ProtectedRoute><Configuracion /></ProtectedRoute>
+            } />
+            <Route path="/dpo/usuarios" element={
+              <ProtectedRoute><GestionUsuarios /></ProtectedRoute>
+            } />
+            <Route path="/dpo/detalle/:numero" element={
+              <ProtectedRoute><DetalleSolicitud /></ProtectedRoute>
+            } />
+
+            {/* ── Rutas roles internos ───────────────────── */}
+            <Route path="/legal" element={
+              <ProtectedRoute><PanelLegal /></ProtectedRoute>
+            } />
+            <Route path="/operador" element={
+              <ProtectedRoute><PanelOperador /></ProtectedRoute>
+            } />
+            <Route path="/auditor" element={
+              <ProtectedRoute><PanelAuditor /></ProtectedRoute>
             } />
 
             {/* ── Fallback ───────────────────────────────── */}

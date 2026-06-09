@@ -1,8 +1,68 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ── Colección: solicitudes ──────────────────────────
+    // Solo el backend (Admin SDK) escribe. El cliente solo
+    // puede leer su propia solicitud por número (seguimiento).
+    match /solicitudes/{id} {
+      allow read: if false;  // todo acceso es por backend
+      allow write: if false;
+    }
+
+    // ── Colección: tokens ───────────────────────────────
+    // Solo el backend valida tokens. Nunca acceso directo.
+    match /tokens/{id} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ── Colección: config ───────────────────────────────
+    // Solo lectura pública para 'sistema' (config básica).
+    // Escritura solo desde backend autenticado (Admin SDK).
+    match /config/{doc} {
+      allow read:  if doc == 'sistema';
+      allow write: if false;
+    }
+
+    // ── Colección: branding_templates ───────────────────
+    // Lectura autenticada. Escritura solo Admin SDK.
+    match /branding_templates/{id} {
+      allow read:  if request.auth != null;
+      allow write: if false;
+    }
+
+    // ── Colección: derechos ─────────────────────────────
+    // Lectura pública (el formulario los carga).
+    // Escritura solo desde backend.
+    match /derechos/{id} {
+      allow read:  if true;
+      allow write: if false;
+    }
+
+    // ── Colección: rut_contactos ────────────────────────
+    // NUNCA acceso desde cliente. Solo Admin SDK.
+    match /rut_contactos/{id} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ── Colección: audit_log ────────────────────────────
+    match /audit_log/{id} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ── Colección: brechas ──────────────────────────────
+    // Solo el backend (Admin SDK). Nunca acceso desde cliente.
+    match /brechas/{id} {
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    // ── Todo lo demás: denegado ─────────────────────────
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

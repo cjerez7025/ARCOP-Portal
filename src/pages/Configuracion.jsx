@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Building2, User, Palette, Clock, Settings, FileText,
   Save, RotateCcw, Loader, AlertCircle, GitBranch,
   Mail, Phone, Globe, Eye, EyeOff,
-  Download, Shield, Database
+  Download, Shield, Database, Upload, Wand2, Layout,
 } from 'lucide-react';
+import adapter from '../adapters';
+import httpAdapter from '../adapters/httpAdapter';
+import { cargarBranding } from '../services/brandingService';
 
 import {
   obtenerConfiguracion, guardarConfiguracion,
@@ -185,103 +188,419 @@ const TabDPO = ({ config, onChange }) => (
   </div>
 );
 
-// ── TAB BRANDING ──────────────────────────────────────────
-const TabBranding = ({ config, onChange }) => {
-  const [verLogo, setVerLogo] = useState(false);
+// ── WCAG helpers ─────────────────────────────────────────
+function _lum(hex) {
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return 0;
+  const toL = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  return 0.2126 * toL(parseInt(hex.slice(1,3),16)) +
+         0.7152 * toL(parseInt(hex.slice(3,5),16)) +
+         0.0722 * toL(parseInt(hex.slice(5,7),16));
+}
+function contrastRatio(h1, h2) {
+  const [li, da] = [Math.max(_lum(h1), _lum(h2)), Math.min(_lum(h1), _lum(h2))];
+  return (li + 0.05) / (da + 0.05);
+}
+const WcagBadge = ({ c1, c2, label }) => {
+  if (!c1 || !c2) return null;
+  const ratio = contrastRatio(c1, c2);
+  const pass  = ratio >= 4.5;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, padding: '4px 0' }}>
+      <span style={{ fontWeight: 700, color: pass ? '#16a34a' : '#dc2626', minWidth: 60 }}>
+        {pass ? '✅' : '⚠️'} {ratio.toFixed(2)}:1
+      </span>
+      <span style={{ color: '#6b7280' }}>{label} — {pass ? 'WCAG AA ✓' : 'No cumple AA'}</span>
+    </div>
+  );
+};
+
+const FUENTES = ['Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Raleway','DM Sans','Plus Jakarta Sans'];
+
+// ── TAB IDENTIDAD VISUAL ──────────────────────────────────
+const TabIdentidadVisual = ({ config, onChange }) => {
+  const [subTab,            setSubTab]            = useState('manual');
+  const [guardando,         setGuardando]          = useState(false);
+  const [extrayendo,        setExtrayendo]         = useState(false);
+  const [urlExtraccion,     setUrlExtraccion]      = useState('');
+  const [resultadoExt,      setResultadoExt]       = useState(null);
+  const [templates,         setTemplates]          = useState([]);
+  const [cargandoTemplates, setCargandoTemplates]  = useState(false);
+  const [verLogo,           setVerLogo]            = useState(false);
+  const [uploadingLogo,     setUploadingLogo]      = useState(false);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (subTab === 'templates' && templates.length === 0) _cargarTemplates();
+  }, [subTab]);
+
+  const _cargarTemplates = async () => {
+    setCargandoTemplates(true);
+    const r = await httpAdapter.getBrandingTemplates();
+    if (r.status === 'success') setTemplates(r.data || []);
+    setCargandoTemplates(false);
+  };
+
+  const handleLogoUpload = async (file) => {
+    if (file.size > 2 * 1024 * 1024) { toast.error('El logo no puede superar 2 MB'); return; }
+    setUploadingLogo(true);
+    const result = await adapter.uploadLogo(file);
+    setUploadingLogo(false);
+    if (result.status !== 'success') { toast.error('Error al subir el logo'); return; }
+    onChange('logo_url', result.data.url);
+    setVerLogo(true);
+    toast.success('Logo subido correctamente');
+  };
+
+  const handleGuardar = async () => {
+    const payload = {
+      color_primario:      config.color_primario,
+      color_secundario:    config.color_secundario,
+      color_fondo:         config.color_fondo,
+      color_texto:         config.color_texto,
+      card_estilo:         config.card_estilo,
+      card_radio:          config.card_radio,
+      card_sombra:         config.card_sombra,
+      fuente_titulo:       config.fuente_titulo,
+      fuente_cuerpo:       config.fuente_cuerpo,
+      logo_url:            config.logo_url,
+      portal_nombre:       config.portal_nombre,
+      aplicar_branding_dpo: config.aplicar_branding_dpo,
+    };
+    setGuardando(true);
+    const r = await httpAdapter.saveBranding(payload);
+    setGuardando(false);
+    if (r.status === 'success') {
+      toast.success('✅ Identidad visual guardada');
+      await cargarBranding();
+    } else {
+      toast.error(r.message || 'Error al guardar branding');
+    }
+  };
+
+  const handleExtraer = async () => {
+    if (!urlExtraccion.trim()) { toast.error('Ingresa una URL'); return; }
+    setExtrayendo(true);
+    setResultadoExt(null);
+    const r = await httpAdapter.extractBrandingFromUrl(urlExtraccion.trim());
+    setExtrayendo(false);
+    if (r.status === 'success') setResultadoExt(r.data);
+    else toast.error(r.message || 'No se pudo extraer el branding');
+  };
+
+  const aplicarSugerido = () => {
+    if (!resultadoExt?.sugerido) return;
+    const s = resultadoExt.sugerido;
+    if (s.color_primario)   onChange('color_primario',   s.color_primario);
+    if (s.color_secundario) onChange('color_secundario', s.color_secundario);
+    if (s.fuente_titulo)    onChange('fuente_titulo',    s.fuente_titulo);
+    if (resultadoExt.logo_url) onChange('logo_url', resultadoExt.logo_url);
+    toast.success('Sugerencias aplicadas — guarda para confirmar');
+    setSubTab('manual');
+  };
+
+  const aplicarTemplate = (tpl) => {
+    ['color_primario','color_secundario','color_fondo','color_texto',
+     'card_estilo','card_radio','card_sombra','fuente_titulo','fuente_cuerpo'].forEach(k => {
+      if (tpl[k] !== undefined) onChange(k, tpl[k]);
+    });
+    toast.success(`Plantilla "${tpl.nombre}" aplicada — guarda para confirmar`);
+    setSubTab('manual');
+  };
+
+  const cp = config.color_primario   || '#2563eb';
+  const cs = config.color_secundario || '#1e40af';
+  const cf = config.color_fondo      || '#f8fafc';
+  const ct = config.color_texto      || '#1e293b';
+
+  const SUB_TABS = [
+    { id: 'manual',    label: 'Manual',    Icon: Wand2  },
+    { id: 'web',       label: 'Desde Web', Icon: Globe  },
+    { id: 'templates', label: 'Plantillas', Icon: Layout },
+  ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-1">🎨 Apariencia del Portal</h2>
-        <p className="text-sm text-gray-500">
-          Personaliza el nombre, colores y logo del portal público que ven los titulares.
-        </p>
+        <h2 className="text-xl font-bold text-gray-900 mb-1">🎨 Identidad Visual</h2>
+        <p className="text-sm text-gray-500">Personaliza colores, tipografía y estilo del portal público.</p>
       </div>
 
-      <Seccion titulo="Identidad del portal">
-        <Campo label="Nombre del portal" ayuda="Aparece en el encabezado y en los emails">
-          <Input value={config.portal_nombre} onChange={v => onChange('portal_nombre', v)}
-            placeholder="Portal ARCOP" />
-        </Campo>
-        <Campo label="URL pública" ayuda="Usada en los links de validación de identidad">
-          <Input value={config.portal_url} onChange={v => onChange('portal_url', v)}
-            placeholder="https://arcop.miempresa.cl" />
-        </Campo>
-      </Seccion>
+      {/* Sub-tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        {SUB_TABS.map(({ id, label, Icon }) => (
+          <button key={id} onClick={() => setSubTab(id)}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              subTab === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
+            <Icon className="w-4 h-4" />{label}
+          </button>
+        ))}
+      </div>
 
-      <Seccion titulo="Colores corporativos">
-        <Campo label="Color principal" ayuda="Botones, cabeceras y elementos destacados">
-          <div className="flex items-center gap-3">
-            <input type="color" value={config.portal_color || '#2563eb'}
-              onChange={e => onChange('portal_color', e.target.value)}
-              className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5 flex-shrink-0" />
-            <Input value={config.portal_color || '#2563eb'}
-              onChange={v => onChange('portal_color', v)} placeholder="#2563eb" />
+      {/* ── Manual ── */}
+      {subTab === 'manual' && (
+        <div className="space-y-8">
+          <Seccion titulo="Identidad del portal">
+            <Campo label="Nombre del portal" ayuda="Aparece en el encabezado y en los emails">
+              <Input value={config.portal_nombre} onChange={v => onChange('portal_nombre', v)} placeholder="Portal ARCOP" />
+            </Campo>
+            <Campo label="URL del logo" ayuda="PNG, SVG o JPG · máx. 2 MB · fondo transparente recomendado">
+              <div className="flex gap-2">
+                <Input value={config.logo_url} onChange={v => onChange('logo_url', v)} placeholder="https://empresa.cl/logo.png" />
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingLogo}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {uploadingLogo ? <Loader className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                </button>
+                <button type="button" onClick={() => setVerLogo(!verLogo)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 flex-shrink-0">
+                  {verLogo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </Campo>
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ''; }} />
+            {verLogo && config.logo_url && (
+              <div className="md:col-span-2 p-4 bg-gray-100 rounded-xl flex items-center justify-center" style={{ minHeight: 80 }}>
+                <img src={config.logo_url} alt="Logo preview" className="max-h-16 max-w-full object-contain"
+                  onError={e => { e.target.style.display = 'none'; }} />
           </div>
-        </Campo>
-        <Campo label="Color secundario" ayuda="Hover y elementos de apoyo">
-          <div className="flex items-center gap-3">
-            <input type="color" value={config.portal_color_secundario || '#1e40af'}
-              onChange={e => onChange('portal_color_secundario', e.target.value)}
-              className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5 flex-shrink-0" />
-            <Input value={config.portal_color_secundario || '#1e40af'}
-              onChange={v => onChange('portal_color_secundario', v)} placeholder="#1e40af" />
-          </div>
-        </Campo>
-      </Seccion>
+            )}
+          </Seccion>
 
-      <div className="space-y-3">
-        <div className="border-b border-gray-100 pb-2">
-          <h3 className="text-base font-bold text-gray-800">Logo</h3>
-          <p className="text-xs text-gray-500 mt-0.5">URL pública de la imagen (PNG o SVG, fondo transparente recomendado)</p>
-        </div>
-        <Campo label="URL del logo">
-          <div className="flex gap-2">
-            <Input value={config.logo_url} onChange={v => onChange('logo_url', v)}
-              placeholder="https://empresa.cl/logo.png" />
-            <button onClick={() => setVerLogo(!verLogo)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 flex-shrink-0">
-              {verLogo ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          <Seccion titulo="Colores" descripcion="Valores hexadecimales #RRGGBB">
+            <Campo label="Color primario" ayuda="Botones y elementos destacados">
+              <div className="flex items-center gap-3">
+                <input type="color" value={cp} onChange={e => onChange('color_primario', e.target.value)}
+                  className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5 flex-shrink-0" />
+                <Input value={cp} onChange={v => onChange('color_primario', v)} placeholder="#2563eb" />
+              </div>
+            </Campo>
+            <Campo label="Color secundario" ayuda="Hover y elementos de apoyo">
+              <div className="flex items-center gap-3">
+                <input type="color" value={cs} onChange={e => onChange('color_secundario', e.target.value)}
+                  className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5 flex-shrink-0" />
+                <Input value={cs} onChange={v => onChange('color_secundario', v)} placeholder="#1e40af" />
+              </div>
+            </Campo>
+            <Campo label="Color de fondo" ayuda="Fondo general del portal">
+              <div className="flex items-center gap-3">
+                <input type="color" value={cf} onChange={e => onChange('color_fondo', e.target.value)}
+                  className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5 flex-shrink-0" />
+                <Input value={cf} onChange={v => onChange('color_fondo', v)} placeholder="#f8fafc" />
+              </div>
+            </Campo>
+            <Campo label="Color de texto" ayuda="Texto principal del portal">
+              <div className="flex items-center gap-3">
+                <input type="color" value={ct} onChange={e => onChange('color_texto', e.target.value)}
+                  className="w-10 h-10 rounded-lg border border-gray-300 cursor-pointer p-0.5 flex-shrink-0" />
+                <Input value={ct} onChange={v => onChange('color_texto', v)} placeholder="#1e293b" />
+              </div>
+            </Campo>
+          </Seccion>
+
+          {/* WCAG contrast (MMPA-148) */}
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Contraste WCAG 2.1 — Accesibilidad</p>
+            <WcagBadge c1={cp} c2={cf} label="Primario / Fondo" />
+            <WcagBadge c1={ct} c2={cf} label="Texto / Fondo" />
+            <WcagBadge c1={cp} c2={ct} label="Primario / Texto" />
+            <p className="text-xs text-gray-400 mt-2">AA requiere ≥ 4.5:1 para texto normal · ≥ 3:1 para texto grande o UI</p>
+          </div>
+
+          <Seccion titulo="Tipografía">
+            <Campo label="Fuente títulos">
+              <select value={config.fuente_titulo || 'Inter'} onChange={e => onChange('fuente_titulo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                {FUENTES.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </Campo>
+            <Campo label="Fuente cuerpo">
+              <select value={config.fuente_cuerpo || 'Inter'} onChange={e => onChange('fuente_cuerpo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                {FUENTES.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </Campo>
+          </Seccion>
+
+          <Seccion titulo="Estilo de tarjetas">
+            <Campo label="Forma">
+              <select value={config.card_estilo || 'rounded'} onChange={e => onChange('card_estilo', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="sharp">Esquinas rectas</option>
+                <option value="rounded">Redondeadas</option>
+                <option value="pill">Muy redondeadas</option>
+              </select>
+            </Campo>
+            <Campo label="Sombra">
+              <select value={config.card_sombra || 'soft'} onChange={e => onChange('card_sombra', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <option value="none">Sin sombra</option>
+                <option value="soft">Suave</option>
+                <option value="medium">Media</option>
+                <option value="strong">Pronunciada</option>
+              </select>
+            </Campo>
+            <Campo label={`Radio de esquinas: ${config.card_radio || 12}px`} fullWidth>
+              <input type="range" min="0" max="32" step="2" value={parseInt(config.card_radio) || 12}
+                onChange={e => onChange('card_radio', e.target.value)}
+                className="w-full accent-blue-600" />
+            </Campo>
+          </Seccion>
+
+          {/* DPO branding toggle */}
+          <div className="flex items-center justify-between p-4 border border-gray-200 rounded-xl">
+            <div>
+              <p className="text-sm font-semibold text-gray-800">Aplicar branding al panel DPO</p>
+              <p className="text-xs text-gray-500 mt-0.5">Los colores afectan también la interfaz interna del equipo</p>
+            </div>
+            <button type="button" onClick={() => onChange('aplicar_branding_dpo', !config.aplicar_branding_dpo)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                config.aplicar_branding_dpo ? 'bg-blue-600' : 'bg-gray-300'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                config.aplicar_branding_dpo ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
-        </Campo>
-        {verLogo && config.logo_url && (
-          <div className="p-4 bg-gray-100 rounded-xl flex items-center justify-center" style={{ minHeight: 80 }}>
-            <img src={config.logo_url} alt="Logo preview" className="max-h-16 max-w-full object-contain"
-              onError={e => { e.target.style.display = 'none'; }} />
-          </div>
-        )}
-      </div>
 
-      <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Vista previa — encabezado del portal</p>
-        <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-          <div className="flex items-center gap-3 px-5 py-4"
-               style={{ background: config.portal_color || '#2563eb' }}>
-            {config.logo_url
-              ? <img src={config.logo_url} alt="Logo" className="h-8 object-contain"
-                     onError={e => { e.target.style.display = 'none'; }} />
-              : <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-white" />
+          {/* Vista previa */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Vista previa — encabezado del portal</p>
+            <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+              <div className="flex items-center gap-3 px-5 py-4" style={{ background: cp }}>
+                {config.logo_url
+                  ? <img src={config.logo_url} alt="Logo" className="h-8 object-contain"
+                      onError={e => { e.target.style.display = 'none'; }} />
+                  : <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                      <FileText className="w-5 h-5 text-white" />
+                    </div>}
+                <div>
+                  <p className="font-bold text-white text-sm">{config.portal_nombre || 'Portal ARCOP'}</p>
+                  <p className="text-white/70 text-xs">Ley 21.719 · Derechos ARCOP</p>
                 </div>
-            }
-            <div>
-              <p className="font-bold text-white text-sm">{config.portal_nombre || 'Portal ARCOP'}</p>
-              <p className="text-white/70 text-xs">Ley 21.719 · Derechos ARCOP</p>
+              </div>
+              <div className="px-5 py-4 border-t border-gray-100" style={{ background: cf }}>
+                <div className="flex gap-2 flex-wrap">
+                  {['Acceso', 'Rectificación', 'Cancelación', 'Oposición', 'Portabilidad'].map(d => (
+                    <span key={d} className="px-3 py-1 text-xs font-medium text-white rounded-full" style={{ background: cp }}>{d}</span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-          <div className="bg-white px-5 py-4 border-t border-gray-100">
-            <div className="flex gap-2 flex-wrap">
-              {['Acceso', 'Rectificación', 'Cancelación', 'Oposición', 'Portabilidad'].map(d => (
-                <span key={d} className="px-3 py-1 text-xs font-medium text-white rounded-full"
-                      style={{ background: config.portal_color || '#2563eb' }}>
-                  {d}
-                </span>
-              ))}
-            </div>
+
+          <div className="flex justify-end pt-2 border-t border-gray-100">
+            <button onClick={handleGuardar} disabled={guardando}
+              className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl disabled:opacity-50 hover:bg-blue-700 text-sm font-semibold">
+              {guardando ? <><Loader className="w-4 h-4 animate-spin" />Guardando...</> : <><Save className="w-4 h-4" />Guardar identidad visual</>}
+            </button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ── Desde Web ── */}
+      {subTab === 'web' && (
+        <div className="space-y-6">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+            <p className="text-sm text-blue-800">
+              <strong>Extracción automática:</strong> Ingresa la URL de tu sitio corporativo y el sistema detectará colores, logo y tipografías usados.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Input value={urlExtraccion} onChange={setUrlExtraccion} placeholder="https://empresa.cl" />
+            <button onClick={handleExtraer} disabled={extrayendo}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex-shrink-0">
+              {extrayendo ? <><Loader className="w-4 h-4 animate-spin" />Extrayendo...</> : <><Globe className="w-4 h-4" />Extraer</>}
+            </button>
+          </div>
+
+          {resultadoExt && (
+            <div className="space-y-5">
+              {resultadoExt.colors?.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Colores detectados <span className="text-xs text-gray-400 font-normal">(clic para aplicar como primario)</span></p>
+                  <div className="flex flex-wrap gap-2">
+                    {resultadoExt.colors.map(c => (
+                      <button key={c} onClick={() => onChange('color_primario', c)} title={`Aplicar ${c} como color primario`}
+                        className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg hover:border-blue-400 text-xs font-mono transition-colors">
+                        <span className="w-4 h-4 rounded-full border border-gray-200 flex-shrink-0" style={{ background: c }} />
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {resultadoExt.fonts?.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Fuentes detectadas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {resultadoExt.fonts.map(f => (
+                      <button key={f} onClick={() => onChange('fuente_titulo', f)}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-blue-50 rounded-lg text-xs transition-colors">{f}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {resultadoExt.logo_url && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Logo detectado</p>
+                  <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg">
+                    <img src={resultadoExt.logo_url} alt="" className="h-10 max-w-32 object-contain"
+                      onError={e => { e.target.style.display = 'none'; }} />
+                    <button onClick={() => onChange('logo_url', resultadoExt.logo_url)}
+                      className="text-xs text-blue-600 hover:underline">Usar este logo</button>
+                  </div>
+                </div>
+              )}
+              <button onClick={aplicarSugerido}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium">
+                <Save className="w-4 h-4" /> Aplicar todas las sugerencias
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Plantillas ── */}
+      {subTab === 'templates' && (
+        <div className="space-y-4">
+          {cargandoTemplates ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+          ) : templates.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <Layout className="w-12 h-12 mx-auto mb-3 opacity-40" />
+              <p className="text-sm font-medium">Sin plantillas disponibles</p>
+              <p className="text-xs mt-1">Ejecuta <code className="bg-gray-100 px-1 rounded">node backend/scripts/seed-templates.js</code> para cargarlas</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {templates.map(tpl => (
+                <div key={tpl.id} className="border border-gray-200 rounded-xl overflow-hidden hover:border-blue-400 transition-colors cursor-pointer group">
+                  <div className="h-14 relative" style={{ background: `linear-gradient(135deg, ${tpl.color_primario}, ${tpl.color_secundario})` }}>
+                    <div className="absolute inset-0 flex items-center px-4 gap-2">
+                      {[tpl.color_primario, tpl.color_secundario, tpl.color_fondo, tpl.color_texto].map((c, i) => (
+                        <div key={i} title={c} className="w-5 h-5 rounded-full border-2 border-white/50 flex-shrink-0" style={{ background: c }} />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{tpl.nombre}</p>
+                        {tpl.descripcion && <p className="text-xs text-gray-500 mt-0.5 leading-tight">{tpl.descripcion}</p>}
+                        <p className="text-xs text-gray-400 mt-1">{tpl.fuente_titulo} · {tpl.card_estilo}</p>
+                      </div>
+                      <button onClick={() => aplicarTemplate(tpl)}
+                        className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 flex-shrink-0 transition-colors">
+                        Aplicar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -532,7 +851,7 @@ const Configuracion = () => {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="page-wrapper flex items-center justify-center">
       <Loader className="w-12 h-12 text-blue-600 animate-spin" />
     </div>
   );
@@ -548,7 +867,7 @@ const Configuracion = () => {
   ];
 
   // tabs que usan el botón guardar del footer de configuración general
-  const tabsSimples = ['empresa', 'dpo', 'branding', 'plazos'];
+  const tabsSimples = ['empresa', 'dpo', 'plazos'];
   const tabActivaEsSimple = tabsSimples.includes(tabActiva);
   const flujoDirty        = flujoHook?.dirty;
   const formularioDirty   = formularioHook?.dirty;
@@ -567,10 +886,10 @@ const Configuracion = () => {
   const mostrarFooter = tabActivaEsSimple || tabActiva === 'derechos';
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="page-wrapper py-8 px-4">
       <div className="max-w-6xl mx-auto">
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">⚙️ Configuración del Sistema</h1>
+        <h1 className="text-3xl font-bold text-white mb-6">⚙️ Configuración del Sistema</h1>
 
         {cambiosPendientes && tabActivaEsSimple && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center gap-2">
@@ -579,10 +898,10 @@ const Configuracion = () => {
           </div>
         )}
 
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="glass-card rounded-2xl overflow-hidden">
 
           {/* Tabs */}
-          <div className="border-b border-gray-200 bg-gray-50">
+          <div className="border-b border-black/10 bg-black/5">
             <div className="flex overflow-x-auto">
               {tabs.map(tab => {
                 const Icono = tab.icono;
@@ -604,7 +923,7 @@ const Configuracion = () => {
           <div className="p-8">
             {tabActiva === 'empresa'  && <TabEmpresa  config={config} onChange={handleChange} />}
             {tabActiva === 'dpo'      && <TabDPO      config={config} onChange={handleChange} />}
-            {tabActiva === 'branding' && <TabBranding config={config} onChange={handleChange} />}
+            {tabActiva === 'branding' && <TabIdentidadVisual config={config} onChange={handleChange} />}
             {tabActiva === 'plazos'   && <TabPlazos   config={config} onChange={handleChange} />}
             {tabActiva === 'avanzado' && <TabAvanzado config={config} onRestaurar={handleRestaurar} onExportar={handleExportar} />}
             {tabActiva === 'derechos' && <TabDerechos formularioHook={formularioHook} flujoHook={flujoHook} />}

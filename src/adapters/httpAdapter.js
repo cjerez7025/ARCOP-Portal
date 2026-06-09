@@ -55,6 +55,32 @@ const httpAdapter = {
   probarGChat:          async (webhook_url, derecho) =>
     _fetch('/api/config/probar-gchat', { method: 'POST', body: JSON.stringify({ webhook_url, derecho }) }, true),
 
+  saveBranding:           async (data) =>
+    _fetch('/api/config/branding', { method: 'PUT', body: JSON.stringify(data) }, true),
+  extractBrandingFromUrl: async (url)  =>
+    _fetch('/api/config/branding/extract-from-url', { method: 'POST', body: JSON.stringify({ url }) }, true),
+  getBrandingTemplates:   async ()     =>
+    _fetch('/api/config/branding/templates', {}, true),
+
+  uploadLogo: async (file) => {
+    try {
+      const token = await _getToken();
+      if (!token) return _err('No autenticado');
+      const formData = new FormData();
+      formData.append('logo', file);
+      const res  = await fetch(`${API_URL}/api/config/logo`, {
+        method:  'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body:    formData,
+      });
+      const data = await res.json();
+      if (!res.ok) return _err(data.error || `Error ${res.status}`);
+      return _ok(data.data ?? data);
+    } catch (e) {
+      return _err(e.message);
+    }
+  },
+
   // ── Derechos ────────────────────────────────────────────
   getDerechos: async () =>
     _fetch('/api/derechos'),
@@ -137,6 +163,37 @@ uploadDocumentacion: async (solicitudId, archivos) => {
       method: 'POST',
       body: JSON.stringify({ causal, nota }),
     }, true),
+
+  asignarResponsable: async (id, datos) =>
+    _fetch(`/api/solicitudes/${id}/asignar`,
+      { method: 'PUT', body: JSON.stringify(datos) }, true),
+
+  reenviarValidacion: async (numero) =>
+    _fetch(`/api/solicitudes/${numero}/reenviar-validacion`, { method: 'POST' }),
+
+  // ── Brechas de datos (Art. 14 bis Ley 21.719) ───────────
+  getBrechas: async () =>
+    _fetch('/api/brechas', {}, true),
+
+  registrarBrecha: async (datos) =>
+    _fetch('/api/brechas', { method: 'POST', body: JSON.stringify(datos) }, true),
+
+  actualizarBrecha: async (id, datos) =>
+    _fetch(`/api/brechas/${id}/estado`,
+      { method: 'PUT', body: JSON.stringify(datos) }, true),
+
+  // ── Usuarios internos ────────────────────────────────────────
+  getUsuarios: async () =>
+    _fetch('/api/usuarios', {}, true),
+
+  crearUsuario: async (datos) =>
+    _fetch('/api/usuarios', { method: 'POST', body: JSON.stringify(datos) }, true),
+
+  cambiarRolUsuario: async (uid, rol) =>
+    _fetch(`/api/usuarios/${uid}/rol`, { method: 'PUT', body: JSON.stringify({ rol }) }, true),
+
+  cambiarEstadoUsuario: async (uid, activo) =>
+    _fetch(`/api/usuarios/${uid}/estado`, { method: 'PUT', body: JSON.stringify({ activo }) }, true),
 
   // ── Estadísticas ────────────────────────────────────────
   getEstadisticas: async () =>

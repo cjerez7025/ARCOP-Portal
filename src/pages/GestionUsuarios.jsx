@@ -148,7 +148,7 @@ export default function GestionUsuarios() {
                       <tr key={u.uid} className="animate-fade-up" style={{ animationDelay: `${idx * 55}ms` }}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <div aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.3))', color: '#A5B4FC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, border: '1px solid rgba(99,102,241,0.25)' }}>
+                            <div aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, rgba(99,102,241, 0.3), rgba(139,92,246,0.3))', color: 'var(--dpo-color-primario, #A5B4FC)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, border: '1px solid rgba(99,102,241,0.25)' }}>
                               {(u.nombre || u.email || '?').charAt(0).toUpperCase()}
                             </div>
                             <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.9)' }}>{u.nombre || '—'}</span>
@@ -201,7 +201,7 @@ export default function GestionUsuarios() {
                     <div key={u.uid} className="animate-fade-up" style={{ padding: 16, borderBottom: '1px solid rgba(255,255,255,0.06)', animationDelay: `${idx * 55}ms` }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                          <div aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.3))', color: '#A5B4FC', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, border: '1px solid rgba(99,102,241,0.25)' }}>
+                          <div aria-hidden="true" style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, rgba(99,102,241, 0.3), rgba(139,92,246,0.3))', color: 'var(--dpo-color-primario, #A5B4FC)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, border: '1px solid rgba(99,102,241,0.25)' }}>
                             {(u.nombre || u.email || '?').charAt(0).toUpperCase()}
                           </div>
                           <div style={{ minWidth: 0 }}>

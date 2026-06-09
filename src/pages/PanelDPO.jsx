@@ -60,7 +60,7 @@ const CampoTransicion = ({ campo, value, onChange, solicitudId }) => {
                 <label style={{ display: 'block', cursor: 'pointer', pointerEvents: subiendo ? 'none' : 'auto', opacity: subiendo ? 0.6 : 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', fontSize: '0.875rem', border: '2px dashed rgba(255,255,255,0.2)', borderRadius: 8, background: 'rgba(255,255,255,0.04)', transition: 'all 0.15s' }}>
                     {subiendo
-                      ? <><Loader style={{ width: 16, height: 16, color: '#6366F1' }} className="animate-spin flex-shrink-0" /><span style={{ color: 'rgba(255,255,255,0.55)' }}>Subiendo...</span></>
+                      ? <><Loader style={{ width: 16, height: 16, color: 'var(--dpo-color-primario, #6366F1)' }} className="animate-spin flex-shrink-0" /><span style={{ color: 'rgba(255,255,255,0.55)' }}>Subiendo...</span></>
                       : <><Upload style={{ width: 16, height: 16, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }} /><span style={{ color: 'rgba(255,255,255,0.35)' }}>Haz clic para seleccionar un archivo</span></>
                     }
                   </div>
@@ -708,7 +708,7 @@ const PanelDPO = () => {
                         </div>
                       </div>
                       <a href={arch.url} target="_blank" rel="noopener noreferrer" download={arch.nombre}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#6366F1', color: 'white', fontSize: '0.75rem', fontWeight: 500, borderRadius: 8, textDecoration: 'none', flexShrink: 0 }}>
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: 'var(--dpo-color-primario, #6366F1)', color: 'white', fontSize: '0.75rem', fontWeight: 500, borderRadius: 8, textDecoration: 'none', flexShrink: 0 }}>
                         ⬇ Descargar
                       </a>
                     </div>
@@ -729,7 +729,7 @@ const PanelDPO = () => {
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button onClick={() => { handleCerrarDetalle(); handleAbrirCambiarEstado(modalDetalle); }}
-                  style={{ padding: '8px 16px', background: '#6366F1', color: 'white', border: 'none', borderRadius: 8, fontWeight: 500, fontSize: '0.875rem', cursor: 'pointer' }}>
+                  style={{ padding: '8px 16px', background: 'var(--dpo-color-primario, #6366F1)', color: 'white', border: 'none', borderRadius: 8, fontWeight: 500, fontSize: '0.875rem', cursor: 'pointer' }}>
                   Cambiar Estado
                 </button>
                 <button onClick={handleCerrarDetalle}
@@ -835,7 +835,7 @@ const PanelDPO = () => {
                       return (
                         <label key={est.id}
                           style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 10, border: `2px solid ${sel ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.10)'}`, background: sel ? 'rgba(99,102,241,0.08)' : 'transparent', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          <input type="radio" name="estadoDestino" style={{ width: 16, height: 16, accentColor: '#6366F1' }}
+                          <input type="radio" name="estadoDestino" style={{ width: 16, height: 16, accentColor: 'var(--dpo-color-primario, #6366F1)' }}
                             checked={sel} onChange={() => handleCambioEstadoDestino(est.id)} />
                           <div style={{ flex: 1 }}>
                             <p style={{ fontSize: '0.875rem', fontWeight: 600, color: sel ? '#A5B4FC' : 'rgba(255,255,255,0.85)', margin: 0 }}>{est.nombre}</p>
@@ -931,7 +931,7 @@ const PanelDPO = () => {
                       {actoresDisponibles.map((actor, i) => (
                         <label key={i}
                           style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8, border: `2px solid ${actorSeleccionado?.email === actor.email ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.08)'}`, background: actorSeleccionado?.email === actor.email ? 'rgba(99,102,241,0.10)' : 'rgba(255,255,255,0.04)', cursor: 'pointer', transition: 'all 0.15s' }}>
-                          <input type="radio" name="actor" style={{ width: 16, height: 16, accentColor: '#6366F1' }}
+                          <input type="radio" name="actor" style={{ width: 16, height: 16, accentColor: 'var(--dpo-color-primario, #6366F1)' }}
                             checked={actorSeleccionado?.email === actor.email}
                             onChange={() => { setActorSeleccionado(actor); setActorLibre(''); }} />
                           <div style={{ flex: 1 }}>
@@ -946,7 +946,7 @@ const PanelDPO = () => {
                         </label>
                       ))}
                       <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8, border: `2px solid ${!actorSeleccionado && !!actorLibre ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.08)'}`, background: !actorSeleccionado && !!actorLibre ? 'rgba(99,102,241,0.10)' : 'rgba(255,255,255,0.04)', cursor: 'pointer', transition: 'all 0.15s' }}>
-                        <input type="radio" name="actor" style={{ width: 16, height: 16, accentColor: '#6366F1' }}
+                        <input type="radio" name="actor" style={{ width: 16, height: 16, accentColor: 'var(--dpo-color-primario, #6366F1)' }}
                           checked={!actorSeleccionado && !!actorLibre}
                           onChange={() => setActorSeleccionado(null)} />
                         <input type="text" placeholder="Otro responsable..."
@@ -984,7 +984,7 @@ const PanelDPO = () => {
                 </button>
                 <button onClick={handleCambiarEstado}
                   disabled={procesando || (!usarFallback && nuevoEstado === estadoActualId)}
-                  style={{ padding: '8px 16px', background: '#6366F1', color: 'white', border: 'none', borderRadius: 8, fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', opacity: (procesando || (!usarFallback && nuevoEstado === estadoActualId)) ? 0.5 : 1 }}>
+                  style={{ padding: '8px 16px', background: 'var(--dpo-color-primario, #6366F1)', color: 'white', border: 'none', borderRadius: 8, fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer', opacity: (procesando || (!usarFallback && nuevoEstado === estadoActualId)) ? 0.5 : 1 }}>
                   {procesando ? 'Guardando...' : 'Confirmar cambio'}
                 </button>
               </div>
