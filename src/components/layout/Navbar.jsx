@@ -73,15 +73,13 @@ const Navbar = () => {
   if (isInterno) return (
     <>
       <nav style={{
-        background:           'rgba(10,18,40,0.97)',
-        backdropFilter:       'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderBottom:         '1px solid rgba(255,255,255,0.08)',
-        boxShadow:            '0 1px 12px rgba(0,0,0,0.4)',
-        position:             'sticky',
-        top:                  0,
-        zIndex:               50,
-        overflow:             'visible',
+        background:   '#ffffff',
+        borderBottom: '1px solid #e2e8f0',
+        boxShadow:    '0 1px 3px rgba(0,0,0,0.07)',
+        position:     'sticky',
+        top:          0,
+        zIndex:       50,
+        overflow:     'visible',
       }}>
         <div style={{
           maxWidth:   '1280px',
@@ -112,8 +110,8 @@ const Navbar = () => {
                     display: 'flex', alignItems: 'center', gap: '6px',
                     padding: '8px 14px', borderRadius: '8px',
                     fontSize: '13px', fontWeight: active ? 600 : 500,
-                    color:      active ? '#93c5fd' : '#94a3b8',
-                    background: active ? 'rgba(29,78,216,0.15)' : 'transparent',
+                    color:      active ? '#1d4ed8' : '#64748b',
+                    background: active ? '#eff6ff' : 'transparent',
                     textDecoration: 'none', transition: 'all 0.15s',
                   }}>
                     <Icon style={{ width: 15, height: 15 }} />{label}
@@ -127,20 +125,20 @@ const Navbar = () => {
                     display: 'flex', alignItems: 'center', gap: '6px',
                     padding: '8px 14px', borderRadius: '8px',
                     fontSize: '13px', fontWeight: active ? 600 : 500,
-                    color:      active ? '#93c5fd' : '#94a3b8',
-                    background: active ? 'rgba(29,78,216,0.15)' : 'transparent',
+                    color:      active ? '#1d4ed8' : '#64748b',
+                    background: active ? '#eff6ff' : 'transparent',
                     textDecoration: 'none', transition: 'all 0.15s',
                   }}>
                     <Icon style={{ width: 15, height: 15 }} />{label}
                   </Link>
                 );
               })}
-              <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.12)', margin: '0 8px' }} />
+              <div style={{ width: '1px', height: '24px', background: '#e2e8f0', margin: '0 8px' }} />
               <Link to="/" style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 padding: '8px 12px', borderRadius: '8px',
-                fontSize: '13px', color: '#94a3b8',
-                border: '1px solid rgba(255,255,255,0.12)', textDecoration: 'none',
+                fontSize: '13px', color: '#64748b',
+                border: '1px solid #e2e8f0', textDecoration: 'none',
               }}>
                 <Home style={{ width: 14, height: 14 }} /> Portal
               </Link>
@@ -149,7 +147,7 @@ const Navbar = () => {
                   display: 'flex', alignItems: 'center', gap: '6px',
                   padding: '8px 12px', borderRadius: '8px',
                   fontSize: '13px', fontWeight: 500,
-                  color: '#fca5a5', border: '1px solid rgba(252,165,165,0.25)',
+                  color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)',
                   background: 'transparent',
                   cursor: saliendo ? 'not-allowed' : 'pointer',
                   opacity: saliendo ? 0.5 : 1, marginLeft: '4px',
@@ -170,14 +168,14 @@ const Navbar = () => {
 
         {/* Mobile menu */}
         {open && (
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', background: 'rgba(10,18,40,0.97)', padding: '12px 16px' }}>
+          <div style={{ borderTop: '1px solid #e2e8f0', background: '#ffffff', padding: '12px 16px' }}>
             {isDPO && NAV_DPO.filter(n => !n.roles || (rol && n.roles.includes(rol))).map(({ to, label, icon: Icon }) => (
               <Link key={to} to={to} onClick={() => setOpen(false)} style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
                 padding: '10px 12px', borderRadius: '8px', marginBottom: '2px',
                 fontSize: '14px', fontWeight: 500,
-                color:      isActive(to) ? '#93c5fd' : '#94a3b8',
-                background: isActive(to) ? 'rgba(29,78,216,0.15)' : 'transparent',
+                color:      isActive(to) ? '#1d4ed8' : '#64748b',
+                background: isActive(to) ? '#eff6ff' : 'transparent',
                 textDecoration: 'none',
               }}>
                 <Icon style={{ width: 16, height: 16 }} />{label}
@@ -188,16 +186,16 @@ const Navbar = () => {
                 display: 'flex', alignItems: 'center', gap: '10px',
                 padding: '10px 12px', borderRadius: '8px', marginBottom: '2px',
                 fontSize: '14px', fontWeight: 500,
-                color:      location.pathname.startsWith(to) ? '#93c5fd' : '#94a3b8',
-                background: location.pathname.startsWith(to) ? 'rgba(29,78,216,0.15)' : 'transparent',
+                color:      location.pathname.startsWith(to) ? '#1d4ed8' : '#64748b',
+                background: location.pathname.startsWith(to) ? '#eff6ff' : 'transparent',
                 textDecoration: 'none',
               }}>
                 <Icon style={{ width: 16, height: 16 }} />{label}
               </Link>
             ))}
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '8px', paddingTop: '8px' }}>
+            <div style={{ borderTop: '1px solid #f1f5f9', marginTop: '8px', paddingTop: '8px' }}>
               <button onClick={() => { setOpen(false); handleLogout(); }} disabled={saliendo}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', fontSize: '14px', fontWeight: 500, color: '#fca5a5', background: 'none', border: 'none', cursor: 'pointer' }}>
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', fontSize: '14px', fontWeight: 500, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}>
                 <LogOut style={{ width: 16, height: 16 }} />{saliendo ? 'Saliendo...' : 'Cerrar sesión'}
               </button>
             </div>

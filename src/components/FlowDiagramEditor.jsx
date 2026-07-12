@@ -360,7 +360,7 @@ const PanelEstado = ({ estado, todos, onEditar, onEliminar, onAgregarTransicion,
             <button
               onClick={() => onAgregarCampoEstado({ tipo: 'text', label: '', obligatorio: false })}
               className="text-xs px-2 py-1 rounded-lg transition-all"
-              style={{ background: 'rgba(139,92,246,0.15)', color: '#C4B5FD', border: '1px solid rgba(139,92,246,0.3)' }}>
+              style={{ background: 'rgba(29,78,216,0.15)', color: '#93c5fd', border: '1px solid rgba(29,78,216,0.3)' }}>
               + Agregar
             </button>
           </div>

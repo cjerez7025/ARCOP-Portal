@@ -10,10 +10,10 @@ import { Plus, Save, Loader, AlertCircle, ChevronRight, ChevronUp, ChevronDown, 
 import { toast } from 'react-toastify';
 import useDerechosConfig, { ICONOS_DISPONIBLES, buildDerechoVacio } from '../hooks/useDerechosConfig';
 import TabFormularios from './TabFormularios';
-import TabFlujos from './TabFlujos';
+import TabFlujos, { NotifWebhookPanel } from './TabFlujos';
 
 // ── Sub-tab General ───────────────────────────────────────
-const TabGeneral = ({ derecho, esNuevo, onGuardar, onGuardarYContinuar, guardando }) => {
+const TabGeneral = ({ derecho, esNuevo, onGuardar, onGuardarYContinuar, guardando, webhookUrl, onGuardarWebhook }) => {
   const [form, setForm] = useState(
     derecho || buildDerechoVacio()
   );
@@ -206,6 +206,21 @@ const TabGeneral = ({ derecho, esNuevo, onGuardar, onGuardarYContinuar, guardand
         </div>
       )}
 
+      {/* Notificaciones (Google Chat / Slack / Teams) */}
+      {!esNuevo && derecho?.id && (
+        <div className="space-y-2">
+          <div className="border-b border-gray-100 pb-2">
+            <h3 className="text-base font-bold text-gray-800">🔔 Notificaciones</h3>
+            <p className="text-xs text-gray-500 mt-0.5">Canal de notificaciones internas para el equipo DPO cuando lleguen solicitudes de este derecho.</p>
+          </div>
+          <NotifWebhookPanel
+            derechoKey={derecho.id}
+            webhook={webhookUrl || ''}
+            onGuardar={onGuardarWebhook}
+          />
+        </div>
+      )}
+
       {/* Footer */}
       <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
         {!dirty ? (
@@ -390,6 +405,17 @@ const TabDerechos = ({ formularioHook, flujoHook }) => {
                     onGuardar={handleGuardar}
                     onGuardarYContinuar={handleGuardarYContinuar}
                     guardando={guardando}
+                    webhookUrl={
+                      derechoSeleccionado?.id
+                        ? flujoHook?.config?.derechos?.[derechoSeleccionado.id]?.google_chat_webhook || ''
+                        : ''
+                    }
+                    onGuardarWebhook={async (url) => {
+                      if (derechoSeleccionado?.id) {
+                        flujoHook?.editarGChatWebhook(derechoSeleccionado.id, url);
+                        setTimeout(() => flujoHook?.guardar?.(), 100);
+                      }
+                    }}
                   />
                 )}
   {subTab === 'formulario' && derechoSeleccionado && (() => {

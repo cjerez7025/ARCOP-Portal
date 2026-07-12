@@ -69,14 +69,30 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
 .stagger-5 { animation-delay: 0.25s; }
 
 /* ── Layout ── */
-.portal-layout, .dpo-layout, .page-wrapper, .portal-bg {
+/* Portal público y páginas oscuras */
+.portal-layout, .page-wrapper, .portal-bg {
   background-color: #0D1117;
   min-height: 100vh;
 }
 .arcop-portal-publico { background-color: #0D1117; min-height: 100vh; }
 
-/* ── Glass cards ── */
-.glass-card, .surface-card, .corp-card {
+/* Panel admin DPO — fondo claro y limpio */
+.dpo-layout {
+  min-height: 100vh;
+  background: #f0f4f8;
+}
+
+/* ── Cards ── */
+/* Card blanco para panel DPO */
+.glass-card, .surface-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.04);
+  border-radius: 12px;
+}
+
+/* Card oscuro para portal público */
+.corp-card {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 12px;
@@ -278,9 +294,13 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
 
 /* ── Backward compat ── */
 .portal-bg { background-color: #0D1117; min-height: 100vh; }
+/* Cards del portal público — glass oscuro sobre fondo navy */
 .arcop-portal-publico .glass-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.3);
   border-radius: 12px;
 }
 .arcop-portal-publico .arcop-input-dark {
@@ -302,4 +322,55 @@ a:focus, button:focus, input:focus, select:focus, textarea:focus {
 .arcop-portal-publico .arcop-input-dark::placeholder { color: rgba(255,255,255,0.3); }
 
 .btn-brand { background: #6366F1; }
-.surface-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; }
+
+/* ══════════════════════════════════════════════════
+   DPO PANEL — Overrides de tema claro
+   Convierte componentes oscuros al admin light theme
+   ══════════════════════════════════════════════════ */
+
+/* Cards → blanco */
+.dpo-layout .corp-card,
+.dpo-layout .corp-card-hover {
+  background: #ffffff !important;
+  border: 1px solid rgba(0,0,0,0.08) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.04) !important;
+}
+.dpo-layout .corp-card-hover:hover {
+  background: #f8fafc !important;
+  border-color: rgba(29,78,216,0.2) !important;
+}
+
+/* Inputs → light */
+.dpo-layout .corp-input,
+.dpo-layout .input-dark {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #1e293b !important;
+}
+.dpo-layout .corp-input::placeholder,
+.dpo-layout .input-dark::placeholder { color: #94a3b8 !important; }
+.dpo-layout .corp-input:focus,
+.dpo-layout .input-dark:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+}
+
+/* Tabla → light */
+.dpo-layout .corp-table thead tr {
+  background: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+.dpo-layout .corp-table thead th { color: #64748b !important; }
+.dpo-layout .corp-table tbody tr { border-bottom: 1px solid #f1f5f9 !important; }
+.dpo-layout .corp-table tbody tr:hover { background: #f8fafc !important; }
+.dpo-layout .corp-table tbody td { color: #374151 !important; }
+
+/* Btn-ghost → light en contexto DPO */
+.dpo-layout .btn-ghost {
+  color: #64748b !important;
+  border-color: #e2e8f0 !important;
+}
+.dpo-layout .btn-ghost:hover {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+}

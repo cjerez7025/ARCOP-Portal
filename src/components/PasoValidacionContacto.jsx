@@ -3,7 +3,7 @@
 // ============================================================
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Mail, MessageCircle, AlertTriangle, Loader, ShieldCheck, CheckCircle2, Pencil } from 'lucide-react';
+import { Mail, MessageCircle, AlertTriangle, Loader, ShieldCheck, CheckCircle2, Pencil, PhoneCall } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
@@ -18,6 +18,7 @@ const PasoValidacionContacto = ({ rut, onConfirmar, onDerivado, color }) => {
   const [noEncontrado, setNoEncontrado] = useState(false);
   const [canal,        setCanal]        = useState('email');
   const [confirmado,   setConfirmado]   = useState(false);
+  const [derivadoUI,   setDerivadoUI]   = useState(false);
 
   const onDerivadoRef = useRef(onDerivado);
   useEffect(() => { onDerivadoRef.current = onDerivado; }, [onDerivado]);
@@ -82,17 +83,27 @@ const PasoValidacionContacto = ({ rut, onConfirmar, onDerivado, color }) => {
   }
 
   // ── No encontrado ────────────────────────────────────────
-  if (noEncontrado) {
+  if (noEncontrado || derivadoUI) {
     return (
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 16px', background: 'rgba(245,158,11,0.08)', borderRadius: '12px', border: '1px solid rgba(245,158,11,0.2)', marginTop: '16px' }}>
-        <AlertTriangle size={15} color="#F59E0B" style={{ flexShrink: 0, marginTop: '1px' }} />
-        <div>
-          <p style={{ margin: 0, fontSize: '13px', color: '#F0C060', fontWeight: 600, marginBottom: '3px' }}>
-            No se encontraron datos de contacto
-          </p>
-          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Tu solicitud será procesada con derivación asistida. Un agente se contactará contigo para verificar tu identidad.
-          </p>
+      <div style={{ marginTop: '16px', padding: '16px', background: '#FFFBEB', borderRadius: '12px', border: '1px solid #FDE68A' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <PhoneCall size={20} color="#D97706" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#92400E', marginBottom: '6px' }}>
+              {noEncontrado ? 'No se encontraron datos de contacto' : 'Canal asistido activado'}
+            </p>
+            <p style={{ margin: 0, fontSize: '12px', color: '#78350F', lineHeight: 1.5 }}>
+              Un agente DPO te contactará para verificar tu identidad. Si prefieres comunicarte directamente:
+            </p>
+            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <a href="mailto:dpo@arcop.cl" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#92400E', textDecoration: 'none' }}>
+                <Mail size={16} /> dpo@arcop.cl
+              </a>
+              <a href="tel:+56221234567" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: '#92400E', textDecoration: 'none' }}>
+                <PhoneCall size={16} /> +56 2 2123 4567
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -106,13 +117,13 @@ const PasoValidacionContacto = ({ rut, onConfirmar, onDerivado, color }) => {
   // ── Confirmado: estado compacto ──────────────────────────
   if (confirmado) {
     return (
-      <div className="animate-fade-up" style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: 'rgba(16,185,129,0.08)', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.2)' }}>
-        <CheckCircle2 size={16} color="#10B981" style={{ flexShrink: 0 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: '12px', color: '#10B981', fontWeight: 600 }}>
+      <div className="animate-fade-up" style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', background: 'rgba(16,185,129,0.08)', borderRadius: '12px', border: '1px solid rgba(16,185,129,0.25)' }}>
+        <CheckCircle2 size={20} color="#10B981" style={{ flexShrink: 0, animation: 'scaleIn 300ms ease-out both' }} />
+        <div style={{ flex: 1, minWidth: 0, animation: 'fadeIn 300ms ease-out both' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: '#10B981', fontWeight: 700 }}>
             Canal confirmado · {meta.label}
           </p>
-          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', marginTop: '1px' }}>
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
             Recibirás el link de verificación en <strong style={{ color: 'var(--text-secondary)' }}>{valorCanal}</strong>
           </p>
         </div>
@@ -176,7 +187,7 @@ const PasoValidacionContacto = ({ rut, onConfirmar, onDerivado, color }) => {
           </button>
           <button
             type="button"
-            onClick={onDerivado}
+            onClick={() => { setDerivadoUI(true); onDerivado(); }}
             style={{ flex: 1, padding: '10px 16px', background: 'transparent', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '10px', fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s' }}
           >
             No reconozco estos datos
@@ -191,17 +202,17 @@ const CanalOption = ({ activo, onClick, Icon, label, valor, accent }) => (
   <button
     type="button"
     onClick={onClick}
-    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: activo ? accent + '15' : 'rgba(255,255,255,0.03)', border: `1px solid ${activo ? accent + '40' : 'rgba(255,255,255,0.08)'}`, borderRadius: '10px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s', width: '100%' }}
+    style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 18px', background: activo ? accent + '15' : 'rgba(255,255,255,0.03)', border: `2px solid ${activo ? accent : 'rgba(255,255,255,0.08)'}`, borderRadius: '12px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s', width: '100%', boxShadow: activo ? `0 0 0 1px ${accent}30` : 'none' }}
   >
-    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: activo ? accent + '20' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
-      <Icon size={16} color={activo ? accent : 'var(--text-muted)'} />
+    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: activo ? accent + '25' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' }}>
+      <Icon size={24} color={activo ? accent : 'var(--text-muted)'} />
     </div>
     <div style={{ flex: 1, minWidth: 0 }}>
-      <p style={{ margin: 0, fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</p>
-      <p style={{ margin: 0, fontSize: '14px', color: activo ? '#E8E8F0' : 'var(--text-secondary)', fontWeight: 600, marginTop: '2px', letterSpacing: '0.01em' }}>{valor}</p>
+      <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: activo ? '#E8E8F0' : 'var(--text-secondary)', transition: 'color 0.2s' }}>{label}</p>
+      <p style={{ margin: 0, fontSize: '13px', color: activo ? accent + 'CC' : 'var(--text-muted)', marginTop: '3px', letterSpacing: '0.01em' }}>{valor}</p>
     </div>
-    <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: `2px solid ${activo ? accent : 'rgba(255,255,255,0.2)'}`, background: activo ? accent : 'transparent', flexShrink: 0, transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {activo && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#fff' }} />}
+    <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: `2px solid ${activo ? accent : 'rgba(255,255,255,0.2)'}`, background: activo ? accent : 'transparent', flexShrink: 0, transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {activo && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#fff' }} />}
     </div>
   </button>
 );

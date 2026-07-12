@@ -18,6 +18,9 @@ const derechosRoutes     = require('./routes/derechos');
 const uploadRouter       = require('./routes/upload');
 const validacionRouter   = require('./routes/validacion');
 const rutContactosRouter = require('./routes/rutContactos');
+const brechasRouter      = require('./routes/brechas');
+const usuariosRouter     = require('./routes/usuarios');
+const { requireAuth }    = require('./middleware/auth');
 
 const app  = express();
 app.set('trust proxy', 1);
@@ -60,6 +63,8 @@ app.use('/api/derechos',      derechosRoutes);
 app.use('/api/upload',        uploadRouter);
 app.use('/api/validacion',    validacionRouter);
 app.use('/api/rut-contactos', rutContactosRouter);
+app.use('/api/brechas',      brechasRouter);
+app.use('/api/usuarios',    requireAuth, usuariosRouter);
 
 // ── Error handler global ──────────────────────────────────
 app.use((err, req, res, _next) => {

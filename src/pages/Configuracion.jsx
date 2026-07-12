@@ -851,7 +851,7 @@ const Configuracion = () => {
   };
 
   if (loading) return (
-    <div className="page-wrapper flex items-center justify-center">
+    <div className="dpo-layout flex items-center justify-center">
       <Loader className="w-12 h-12 text-blue-600 animate-spin" />
     </div>
   );
@@ -886,10 +886,10 @@ const Configuracion = () => {
   const mostrarFooter = tabActivaEsSimple || tabActiva === 'derechos';
 
   return (
-    <div className="page-wrapper py-8 px-4">
+    <div className="dpo-layout py-8 px-4">
       <div className="max-w-6xl mx-auto">
 
-        <h1 className="text-3xl font-bold text-white mb-6">⚙️ Configuración del Sistema</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-6">Configuración del Sistema</h1>
 
         {cambiosPendientes && tabActivaEsSimple && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 flex items-center gap-2">

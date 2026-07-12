@@ -96,6 +96,20 @@ async function consultarAPIEmpresa(rut, config) {
   }
 }
 
+// ── Normalizar RUT para búsqueda en Firebase ─────────────
+// Produce "12.345.678-9" desde cualquier variante del RUT
+function _normalizarRut(rut) {
+  const s      = String(rut).replace(/[\.\-\s]/g, '').toUpperCase();
+  const cuerpo = s.slice(0, -1);
+  const dv     = s.slice(-1);
+  let resultado = '';
+  for (let i = 0; i < cuerpo.length; i++) {
+    if (i > 0 && (cuerpo.length - i) % 3 === 0) resultado += '.';
+    resultado += cuerpo[i];
+  }
+  return resultado + '-' + dv;
+}
+
 // ── Consulta Firebase fallback ────────────────────────────
 
 /**
@@ -104,7 +118,10 @@ async function consultarAPIEmpresa(rut, config) {
  */
 async function consultarFirebaseFallback(rut) {
   try {
-    const snap = await db.collection('rut_contactos').doc(rut).get();
+    // Intentar con el RUT normalizado (formato con puntos) y sin normalizar
+    const rutNorm = _normalizarRut(rut);
+    let snap = await db.collection('rut_contactos').doc(rutNorm).get();
+    if (!snap.exists) snap = await db.collection('rut_contactos').doc(rut).get();
     if (!snap.exists) {
       console.log(`[validacionService] Fallback Firebase: RUT ${_maskRut(rut)} no encontrado`);
       return null;

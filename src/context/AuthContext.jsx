@@ -14,14 +14,24 @@ import {
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user,    setUser]    = useState(null);
-  const [loading, setLoading] = useState(true); // true mientras Firebase verifica sesión
+  const [user,     setUser]     = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [loading,  setLoading]  = useState(true);
 
   const auth = getAuth();
 
   useEffect(() => {
-    // Escucha cambios de sesión (persiste entre recargas)
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const tokenResult = await firebaseUser.getIdTokenResult();
+          setUserRole(tokenResult.claims.role || null);
+        } catch {
+          setUserRole(null);
+        }
+      } else {
+        setUserRole(null);
+      }
       setUser(firebaseUser);
       setLoading(false);
     });
@@ -34,7 +44,7 @@ export function AuthProvider({ children }) {
   const logout = () => signOut(auth);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, userRole, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

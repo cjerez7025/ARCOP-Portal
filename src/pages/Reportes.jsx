@@ -708,7 +708,7 @@ const Reportes = () => {
   })();
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="dpo-layout flex items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-slate-400">
         <Loader className="w-8 h-8 animate-spin" />
         <span className="text-sm font-medium">Cargando reportes...</span>
@@ -717,7 +717,7 @@ const Reportes = () => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
+    <div className="dpo-layout py-8 px-4">
       <div className="max-w-7xl mx-auto space-y-6">
 
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">

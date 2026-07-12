@@ -399,14 +399,47 @@ const ModalNuevoEstado = ({ estadosExistentes, onCancelar, onConfirmar }) => {
   );
 };
 
-const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
+const CANALES = {
+  gchat: {
+    nombre:      'Google Chat',
+    badge:       'bg-green-100 text-green-700',
+    placeholder: 'https://chat.googleapis.com/v1/spaces/XXX/messages?key=...',
+  },
+  slack: {
+    nombre:      'Slack',
+    badge:       'bg-purple-100 text-purple-700',
+    placeholder: 'https://hooks.slack.com/services/T.../B.../..',
+  },
+  teams: {
+    nombre:      'Microsoft Teams',
+    badge:       'bg-blue-100 text-blue-700',
+    placeholder: 'https://xxx.webhook.office.com/webhookb2/...',
+  },
+};
+
+function _detectarCanal(url) {
+  if (!url) return null;
+  if (url.includes('chat.googleapis.com')) return 'gchat';
+  if (url.includes('hooks.slack.com'))     return 'slack';
+  if (url.includes('webhook.office.com') ||
+      url.includes('outlook.office.com')) return 'teams';
+  return null;
+}
+
+const NotifWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
   const [editando, setEditando] = useState(false);
   const [draft,    setDraft]    = useState(webhook || '');
   const [probando, setProbando] = useState(false);
 
   React.useEffect(() => { setDraft(webhook || ''); setEditando(false); }, [derechoKey, webhook]);
 
-  const esValida = (url) => !url || url.startsWith('https://chat.googleapis.com/v1/spaces/');
+  const canalActual = _detectarCanal(webhook);
+  const canalDraft  = _detectarCanal(draft);
+  const infoActual  = canalActual ? CANALES[canalActual] : null;
+  const infoDraft   = canalDraft  ? CANALES[canalDraft]  : null;
+  const tieneWebhook = !!webhook;
+
+  const esValida = (url) => !url || !!_detectarCanal(url);
   const handleGuardar = () => { if (!esValida(draft)) return; onGuardar(draft); setEditando(false); };
 
   const handleProbar = async () => {
@@ -415,12 +448,14 @@ const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
     try {
       const adapter = (await import('../adapters')).default;
       const result  = await adapter.probarGChat(webhook, derechoKey);
-      alert(result.status === 'success' ? '✅ Mensaje de prueba enviado al espacio de Google Chat' : '❌ Error: ' + (result.message || 'Revisa la URL del webhook'));
+      const nombre  = infoActual?.nombre || 'el canal';
+      alert(result.status === 'success'
+        ? `✅ Mensaje de prueba enviado a ${nombre}`
+        : `❌ Error: ${result.message || 'Revisa la URL del webhook'}`);
     } catch (e) { alert('❌ Error de conexión: ' + e.message); }
     finally { setProbando(false); }
   };
 
-  const tieneWebhook = !!webhook;
   return (
     <div className="bg-white border border-gray-200 rounded-2xl px-5 py-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -429,8 +464,15 @@ const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
             <Link2 className={`w-3.5 h-3.5 ${tieneWebhook ? 'text-green-600' : 'text-gray-400'}`} />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-800">Canal Google Chat</p>
-            <p className="text-xs text-gray-400">{tieneWebhook ? '✅ Webhook configurado' : 'Sin espacio configurado'}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-800">Canal de notificaciones</p>
+              {infoActual && (
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${infoActual.badge}`}>
+                  {infoActual.nombre}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400">{tieneWebhook ? '✅ Webhook configurado' : 'Sin canal configurado'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -446,27 +488,60 @@ const GoogleChatWebhookPanel = ({ derechoKey, webhook, onGuardar }) => {
           </button>
         </div>
       </div>
-      {tieneWebhook && !editando && (
-        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
-          <code className="text-xs text-gray-500 truncate flex-1">{webhook.replace('https://chat.googleapis.com/v1/spaces/', 'chat.googleapis.com/…/')}</code>
+
+      {!tieneWebhook && !editando && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-400">Soporta:</span>
+          {Object.entries(CANALES).map(([k, c]) => (
+            <span key={k} className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.badge}`}>{c.nombre}</span>
+          ))}
         </div>
       )}
+
+      {tieneWebhook && !editando && (
+        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
+          <code className="text-xs text-gray-500 truncate flex-1">
+            {webhook.replace(/^https?:\/\//, '').substring(0, 80)}...
+          </code>
+        </div>
+      )}
+
       {editando && (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          {canalDraft && (
+            <div className={`flex items-center gap-2 text-xs font-medium px-3 py-2 rounded-lg ${CANALES[canalDraft].badge}`}>
+              <span>✓ Canal detectado:</span>
+              <span className="font-bold">{CANALES[canalDraft].nombre}</span>
+            </div>
+          )}
           <div className="space-y-1">
-            <label className="text-xs font-medium text-gray-600">Webhook URL de Google Chat</label>
+            <label className="text-xs font-medium text-gray-600">URL del webhook</label>
             <input type="url" value={draft} onChange={e => setDraft(e.target.value)}
-              placeholder="https://chat.googleapis.com/v1/spaces/XXX/messages?key=..."
-              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 transition-colors ${draft && !esValida(draft) ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-gray-300 focus:ring-blue-200'}`} />
+              placeholder={infoDraft?.placeholder || 'https://chat.googleapis.com/... · hooks.slack.com/... · webhook.office.com/...'}
+              className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                draft && !esValida(draft) ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-gray-300 focus:ring-blue-200'
+              }`} />
             {draft && !esValida(draft) && (
-              <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" />La URL debe comenzar con https://chat.googleapis.com/v1/spaces/</p>
+              <p className="text-xs text-red-500 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3" />
+                URL no reconocida. Usa un webhook de Google Chat, Slack o Teams.
+              </p>
+            )}
+            {!draft && (
+              <p className="text-xs text-gray-400">
+                Pega el webhook de tu plataforma — el canal se detecta automáticamente.
+              </p>
             )}
           </div>
           <div className="flex gap-2 pt-1">
             <button onClick={() => { setDraft(''); onGuardar(''); setEditando(false); }}
-              className="px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors">Limpiar</button>
+              className="px-3 py-1.5 text-xs text-gray-500 hover:text-red-500 hover:bg-red-50 border border-gray-200 rounded-lg transition-colors">
+              Limpiar
+            </button>
             <button onClick={handleGuardar} disabled={!esValida(draft)}
-              className="flex-1 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">Guardar webhook</button>
+              className="flex-1 px-4 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors">
+              Guardar webhook
+            </button>
           </div>
         </div>
       )}
@@ -532,6 +607,8 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
               const dc2 = DERECHO_COLORS[m.color] || DERECHO_COLORS.blue;
               const est = config.derechos?.[key]?.estados || [];
               const hook_url = config.derechos?.[key]?.google_chat_webhook;
+              const canalSidebar = _detectarCanal(hook_url);
+              const CANAL_ICON = { gchat: '💬', slack: '💜', teams: '🔵' };
               return (
                 <button key={key} onClick={() => { setDerechoActivo(key); setVista('lista'); }}
                   className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
@@ -540,7 +617,7 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-800">{m.icono} {m.nombre}</span>
                     <div className="flex items-center gap-1">
-                      {hook_url && <Link2 className="w-3 h-3 text-green-500" />}
+                      {canalSidebar && <span title={CANALES[canalSidebar]?.nombre}>{CANAL_ICON[canalSidebar]}</span>}
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                         {est.filter(e => e.activo !== false).length} estados
                       </span>
@@ -580,12 +657,6 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
               </div>
             </div>
           </div>
-
-          <GoogleChatWebhookPanel
-            derechoKey={derechoActivo}
-            webhook={config.derechos?.[derechoActivo]?.google_chat_webhook || ''}
-            onGuardar={(url) => editarGChatWebhook(derechoActivo, url)}
-          />
 
           {vista === 'diagrama' && <FlowDiagramEditor estados={estados} hook={hook} derechoKey={derechoActivo} />}
 
@@ -650,4 +721,5 @@ const TabFlujos = ({ hook, derechoActivoExterno }) => {
   );
 };
 
+export { NotifWebhookPanel };
 export default TabFlujos;

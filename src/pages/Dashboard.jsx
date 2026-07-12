@@ -44,7 +44,7 @@ const Dashboard = () => {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="dpo-layout flex items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-slate-400">
         <Loader className="w-8 h-8 animate-spin" />
         <span className="text-sm font-medium">Cargando datos...</span>
@@ -117,7 +117,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
+    <div className="dpo-layout py-8 px-4">
       <div className="max-w-7xl mx-auto space-y-8">
 
         {/* Header */}
@@ -126,7 +126,7 @@ const Dashboard = () => {
             <p className="text-xs font-semibold tracking-widest uppercase text-indigo-500 mb-1">
               Panel de control
             </p>
-            <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-sm text-slate-400 mt-0.5">
               Sistema de gestión ARCOP — Ley 21.719
             </p>
@@ -173,9 +173,9 @@ const Dashboard = () => {
         {solicitudes.length > 0 && <GraficosPanel solicitudes={solicitudes} />}
 
         {/* Solicitudes recientes */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="glass-card rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-bold text-slate-900">Solicitudes recientes</h2>
+            <h2 className="text-sm font-bold text-gray-900">Solicitudes recientes</h2>
             <Link to="/dpo"
               className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
             >
@@ -247,7 +247,7 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {ACCIONES.map(({ to, icon: Icon, titulo, desc, color, bg }) => (
               <Link key={to} to={to}
-                className="group flex items-start gap-4 bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-300 hover:shadow-sm transition-all"
+                className="group flex items-start gap-4 glass-card rounded-xl p-5 hover:border-blue-300 transition-all"
               >
                 <div className={`flex-shrink-0 w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
                   <Icon className={`w-4 h-4 ${color}`} strokeWidth={2} />

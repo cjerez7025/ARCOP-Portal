@@ -26,7 +26,7 @@ const CampoRenderer = ({ campo, register, watch, setValue, errors, dark = false 
       outline: 'none',
       transition: 'border-color 0.15s, box-shadow 0.15s',
     },
-    inputFocus:  { borderColor: 'rgba(99,102,241,0.5)', boxShadow: '0 0 0 3px rgba(99,102,241,0.12)' },
+    inputFocus:  { borderColor: 'rgba(29,78,216,0.5)', boxShadow: '0 0 0 3px rgba(29,78,216,0.12)' },
     ayuda:       { fontSize: '11px', color: '#5A5A72', marginTop: '5px' },
     error:       { fontSize: '12px', color: '#EF4444', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' },
     radioItem:   {

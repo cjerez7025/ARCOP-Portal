@@ -645,6 +645,125 @@ router.post('/:id/desistir', async (req, res, next) => {
 });
 
 // ═════════════════════════════════════════════════════════
+// PUT /api/solicitudes/:id/asignar  (interno)
+// Body: { asignado_a, asignado_email, nota? }
+// ═════════════════════════════════════════════════════════
+router.put('/:id/asignar', requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { asignado_a, asignado_email, nota } = req.body;
+
+    if (!asignado_a || !asignado_email) {
+      return res.status(400).json({ error: 'asignado_a y asignado_email son obligatorios' });
+    }
+
+    const ref  = db.collection('solicitudes').doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const prev = snap.data();
+
+    await ref.update({
+      asignado_a,
+      asignado_email,
+      asignado_en:  FieldValue.serverTimestamp(),
+      asignado_por: req.user.email,
+      updatedAt:    FieldValue.serverTimestamp(),
+    });
+
+    await ref.collection('historial').add({
+      estado_anterior: prev.estado,
+      estado_nuevo:    prev.estado,
+      comentario:      `Solicitud asignada a ${asignado_a}${nota ? ': ' + nota : ''}`,
+      actor:           req.user.email,
+      timestamp:       FieldValue.serverTimestamp(),
+    });
+
+    try {
+      await emailService.notificarAsignacion({
+        emailResponsable:  asignado_email,
+        nombreResponsable: asignado_a,
+        numero:            prev.numero_solicitud,
+        tipo:              prev.tipo_derecho,
+        estado:            prev.estado,
+        nombreTitular:     prev.nombre_completo,
+        panelUrl:          process.env.PANEL_URL || '',
+      });
+    } catch (emailErr) {
+      console.warn('[solicitudes] Email asignacion fallo:', emailErr.message);
+    }
+
+    return res.json({ status: 'success', data: { asignado_a, asignado_email } });
+  } catch (e) { next(e); }
+});
+
+// ═════════════════════════════════════════════════════════
+// POST /api/solicitudes/:numero/reenviar-validacion  (público)
+// Rate limit: 1 reenvío cada 10 minutos por solicitud
+// ═════════════════════════════════════════════════════════
+router.post('/:numero/reenviar-validacion', async (req, res, next) => {
+  try {
+    const { numero } = req.params;
+
+    const snap = await db.collection('solicitudes')
+      .where('numero_solicitud', '==', numero)
+      .limit(1)
+      .get();
+
+    if (snap.empty) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const solDoc = snap.docs[0];
+    const sol    = solDoc.data();
+
+    if (sol.estado !== 'PENDIENTE') {
+      return res.status(400).json({
+        error: 'La solicitud ya fue validada o esta en un estado que no permite reenvio'
+      });
+    }
+
+    if (sol.ultimo_reenvio) {
+      const minDesde = (Date.now() - sol.ultimo_reenvio.toDate().getTime()) / 60_000;
+      if (minDesde < 10) {
+        return res.status(429).json({
+          error: `Por favor espera ${Math.ceil(10 - minDesde)} minutos antes de solicitar otro reenvio`
+        });
+      }
+    }
+
+    const nuevoToken = crypto.randomBytes(32).toString('hex');
+
+    await db.collection('tokens').doc(nuevoToken).set({
+      solicitudId:  solDoc.id,
+      numero:       sol.numero_solicitud,
+      tipo_derecho: sol.tipo_derecho,
+      createdAt:    FieldValue.serverTimestamp(),
+      expiresAt:    new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+      usado:        false,
+    });
+
+    if (sol.token_validacion) {
+      db.collection('tokens').doc(sol.token_validacion)
+        .update({ invalidado: true }).catch(() => {});
+    }
+
+    await solDoc.ref.update({
+      token_validacion: nuevoToken,
+      ultimo_reenvio:   FieldValue.serverTimestamp(),
+    });
+
+    await emailService.reenviarValidacion({
+      email:            sol.email,
+      nombre_completo:  sol.nombre_completo,
+      numero_solicitud: sol.numero_solicitud,
+      tipo_derecho:     sol.tipo_derecho,
+      token:            nuevoToken,
+    });
+
+    return res.json({ status: 'success', data: { mensaje: 'Link de validacion reenviado correctamente' } });
+  } catch (e) { next(e); }
+});
+
+// ═════════════════════════════════════════════════════════
 // POST /api/solicitudes/:id/rechazar  (DPO)
 // ═════════════════════════════════════════════════════════
 router.post('/:id/rechazar', requireDPO, async (req, res, next) => {

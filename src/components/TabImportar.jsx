@@ -67,7 +67,8 @@ const validarTelefono = (tel) => {
 
 // ── Parser CSV ────────────────────────────────────────────
 const parsearCSV = (texto) => {
-  const lineas = texto.split(/\r?\n/).filter(l => l.trim());
+  // Eliminar BOM UTF-8 que Excel agrega al exportar CSV en Windows
+  const lineas = texto.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
   if (lineas.length < 2) throw new Error('El archivo no tiene datos.');
 
   const header = lineas[0].toLowerCase();
@@ -89,8 +90,9 @@ const parsearCSV = (texto) => {
 // ── Parser Excel ──────────────────────────────────────────
 const parsearExcel = async (buffer) => {
   try {
-    const XLSX = await import('xlsx');
-    const wb   = XLSX.read(buffer, { type: 'array' });
+    const XLSXMod = await import('xlsx');
+    const XLSX    = XLSXMod.default || XLSXMod;
+    const wb      = XLSX.read(buffer, { type: 'array' });
     const ws   = wb.Sheets[wb.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
     return rows.map((row, i) => {

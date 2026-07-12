@@ -8,6 +8,7 @@
 'use strict';
 
 const { Resend } = require('resend');
+const { db }     = require('./firebase');
 
 const resend         = new Resend(process.env.RESEND_API_KEY);
 const FROM_EMAIL     = process.env.RESEND_FROM      || 'portal@arcop.cl';
@@ -127,6 +128,25 @@ function _wrap(filas) {
   </td>
 </tr></table>
 </body></html>`;
+}
+
+// ─────────────────────────────────────────────────────────
+// HELPERS PRIVADOS
+// ─────────────────────────────────────────────────────────
+
+async function _getConfig() {
+  const snap = await db.collection('config').doc('sistema').get();
+  return snap.exists ? snap.data() : {};
+}
+
+async function _send({ to, subject, html, replyTo }) {
+  return resend.emails.send({
+    from:     `${FROM_NAME} <${FROM_EMAIL}>`,
+    to:       Array.isArray(to) ? to : [to],
+    subject,
+    html,
+    reply_to: replyTo || DPO_EMAIL || undefined,
+  });
 }
 
 // ─────────────────────────────────────────────────────────
@@ -373,4 +393,106 @@ async function enviarRechazo(solicitud, causal, nota, config) {
   });
 }
 
-module.exports = { enviarRecepcion, enviarCambioEstado, enviarDatosListos, enviarRechazo };
+// ── MMPA-53: notificación al responsable asignado ─────────
+async function notificarAsignacion({
+  emailResponsable, nombreResponsable, numero, tipo,
+  estado, nombreTitular, panelUrl,
+}) {
+  const config = await _getConfig();
+  const html   = _wrap(`
+    ${_header('Solicitud asignada a ti', 'Accion requerida', '#2563EB')}
+    <tr><td style="padding:30px 40px;">
+      <p style="margin:0 0 18px;font-size:14px;color:#374151;font-family:Arial,sans-serif;line-height:1.6;">
+        Hola ${nombreResponsable}, se te ha asignado la siguiente solicitud.
+      </p>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+        ${_fila('Numero',  numero)}
+        ${_fila('Derecho', tipo || 'ACCESO')}
+        ${_fila('Estado',  estado)}
+        ${_fila('Titular', nombreTitular)}
+      </table>
+      ${panelUrl ? _boton('Ver en Panel DPO', panelUrl + '/#/dpo', '#2563EB') : ''}
+    </td></tr>
+    ${_footer(config)}
+  `);
+
+  return _send({
+    to:      emailResponsable,
+    subject: `[ARCOP] Solicitud ${numero} asignada a ti`,
+    html,
+  });
+}
+
+// ── MMPA-96: alerta de brecha de datos al DPO ─────────────
+async function notificarBrechaDPO({ id, descripcion, horasDesde, enPlazo, panelUrl }) {
+  const config = await _getConfig();
+  const alerta = enPlazo
+    ? `Quedan ${72 - horasDesde} horas para notificar a la APDP.`
+    : `El plazo de 72 horas ha vencido (${horasDesde}h transcurridas).`;
+
+  const html = _wrap(`
+    ${_header('Brecha de datos registrada', 'Art. 14 bis — Ley 21.719', '#DC2626')}
+    <tr><td style="padding:30px 40px;">
+      <p style="margin:0 0 12px;font-size:14px;color:#374151;font-family:Arial,sans-serif;line-height:1.6;">
+        Se ha registrado una brecha de datos personales en el sistema.
+      </p>
+      <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px;">
+        ${_fila('ID Brecha',   id)}
+        ${_fila('Descripcion', descripcion.substring(0, 200) + (descripcion.length > 200 ? '...' : ''))}
+        ${_fila('Tiempo',      horasDesde + ' horas desde deteccion')}
+        ${_fila('Plazo APDP',  alerta)}
+      </table>
+      <p style="font-size:13px;color:#6B7280;font-family:Arial,sans-serif;">
+        Segun el Art. 14 bis de la Ley 21.719, debe notificar a la
+        Agencia de Proteccion de Datos Personales (APDP) dentro de
+        72 horas desde la deteccion de la brecha.
+      </p>
+      ${panelUrl ? _boton('Ver en Panel DPO', panelUrl + '/#/dpo', '#DC2626') : ''}
+    </td></tr>
+    ${_footer(config)}
+  `);
+
+  return _send({
+    to:      config.dpo_email || DPO_EMAIL,
+    subject: `[ARCOP] Brecha de datos registrada — ${enPlazo ? 'EN PLAZO' : 'PLAZO VENCIDO'}`,
+    html,
+  });
+}
+
+// ── MMPA-21: reenvío de link de validación expirado ───────
+async function reenviarValidacion({ email, nombre_completo, numero_solicitud, tipo_derecho, token }) {
+  const config     = await _getConfig();
+  const validarUrl = `${process.env.FRONTEND_URL || ''}/#/validar/${token}`;
+  const diasValidez = config.dias_validacion || '5';
+
+  const html = _wrap(`
+    ${_header('Nuevo link de validacion', 'Tu solicitud te esta esperando', '#059669')}
+    <tr><td style="padding:30px 40px;">
+      <p style="margin:0 0 18px;font-size:14px;color:#374151;font-family:Arial,sans-serif;line-height:1.6;">
+        Hola ${nombre_completo}, aqui tienes un nuevo link para validar
+        tu identidad en la solicitud <strong>${numero_solicitud}</strong>.
+      </p>
+      <p style="font-size:13px;color:#6B7280;font-family:Arial,sans-serif;margin:0 0 18px;">
+        El link anterior expiro. Este nuevo link es valido por ${diasValidez} dias habiles.
+      </p>
+      ${_boton('Validar mi identidad', validarUrl, '#059669')}
+    </td></tr>
+    ${_footer(config)}
+  `);
+
+  return _send({
+    to:      email,
+    subject: `[ARCOP] Nuevo link de validacion — ${numero_solicitud}`,
+    html,
+  });
+}
+
+module.exports = {
+  enviarRecepcion,
+  enviarCambioEstado,
+  enviarDatosListos,
+  enviarRechazo,
+  notificarAsignacion,
+  notificarBrechaDPO,
+  reenviarValidacion,
+};

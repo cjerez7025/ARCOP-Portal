@@ -529,27 +529,27 @@ const PanelDPO = () => {
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 24 }}>
           <div>
-            <div style={{ height: 10, width: 60, background: 'rgba(255,255,255,0.08)', borderRadius: 4, marginBottom: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
-            <div style={{ height: 28, width: 160, background: 'rgba(255,255,255,0.08)', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
+            <div style={{ height: 10, width: 60, background: '#e2e8f0', borderRadius: 4, marginBottom: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+            <div style={{ height: 28, width: 160, background: '#e2e8f0', borderRadius: 6, animation: 'pulse 1.5s ease-in-out infinite' }} />
           </div>
         </div>
         <div className="corp-card" style={{ padding: 16, marginBottom: 24 }}>
-          <div style={{ height: 36, background: 'rgba(255,255,255,0.06)', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+          <div style={{ height: 36, background: '#e2e8f0', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
         </div>
         <div className="corp-card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: 24 }}>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: 24 }}>
             {['60px', '120px', '80px', '140px', '80px', '80px', '80px'].map((w, i) => (
-              <div key={i} style={{ height: 12, width: w, background: 'rgba(255,255,255,0.06)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div key={i} style={{ height: 12, width: w, background: '#e2e8f0', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
             ))}
           </div>
           {[...Array(5)].map((_, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ height: 16, width: 24, background: 'rgba(255,255,255,0.06)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
-              <div style={{ height: 16, width: 120, background: 'rgba(255,255,255,0.06)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
-              <div style={{ height: 16, width: 80, background: 'rgba(255,255,255,0.06)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
-              <div style={{ height: 22, width: 80, background: 'rgba(99,102,241,0.12)', borderRadius: 20, animation: 'pulse 1.5s ease-in-out infinite' }} />
-              <div style={{ height: 16, width: 100, background: 'rgba(255,255,255,0.06)', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
-              <div style={{ height: 32, width: 60, background: 'rgba(255,255,255,0.06)', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+              <div style={{ height: 16, width: 24, background: '#e2e8f0', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 16, width: 120, background: '#e2e8f0', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 16, width: 80, background: '#e2e8f0', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 22, width: 80, background: '#e0e7ff', borderRadius: 20, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 16, width: 100, background: '#e2e8f0', borderRadius: 4, animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <div style={{ height: 32, width: 60, background: '#e2e8f0', borderRadius: 8, animation: 'pulse 1.5s ease-in-out infinite' }} />
             </div>
           ))}
         </div>
@@ -565,9 +565,9 @@ const PanelDPO = () => {
         {/* Header */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }} className="sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(165,180,252,0.8)', marginBottom: 4 }}>Zona DPO</p>
-            <h1 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 24, fontWeight: 800, color: 'white', margin: 0 }}>Solicitudes</h1>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#3b82f6', marginBottom: 4 }}>Zona DPO</p>
+            <h1 style={{ fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif', fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0 }}>Solicitudes</h1>
+            <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
               {solicitudesFiltradas.length} de {solicitudes.length} solicitudes
             </p>
           </div>
@@ -580,14 +580,14 @@ const PanelDPO = () => {
         <div className="corp-card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
             <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-              <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'rgba(255,255,255,0.35)' }} />
+              <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
               <input type="text" placeholder="Buscar por nombre, RUT, email o número..."
                 value={filtros.busqueda}
                 onChange={e => setFiltros(prev => ({ ...prev, busqueda: e.target.value }))}
                 className="corp-input" style={{ paddingLeft: 40 }} />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Filter style={{ width: 16, height: 16, color: 'rgba(255,255,255,0.35)', flexShrink: 0 }} />
+              <Filter style={{ width: 16, height: 16, color: '#94a3b8', flexShrink: 0 }} />
               <select value={filtros.estado}
                 onChange={e => { setFiltros(prev => ({ ...prev, estado: e.target.value })); setFiltroEspecial(null); }}
                 className="corp-input" style={{ width: 'auto' }}>
@@ -598,7 +598,7 @@ const PanelDPO = () => {
               </select>
               {(filtros.estado || filtros.busqueda || filtroEspecial) && (
                 <button onClick={() => { setFiltros({ estado: '', busqueda: '' }); setFiltroEspecial(null); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#FCA5A5', border: '1px solid rgba(252,165,165,0.3)', padding: '6px 10px', borderRadius: 6, background: 'none', cursor: 'pointer' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', padding: '6px 10px', borderRadius: 6, background: 'none', cursor: 'pointer' }}>
                   <X style={{ width: 12, height: 12 }} /> Limpiar
                 </button>
               )}
